@@ -1,0 +1,51 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Piper Test</title>
+<script type="importmap">
+{
+  "imports": {
+    "@mintplex-labs/piper-tts-web": "https://cdn.jsdelivr.net/npm/@mintplex-labs/piper-tts-web@1.0.5/dist/piper-tts-web.js",
+    "onnxruntime-web": "https://cdn.jsdelivr.net/npm/onnxruntime-web@1.18.0/dist/ort.min.mjs"
+  }
+}
+</script>
+</head>
+<body>
+<h2>Piper TTS Test</h2>
+<button id="testBtn">Test Synthesis</button>
+<div id="log"></div>
+<script type="module">
+import * as tts from '@mintplex-labs/piper-tts-web';
+const log = document.getElementById('log');
+function addLog(msg) {
+  const p = document.createElement('p');
+  p.textContent = new Date().toISOString() + ' ' + msg;
+  log.appendChild(p);
+  console.log(msg);
+}
+document.getElementById('testBtn').addEventListener('click', async () => {
+  try {
+    addLog('Starting download...');
+    await tts.download('en_GB-alba-medium', (progress) => {
+      addLog('Download: ' + Math.round(progress.loaded * 100 / progress.total) + '%');
+    });
+    addLog('Download complete, synthesizing...');
+    const wav = await tts.predict({
+      text: 'Hello! I am your English mentor.',
+      voiceId: 'en_GB-alba-medium'
+    });
+    addLog('Synthesis complete! Blob size: ' + wav.size + ' bytes, type: ' + wav.type);
+    const audio = new Audio(URL.createObjectURL(wav));
+    audio.onended = () => addLog('Playback finished');
+    await audio.play();
+    addLog('Playing audio...');
+  } catch (e) {
+    addLog('ERROR: ' + e.message);
+  }
+});
+</script>
+</body>
+</html>
