@@ -735,6 +735,15 @@
   </style>
 </head>
 <body>
+<script type="module">
+  // Preload Piper TTS in background for reliability
+  import('https://cdn.jsdelivr.net/npm/@mintplex-labs/piper-tts-web@1.0.5/+esm').then(function (mod) {
+    window.piperTTS = mod;
+    window.dispatchEvent(new CustomEvent('piper-ready'));
+  }).catch(function () {
+    window.dispatchEvent(new CustomEvent('piper-failed'));
+  });
+</script>
   <main class="page">
     <section class="intro" aria-labelledby="main-title">
       <h1 id="main-title">Speak. Get corrected. <span>Try again.</span></h1>
@@ -793,7 +802,7 @@
         <button class="small-action" id="testElevenBtn" type="button" style="width:100%;margin-top:8px">🔊 ভয়েস পরীক্ষা</button>
         <div class="key-status bn" id="elevenStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.12</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.13</div>
       </div>
     </section>
 
@@ -1650,6 +1659,7 @@
       function ensurePiper(voiceId) {
         return new Promise(function (resolve) {
           if (piperReadyVoice === voiceId && piperModule) { resolve(true); return; }
+          if (window.piperTTS && !piperModule) { piperModule = window.piperTTS; }
           if (piperDownloading) { resolve(false); return; }
           piperDownloading = true;
           var statusEl = document.getElementById('piperStatus');
@@ -1660,9 +1670,12 @@
           setBtn(activeBtn, '⏳ 0%');
           var modPromise = piperModule
             ? Promise.resolve(piperModule)
-            : import('https://esm.sh/@mintplex-labs/piper-tts-web@1.0.5');
+            : (window.piperTTS
+              ? Promise.resolve(window.piperTTS)
+              : import('https://cdn.jsdelivr.net/npm/@mintplex-labs/piper-tts-web@1.0.5/+esm'));
           modPromise.then(function (mod) {
             piperModule = mod;
+            window.piperTTS = mod;
             return mod.download(voiceId, function (progress) {
               var pct = progress && progress.total
                 ? Math.round(progress.loaded * 100 / progress.total) : 0;
@@ -1675,6 +1688,7 @@
             setStatus('✅ ডাউনলোড সম্পূর্ণ! এখন থেকে এই সুন্দর গলায় কথা বলবে।');
             showToast('✅ Neural ভয়েস রেডি!');
             updatePiperUI();
+            resolve(true);
             resolve(true);
           }).catch(function () {
             piperDownloading = false;
@@ -2436,6 +2450,16 @@
       if (piperMaleBtn) piperMaleBtn.addEventListener('click', function () { setPiperVoice(PIPER_MALE); });
       if (piperOffBtn) piperOffBtn.addEventListener('click', function () { setPiperVoice(null); });
       updatePiperUI();
+      if (piperVoiceId) {
+        setTimeout(function () {
+          ensurePiper(piperVoiceId).then(function (ok) {
+            if (!ok) {
+              var statusEl = document.getElementById('piperStatus');
+              if (statusEl) statusEl.textContent = '⚠️ Neural ভয়েস লোড হয়নি — 🔊 Voice থেকে আবার Select করো।';
+            }
+          });
+        }, 2000);
+      }
       if (mentorPackToggle) {
         mentorPackToggle.addEventListener('click', function () {
           mentorPackOn = !mentorPackOn;
