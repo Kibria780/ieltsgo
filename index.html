@@ -715,6 +715,7 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v1.6</div>
       </div>
     </section>
 
@@ -852,7 +853,7 @@
       }
 
       async function requestGroq(systemPrompt, userPrompt, key) {
-        var models = [GROQ_MODEL, GROQ_FALLBACK_MODEL, 'qwen/qwen3.6-27b'];
+        var models = [GROQ_MODEL, GROQ_FALLBACK_MODEL, 'qwen/qwen3.8-27b'];
         var lastErr = null;
         for (var mi = 0; mi < models.length; mi++) {
           var controller = new AbortController();
@@ -1040,31 +1041,37 @@
       }
 
       function localReply(text, corrections) {
-        var t = String(text).toLowerCase();
-        var question = 'Could you tell me a little more about that?';
+        var raw = String(text).replace(/\s+/g, ' ').trim();
+        var t = raw.toLowerCase();
         var topics = [
-          [/family|mother|father|brother|sister|parents/, 'How many members are there in your family?'],
-          [/school|college|study|teacher|exam|subject/, 'What is your favourite subject and why?'],
-          [/food|eat|lunch|dinner|breakfast|restaurant/, 'What kind of food do you like most?'],
-          [/football|cricket|game|hobby|music|movie/, 'How often do you do that in your free time?'],
-          [/travel|visit|journey|tour/, 'Which place would you like to visit one day?'],
-          [/work|job|office|business/, 'What do you do for work?'],
-          [/friend/, 'What do you usually do together with your friends?'],
-          [/morning|evening|daily|every day/, 'What do you usually do in the evening?'],
-          [/dream|future|want to be/, 'What would you like to do in the future?']
+          { re: /^(hi|hello|hey|assalam|salam|good morning|good evening)\b/, say: '', q: 'Hello! How are you today? What would you like to talk about?' },
+          { re: /family|mother|father|brother|sister|parents/, say: 'Family is a wonderful topic.', q: 'How many members are there in your family?' },
+          { re: /school|college|university|study|teacher|exam|subject|student/, say: 'Study life keeps us learning.', q: 'What is your favourite subject and why?' },
+          { re: /food|\beat\b|eating|lunch|dinner|breakfast|restaurant|biryani/, say: 'Food talk is always delicious!', q: 'What kind of food do you like most?' },
+          { re: /football|cricket|game|sport|match/, say: 'Sports bring so much excitement.', q: 'Do you play it yourself, or do you love watching matches?' },
+          { re: /hobby|music|song|movie|book|reading|sing|dance/, say: 'Hobbies say a lot about a person.', q: 'How often do you enjoy that in your free time?' },
+          { re: /travel|visit|journey|tour|village|city|country/, say: 'Places have such beautiful stories.', q: 'Which place would you like to visit one day?' },
+          { re: /work|job|office|business|shop/, say: 'Work keeps life moving.', q: 'What do you do for work?' },
+          { re: /friend/, say: 'Friends make everything better.', q: 'What do you usually do together with your friends?' },
+          { re: /morning|evening|daily|every day|routine/, say: 'Routines are great for practice.', q: 'What do you usually do in the evening?' },
+          { re: /dream|future|want to be|will be/, say: 'Dreams give us direction.', q: 'What would you like to do in the future?' }
         ];
-        for (var i = 0; i < topics.length; i++) {
-          if (topics[i][0].test(t)) { question = topics[i][1]; break; }
-        }
         var openersFix = [
-          'Good try! I found some small mistakes — let us fix them together.',
+          'Good try! I spotted some small mistakes — let us fix them together.',
           'Nice effort! A few small corrections will make it even better.'
         ];
         var openersGood = ['Well said!', 'Nice answer!', 'Good, very clear!'];
         var opener = corrections.length
           ? openersFix[Math.floor(Math.random() * openersFix.length)]
           : openersGood[Math.floor(Math.random() * openersGood.length)];
-        return opener + ' ' + question;
+        for (var i = 0; i < topics.length; i++) {
+          if (topics[i].re.test(t)) {
+            var mid = topics[i].say ? ' ' + topics[i].say : '';
+            return opener + mid + ' ' + topics[i].q;
+          }
+        }
+        var snippet = raw.length > 60 ? raw.slice(0, 60).trim() + '…' : raw;
+        return opener + ' You said "' + snippet + '" — interesting! Could you tell me a little more about that?';
       }
 
       function localPracticeResult(text) {
