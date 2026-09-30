@@ -712,6 +712,7 @@
           <button class="small-action" id="saveKeyBtn" type="button">Save</button>
           <button class="small-action" id="clearKeyBtn" type="button">Clear</button>
         </div>
+        <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
       </div>
@@ -1704,6 +1705,24 @@
         groqKeyInput.value = '';
         keyStatus.textContent = 'Key মুছে ফেলা হয়েছে।';
         refreshKeyUI();
+      });
+      var testKeyBtn = document.getElementById('testKeyBtn');
+      testKeyBtn.addEventListener('click', async function () {
+        var key = getGroqKey();
+        if (!key) { keyStatus.textContent = 'আগে key বসিয়ে Save চাপো।'; return; }
+        keyStatus.textContent = 'পরীক্ষা চলছে…';
+        testKeyBtn.disabled = true;
+        var t0 = Date.now();
+        try {
+          var r = await requestGroq('Reply with ONLY this JSON: {"reply":"OK","corrections":[],"score":100,"encouragement_bn":"ঠিক আছে"}', 'test', key);
+          var secs = ((Date.now() - t0) / 1000).toFixed(1);
+          keyStatus.textContent = '✅ Groq কাজ করছে! (' + secs + 's)';
+          showToast('Groq ঠিক আছে ✅');
+        } catch (e) {
+          keyStatus.textContent = '❌ সমস্যা: ' + errMsg(e) + ' — এই লেখাটা হুবহু আমাকে জানাও।';
+        } finally {
+          testKeyBtn.disabled = false;
+        }
       });
       refreshKeyUI();
     })();
