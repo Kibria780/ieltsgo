@@ -211,6 +211,30 @@
       cursor: pointer;
       white-space: nowrap;
     }
+    .key-panel {
+      display: none;
+      margin-top: 10px;
+      padding: 12px;
+      border: 1px dashed var(--line);
+      border-radius: 12px;
+      background: var(--surface-3);
+    }
+    .key-panel.open { display: block; }
+    .key-panel input {
+      width: 100%;
+      box-sizing: border-box;
+      margin: 8px 0;
+      padding: 10px 12px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 14px;
+    }
+    .key-row { display: flex; gap: 8px; }
+    .key-row .small-action { flex: 1; min-height: 40px; }
+    .key-status { font-size: 13px; margin-top: 6px; min-height: 18px; }
+    .key-note { font-size: 12px; opacity: 0.75; margin: 8px 0 0; }
 
     .workspace {
       display: grid;
@@ -680,6 +704,17 @@
         </div>
       </div>
       <button class="small-action" id="newSession" type="button">New session</button>
+      <button class="small-action" id="keyBtn" type="button" style="margin-top:8px">⚙ AI Key</button>
+      <div class="key-panel" id="keyPanel">
+        <span class="field-label">GROQ API KEY · দ্রুত AI</span>
+        <input type="password" id="groqKeyInput" placeholder="gsk_... key এখানে বসাও" autocomplete="off" spellcheck="false">
+        <div class="key-row">
+          <button class="small-action" id="saveKeyBtn" type="button">Save</button>
+          <button class="small-action" id="clearKeyBtn" type="button">Clear</button>
+        </div>
+        <div class="key-status bn" id="keyStatus"></div>
+        <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
+      </div>
     </section>
 
     <section class="workspace">
@@ -802,6 +837,48 @@
       }
 
       var AI_ENDPOINT = 'https://text.pollinations.ai/openai';
+      var GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
+      var GROQ_MODEL = 'llama-3.3-70b-versatile';
+      var lastProvider = '';
+
+      function getGroqKey() {
+        try { return (localStorage.getItem('ieltsgo_groq_key') || '').trim(); }
+        catch (e) { return ''; }
+      }
+
+      async function requestGroq(systemPrompt, userPrompt, key) {
+        var controller = new AbortController();
+        var timeout = setTimeout(function () { controller.abort(); }, 25000);
+        try {
+          var response = await fetch(GROQ_ENDPOINT, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': 'Bearer ' + key
+            },
+            body: JSON.stringify({
+              model: GROQ_MODEL,
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+              ],
+              temperature: 0.25,
+              max_tokens: 1500,
+              response_format: { type: 'json_object' }
+            }),
+            signal: controller.signal
+          });
+          if (!response.ok) throw new Error('Groq returned ' + response.status);
+          var payload = await response.json();
+          var content = payload && payload.choices && payload.choices[0] && payload.choices[0].message
+            ? payload.choices[0].message.content
+            : '';
+          if (!content) throw new Error('Groq response was empty');
+          return extractJsonObject(content);
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
 
       function extractJsonObject(raw) {
         var text = String(raw || '').trim();
@@ -1035,9 +1112,19 @@
         ].join(' ');
         try {
           lastResultOffline = false;
+          var groqKey = getGroqKey();
+          if (groqKey) {
+            try {
+              var g = await requestGroq(systemPrompt, 'Conversation context:\n' + recent + '\n\nLatest learner answer to analyse:\n' + text, groqKey);
+              lastProvider = 'groq';
+              return normalizeCoachResult(g);
+            } catch (ge) { lastProvider = ''; }
+          }
+          lastProvider = 'pollinations';
           return normalizeCoachResult(await requestAI(systemPrompt, 'Conversation context:\n' + recent + '\n\nLatest learner answer to analyse:\n' + text));
         } catch (e) {
           lastResultOffline = true;
+          lastProvider = 'offline';
           return localPracticeResult(text);
         }
       }
@@ -1058,9 +1145,18 @@
         ].join(' ');
         try {
           lastResultOffline = false;
+          var groqKey = getGroqKey();
+          if (groqKey) {
+            try {
+              lastProvider = 'groq';
+              return await requestGroq(systemPrompt, testText, groqKey);
+            } catch (ge) { lastProvider = ''; }
+          }
+          lastProvider = 'pollinations';
           return await requestAI(systemPrompt, testText);
         } catch (e) {
           lastResultOffline = true;
+          lastProvider = 'offline';
           return localMockResult();
         }
       }
@@ -1341,6 +1437,8 @@
           if (lastResultOffline) {
             setStatus('অফলাইন মোড · মৌলিক সংশোধন', true);
             showToast('AI সার্ভার ব্যস্ত — অফলাইন মোডে মৌলিক সংশোধন দেখানো হচ্ছে।');
+          } else if (lastProvider === 'groq') {
+            setStatus('Groq AI · ready', false);
           } else {
             setStatus('AI coach · ready', false);
           }
@@ -1535,6 +1633,53 @@
         if (appMode === 'mock') startMockTest();
         else startPracticeSession();
       });
+
+      // ---------- Groq API key settings (stored only in this browser) ----------
+      var keyBtn = document.getElementById('keyBtn');
+      var keyPanel = document.getElementById('keyPanel');
+      var groqKeyInput = document.getElementById('groqKeyInput');
+      var saveKeyBtn = document.getElementById('saveKeyBtn');
+      var clearKeyBtn = document.getElementById('clearKeyBtn');
+      var keyStatus = document.getElementById('keyStatus');
+      function refreshKeyUI() {
+        var has = !!getGroqKey();
+        keyBtn.textContent = has ? '⚙ AI Key · চালু ✅' : '⚙ AI Key';
+        if (has && !keyStatus.textContent) keyStatus.textContent = 'Groq key সেভ আছে — দ্রুত AI চালু।';
+      }
+      keyBtn.addEventListener('click', function () {
+        keyPanel.classList.toggle('open');
+        if (keyPanel.classList.contains('open')) {
+          groqKeyInput.value = getGroqKey();
+          groqKeyInput.focus();
+        }
+      });
+      saveKeyBtn.addEventListener('click', async function () {
+        var key = groqKeyInput.value.trim();
+        if (!key) { keyStatus.textContent = 'Key টা লিখে Save চাপো।'; return; }
+        keyStatus.textContent = 'যাচাই করা হচ্ছে…';
+        saveKeyBtn.disabled = true;
+        try {
+          var check = await fetch('https://api.groq.com/openai/v1/models', {
+            headers: { 'Authorization': 'Bearer ' + key }
+          });
+          if (!check.ok) throw new Error('bad key');
+          try { localStorage.setItem('ieltsgo_groq_key', key); } catch (e) {}
+          keyStatus.textContent = 'সংযুক্ত হয়েছে ✅ — এখন থেকে দ্রুত AI উত্তর দেবে।';
+          showToast('Groq AI সংযুক্ত হয়েছে।');
+        } catch (e) {
+          keyStatus.textContent = 'Key টা ঠিক মনে হচ্ছে না — আবার চেক করে বসাও।';
+        } finally {
+          saveKeyBtn.disabled = false;
+          refreshKeyUI();
+        }
+      });
+      clearKeyBtn.addEventListener('click', function () {
+        try { localStorage.removeItem('ieltsgo_groq_key'); } catch (e) {}
+        groqKeyInput.value = '';
+        keyStatus.textContent = 'Key মুছে ফেলা হয়েছে।';
+        refreshKeyUI();
+      });
+      refreshKeyUI();
     })();
   </script>
 </body>
