@@ -736,7 +736,7 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.0</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.1</div>
       </div>
     </section>
 
@@ -1082,10 +1082,10 @@
           { re: /dream|future|want to be|will be/, say: 'Dreams give us direction.', q: 'What would you like to do in the future?' }
         ];
         var openersFix = [
-          'Good try! I spotted some small mistakes — let us fix them together.',
-          'Nice effort! A few small corrections will make it even better.'
+          'Good try! Every mistake is a step forward — let us fix them together.',
+          'Nice effort! I can see you are improving. A few small corrections will make it even better.'
         ];
-        var openersGood = ['Well said!', 'Nice answer!', 'Good, very clear!'];
+        var openersGood = ['Well said!', 'Excellent!', 'Wonderful! I can see your progress.', 'Good, very clear! Keep it up!'];
         var opener = corrections.length
           ? openersFix[Math.floor(Math.random() * openersFix.length)]
           : openersGood[Math.floor(Math.random() * openersGood.length)];
@@ -1102,8 +1102,8 @@
       function localPracticeResult(text) {
         var corrections = checkGrammar(text);
         var encouragement = corrections.length
-          ? 'ভুলগুলো দেখে বাক্যটি আরেকবার সঠিকভাবে বলার চেষ্টা করুন।'
-          : 'দারুণ! এই উত্তরে গুরুত্বপূর্ণ কোনো ভুল পাওয়া যায়নি।';
+          ? 'ভুলগুলো দেখে বাক্যটি আরেকবার সঠিকভাবে বলার চেষ্টা করুন — আপনি পারবেন!'
+          : 'দারুণ! এই উত্তরে গুরুত্বপূর্ণ কোনো ভুল পাওয়া যায়নি। এভাবেই এগিয়ে যান!';
         return {
           reply: localReply(text, corrections),
           corrections: corrections,
@@ -1156,10 +1156,11 @@
           return (item.role === 'user' ? 'Learner: ' : 'Coach: ') + item.text;
         }).join('\n');
         var systemPrompt = [
-          'You are IELTSgo, a real-time English speaking coach for Bengali learners.',
+          'You are IELTSgo, a warm and responsible English mentor for Bengali learners — like a caring teacher guiding their own student.',
           'The learner level is ' + levelSelect.value + ' and the topic is ' + selectedTopic + '.',
           'Analyse the learner’s latest English text carefully, including grammar, tense, articles, prepositions, word choice, word order and naturalness.',
-          'Identify every meaningful error you can find, up to six. Never invent an error. Keep the English reply friendly, concise, and continue the conversation with one natural follow-up question.',
+          'Identify every meaningful error you can find, up to six. Never invent an error.',
+          'Speak like a mentor: praise genuine effort warmly, be patient with mistakes, explain simply, and guide step by step. Keep the English reply friendly and concise (1-2 sentences), and continue the conversation with one natural follow-up question.',
           'Return ONLY valid JSON with exactly these keys: reply (English string), corrections (array of objects with original, corrected, explanation_bn), score (integer 0-100 for grammar and clarity), encouragement_bn (Bengali string).',
           'Each original must quote the learner’s exact problematic words. Each corrected must show the improved wording. Each explanation_bn must clearly explain the rule in Bengali. If there is no meaningful error, return an empty corrections array.'
         ].join(' ');
@@ -1306,6 +1307,20 @@
         if (t) t.remove();
       }
 
+      function pickMentorVoice(voices) {
+        var list = voices || [];
+        var prefs = [
+          function (v) { return /google/i.test(v.name) && /en[-_]GB/i.test(v.lang); },
+          function (v) { return /en[-_]GB/i.test(v.lang); },
+          function (v) { return /google/i.test(v.name) && /^en/i.test(v.lang); },
+          function (v) { return /^en/i.test(v.lang); }
+        ];
+        for (var i = 0; i < prefs.length; i++) {
+          var found = list.find(prefs[i]);
+          if (found) return found;
+        }
+        return null;
+      }
       function speak(text) {
         if (!voiceOn || !('speechSynthesis' in window)) return;
         var synth = window.speechSynthesis;
@@ -1315,14 +1330,14 @@
         var chunks = clean.match(/[^.!?।]+[.!?।]+|[^.!?।]+$/g) || [clean];
         var voices = [];
         try { voices = synth.getVoices() || []; } catch (e) {}
-        var preferred = voices.find(function (v) { return /en[-_]GB/i.test(v.lang); }) ||
-                        voices.find(function (v) { return /^en/i.test(v.lang); });
+        var preferred = pickMentorVoice(voices);
         chunks.forEach(function (part) {
           var c = part.trim();
           if (!c) return;
           var utterance = new SpeechSynthesisUtterance(c);
           utterance.lang = 'en-GB';
-          utterance.rate = 0.9;
+          utterance.rate = 0.88;
+          utterance.pitch = 1.0;
           if (preferred) utterance.voice = preferred;
           try { synth.speak(utterance); } catch (e) {}
         });
@@ -1366,8 +1381,7 @@
           var chunks = clean.match(/[^.!?।]+[.!?।]+|[^.!?।]+$/g) || [clean];
           var voices = [];
           try { voices = synth.getVoices() || []; } catch (e) {}
-          var preferred = voices.find(function (v) { return /en[-_]GB/i.test(v.lang); }) ||
-                          voices.find(function (v) { return /^en/i.test(v.lang); });
+          var preferred = pickMentorVoice(voices);
           var i = 0;
           function next() {
             if (!voiceChatActive) { try { synth.cancel(); } catch (e) {} resolve(); return; }
@@ -1376,7 +1390,8 @@
             if (!c) { next(); return; }
             var u = new SpeechSynthesisUtterance(c);
             u.lang = 'en-GB';
-            u.rate = 0.95;
+            u.rate = 0.88;
+            u.pitch = 1.0;
             if (preferred) u.voice = preferred;
             u.onend = next;
             u.onerror = next;
