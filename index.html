@@ -443,6 +443,16 @@
       border-radius: 999px;
       transition: width 90ms linear;
     }
+    .voice-select {
+      width: 100%;
+      margin-top: 8px;
+      padding: 9px 10px;
+      border-radius: 10px;
+      border: 1px solid var(--line);
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 14px;
+    }
 
     .coach {
       border-radius: var(--radius-lg) var(--radius-xl) var(--radius-lg) var(--radius-lg);
@@ -736,7 +746,10 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.1</div>
+        <span class="field-label">AI VOICE · মেন্টর ভয়েস বেছে নাও</span>
+        <select id="voiceSelect" class="voice-select"></select>
+        <button class="small-action" id="voiceTestBtn" type="button" style="width:100%;margin-top:8px">🔊 ভয়েস শুনে দেখো</button>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.2</div>
       </div>
     </section>
 
@@ -1330,7 +1343,7 @@
         var chunks = clean.match(/[^.!?।]+[.!?।]+|[^.!?।]+$/g) || [clean];
         var voices = [];
         try { voices = synth.getVoices() || []; } catch (e) {}
-        var preferred = pickMentorVoice(voices);
+        var preferred = getActiveVoice(voices);
         chunks.forEach(function (part) {
           var c = part.trim();
           if (!c) return;
@@ -1381,7 +1394,7 @@
           var chunks = clean.match(/[^.!?।]+[.!?।]+|[^.!?।]+$/g) || [clean];
           var voices = [];
           try { voices = synth.getVoices() || []; } catch (e) {}
-          var preferred = pickMentorVoice(voices);
+          var preferred = getActiveVoice(voices);
           var i = 0;
           function next() {
             if (!voiceChatActive) { try { synth.cancel(); } catch (e) {} resolve(); return; }
@@ -2053,6 +2066,78 @@
         voiceToggle.textContent = 'Voice reply · ' + (voiceOn ? 'On' : 'Off');
         if (!voiceOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
       });
+
+      var voiceSelect = document.getElementById('voiceSelect');
+      var voiceTestBtn = document.getElementById('voiceTestBtn');
+      var selectedVoiceURI = null;
+      try { selectedVoiceURI = localStorage.getItem('ieltsgo_voice_uri'); } catch (e) {}
+      function getActiveVoice(voices) {
+        var list = voices || [];
+        if (selectedVoiceURI) {
+          var saved = list.find(function (v) { return v.voiceURI === selectedVoiceURI; });
+          if (saved) return saved;
+        }
+        return pickMentorVoice(list);
+      }
+      function refreshVoiceList() {
+        if (!('speechSynthesis' in window) || !voiceSelect) return;
+        var voices = [];
+        try { voices = window.speechSynthesis.getVoices() || []; } catch (e) {}
+        var en = voices.filter(function (v) { return /^en/i.test(v.lang); });
+        var others = voices.filter(function (v) { return !/^en/i.test(v.lang); });
+        var sorted = en.concat(others);
+        voiceSelect.innerHTML = '';
+        if (!sorted.length) {
+          var empty = document.createElement('option');
+          empty.value = '';
+          empty.textContent = 'কোনো ভয়েস পাওয়া যায়নি';
+          voiceSelect.appendChild(empty);
+          return;
+        }
+        sorted.forEach(function (v) {
+          var opt = document.createElement('option');
+          opt.value = v.voiceURI;
+          opt.textContent = v.name + ' (' + v.lang + ')';
+          voiceSelect.appendChild(opt);
+        });
+        var exists = sorted.some(function (v) { return v.voiceURI === selectedVoiceURI; });
+        if (!exists) {
+          var mentor = pickMentorVoice(sorted);
+          selectedVoiceURI = mentor ? mentor.voiceURI : sorted[0].voiceURI;
+        }
+        voiceSelect.value = selectedVoiceURI;
+      }
+      if (voiceSelect) {
+        voiceSelect.addEventListener('change', function () {
+          selectedVoiceURI = voiceSelect.value;
+          try { localStorage.setItem('ieltsgo_voice_uri', selectedVoiceURI); } catch (e) {}
+        });
+      }
+      if (voiceTestBtn) {
+        voiceTestBtn.addEventListener('click', function () {
+          if (!('speechSynthesis' in window)) { showToast('এই ব্রাউজারে ভয়েস নেই।'); return; }
+          var synth = window.speechSynthesis;
+          try { synth.cancel(); } catch (e) {}
+          var u = new SpeechSynthesisUtterance("Hello! I'm your English mentor. Let's learn together, step by step.");
+          u.lang = 'en-GB';
+          u.rate = 0.88;
+          u.pitch = 1.0;
+          var voices = [];
+          try { voices = synth.getVoices() || []; } catch (e) {}
+          var v = getActiveVoice(voices);
+          if (v) u.voice = v;
+          try { synth.speak(u); } catch (e) {}
+        });
+      }
+      if ('speechSynthesis' in window) {
+        refreshVoiceList();
+        var prevVoicesChanged = window.speechSynthesis.onvoiceschanged;
+        window.speechSynthesis.onvoiceschanged = function () {
+          try { window.speechSynthesis.getVoices(); } catch (e) {}
+          refreshVoiceList();
+          if (typeof prevVoicesChanged === 'function') { try { prevVoicesChanged(); } catch (e) {} }
+        };
+      }
 
       function resetScore() {
         scoreRing.style.setProperty('--score', '0deg');
