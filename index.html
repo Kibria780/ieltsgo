@@ -428,6 +428,21 @@
       border-radius: 999px;
       padding: 6px 14px;
     }
+    .voice-meter {
+      height: 6px;
+      background: var(--accent-soft);
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 6px;
+      display: none;
+    }
+    .voice-meter-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: 999px;
+      transition: width 90ms linear;
+    }
 
     .coach {
       border-radius: var(--radius-lg) var(--radius-xl) var(--radius-lg) var(--radius-lg);
@@ -721,7 +736,7 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v1.9</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.0</div>
       </div>
     </section>
 
@@ -754,6 +769,9 @@
             <span class="bn" id="micHint">মাইকে চাপ দিয়ে ইংরেজিতে বলুন</span>
             <button class="voice-toggle" id="voiceChatBtn" type="button">🎙 Voice chat</button>
             <button class="voice-toggle" id="voiceToggle" type="button" aria-pressed="true">Voice reply · On</button>
+          </div>
+          <div class="voice-meter" id="voiceMeter" aria-hidden="true">
+            <div class="voice-meter-fill" id="voiceMeterFill"></div>
           </div>
         </div>
       </article>
@@ -1381,7 +1399,9 @@
             finish(null);
             return;
           }
-          navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+          navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+          }).then(function (stream) {
             var audioCtx = null;
             try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
             catch (e) { audioCtx = null; }
@@ -1792,6 +1812,7 @@
       async function handleWhisperStop() {
         try { if (whisperStopTimer) clearTimeout(whisperStopTimer); } catch (e) {}
         whisperStopTimer = null;
+        stopWhisperMeter();
         cleanupMediaStream();
         whisperRecording = false;
         isListening = false;
@@ -1819,6 +1840,20 @@
         }
       }
       var whisperStopTimer = null;
+      var whisperAudioCtx = null;
+      var whisperMeterRaf = 0;
+      var voiceMeterEl = document.getElementById('voiceMeter');
+      var voiceMeterFill = document.getElementById('voiceMeterFill');
+      function stopWhisperMeter() {
+        try { cancelAnimationFrame(whisperMeterRaf); } catch (e) {}
+        whisperMeterRaf = 0;
+        if (voiceMeterEl) voiceMeterEl.style.display = 'none';
+        if (voiceMeterFill) voiceMeterFill.style.width = '0%';
+        if (whisperAudioCtx) {
+          try { whisperAudioCtx.close(); } catch (e) {}
+          whisperAudioCtx = null;
+        }
+      }
       async function toggleWhisperRecording() {
         if (whisperRecording) {
           try { if (whisperStopTimer) clearTimeout(whisperStopTimer); } catch (e) {}
@@ -1828,10 +1863,16 @@
           return;
         }
         try {
-          mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+          });
         } catch (e) {
-          showToast('মাইকের অনুমতি দিন।');
-          return;
+          try {
+            mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+          } catch (e2) {
+            showToast('মাইকের অনুমতি দিন।');
+            return;
+          }
         }
         audioChunks = [];
         try {
@@ -1843,17 +1884,63 @@
         }
         mediaRecorder.ondataavailable = function (e) { if (e.data && e.data.size) audioChunks.push(e.data); };
         mediaRecorder.onstop = handleWhisperStop;
+        var analyser = null;
+        var dataArray = null;
+        try {
+          whisperAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
+          var src = whisperAudioCtx.createMediaStreamSource(mediaStream);
+          analyser = whisperAudioCtx.createAnalyser();
+          analyser.fftSize = 256;
+          src.connect(analyser);
+          dataArray = new Uint8Array(analyser.frequencyBinCount);
+        } catch (e) {
+          analyser = null;
+        }
         mediaRecorder.start();
         whisperRecording = true;
         isListening = true;
         micBtn.classList.add('listening');
         micBtn.setAttribute('aria-label', 'Stop listening');
-        micHint.textContent = '🔴 রেকর্ড হচ্ছে… শেষ হলে আবার মাইকে চাপ দিন';
-        setStatus('Recording… tap mic to stop', true);
-        try { if (whisperStopTimer) clearTimeout(whisperStopTimer); } catch (e) {}
-        whisperStopTimer = setTimeout(function () {
-          if (whisperRecording) toggleWhisperRecording();
-        }, 30000);
+        micHint.textContent = '🔴 রেকর্ড হচ্ছে… বলুন, থামলে নিজেই নেবে';
+        setStatus('Recording…', true);
+        if (voiceMeterEl) voiceMeterEl.style.display = 'block';
+        var recStart = Date.now();
+        var speaking = false;
+        var silenceStart = 0;
+        function meterLoop() {
+          if (!whisperRecording) { stopWhisperMeter(); return; }
+          var avg = 0;
+          if (analyser) {
+            analyser.getByteFrequencyData(dataArray);
+            var sum = 0;
+            for (var i = 0; i < dataArray.length; i++) sum += dataArray[i];
+            avg = sum / dataArray.length;
+          }
+          if (voiceMeterFill) voiceMeterFill.style.width = Math.min(100, (avg / 70) * 100) + '%';
+          var elapsed = Date.now() - recStart;
+          if (avg > 14) {
+            speaking = true;
+            silenceStart = 0;
+          } else if (speaking) {
+            if (!silenceStart) silenceStart = Date.now();
+            if (Date.now() - silenceStart > 1800) {
+              toggleWhisperRecording();
+              return;
+            }
+          }
+          if (elapsed > 30000) {
+            toggleWhisperRecording();
+            return;
+          }
+          whisperMeterRaf = requestAnimationFrame(meterLoop);
+        }
+        if (analyser) whisperMeterRaf = requestAnimationFrame(meterLoop);
+        else {
+          try { if (whisperStopTimer) clearTimeout(whisperStopTimer); } catch (e) {}
+          whisperStopTimer = setTimeout(function () {
+            if (whisperRecording) toggleWhisperRecording();
+          }, 30000);
+        }
       }
       if (SpeechRecognition) {
         recognition = new SpeechRecognition();
