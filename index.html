@@ -715,7 +715,7 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v1.6</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v1.7</div>
       </div>
     </section>
 
@@ -1518,6 +1518,7 @@
       var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
       var hasMediaRecorder = !!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
       var whisperRecording = false;
+      var preferWhisper = false;
       var mediaRecorder = null;
       var mediaStream = null;
       var audioChunks = [];
@@ -1654,6 +1655,15 @@
           delete input.dataset.finalSpeech;
           if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
             showToast('মাইকের অনুমতি বন্ধ আছে। অ্যাড্রেস বারের 🔒 → Microphone → Allow করুন।');
+          } else if (event.error === 'network' || event.error === 'audio-capture') {
+            if (hasMediaRecorder && getGroqKey() && !preferWhisper) {
+              preferWhisper = true;
+              showToast('ব্রাউজার ভয়েসে সমস্যা — Whisper ভয়েস চালু হলো। আবার মাইকে চাপ দিন।');
+            } else {
+              showToast('মাইক্রোফোন শোনা যায়নি। আবার চেষ্টা করুন অথবা লিখে পাঠান।');
+            }
+          } else if (event.error === 'no-speech') {
+            showToast('কিছু শোনা যায়নি — মাইকে চাপ দিয়ে জোরে ইংরেজিতে বলুন।');
           } else if (event.error !== 'aborted') {
             showToast('মাইক্রোফোন শোনা যায়নি। আবার চেষ্টা করুন অথবা লিখে পাঠান।');
           }
@@ -1669,7 +1679,7 @@
 
       micBtn.addEventListener('click', function () {
         if (isBusy) return;
-        if (recognition) {
+        if (recognition && !preferWhisper) {
           if (isListening) recognition.stop();
           else {
             input.value = '';
@@ -1680,6 +1690,8 @@
           toggleWhisperRecording();
         } else if (hasMediaRecorder) {
           showToast('ভয়েসের জন্য ⚙ AI Key-তে Groq key সেভ করুন।');
+        } else {
+          showToast('এই ব্রাউজারে ভয়েস ইনপুট নেই।');
         }
       });
       sendBtn.addEventListener('click', submitMessage);
