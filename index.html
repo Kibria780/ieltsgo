@@ -781,7 +781,7 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.5</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.6</div>
       </div>
     </section>
 
@@ -830,6 +830,11 @@
             <span class="vname">🎙 Mentor voice pack <span class="bn" style="opacity:.6">(GitHub · warm human-like voice)</span></span>
             <button class="small-action" id="mentorPackTest" type="button">🔊</button>
             <button class="small-action" id="mentorPackToggle" type="button">On</button>
+          </div>
+          <div class="voice-item" id="packGenderRow">
+            <span class="vname">👧 মেয়ে / 👦 ছেলে ভয়েস</span>
+            <button class="small-action" id="packFemaleBtn" type="button">👧 মেয়ে</button>
+            <button class="small-action" id="packMaleBtn" type="button">👦 ছেলে</button>
           </div>
           <div class="voice-item" id="netVoiceRow">
             <span class="vname">🌐 Internet voice <span class="bn" style="opacity:.6">(কথোপকথনে ব্যবহার হবে)</span></span>
@@ -1487,6 +1492,9 @@
 
       var mentorPackOn = true;
       try { mentorPackOn = localStorage.getItem('ieltsgo_mentor_pack') !== 'off'; } catch (e) {}
+      var packGender = 'female';
+      try { packGender = localStorage.getItem('ieltsgo_pack_gender') || 'female'; } catch (e) {}
+      if (packGender !== 'male' && packGender !== 'female') packGender = 'female';
       var netVoiceOn = true;
       try { netVoiceOn = localStorage.getItem('ieltsgo_net_voice') !== 'off'; } catch (e) {}
       function playPackAudio(name) {
@@ -1494,7 +1502,7 @@
           if (!voiceOn || !mentorPackOn) { resolve(false); return; }
           try {
             if ('speechSynthesis' in window) { try { window.speechSynthesis.cancel(); } catch (e) {} }
-            var audio = new Audio('voices/' + name + '.mp3');
+            var audio = new Audio('voices/' + packGender + '/' + name + '.mp3');
             var done = false;
             function finish(ok) { if (!done) { done = true; resolve(ok); } }
             audio.onended = function () { finish(true); };
@@ -2218,12 +2226,25 @@
       var mentorPackRow = document.getElementById('mentorPackRow');
       var netVoiceToggle = document.getElementById('netVoiceToggle');
       var netVoiceRow = document.getElementById('netVoiceRow');
+      var packFemaleBtn = document.getElementById('packFemaleBtn');
+      var packMaleBtn = document.getElementById('packMaleBtn');
+      var packGenderRow = document.getElementById('packGenderRow');
       function updateMentorPackUI() {
         if (mentorPackToggle) mentorPackToggle.textContent = mentorPackOn ? 'On' : 'Off';
         if (mentorPackRow) mentorPackRow.classList.toggle('selected', !!mentorPackOn);
         if (netVoiceToggle) netVoiceToggle.textContent = netVoiceOn ? 'On' : 'Off';
         if (netVoiceRow) netVoiceRow.classList.toggle('selected', !!netVoiceOn);
+        if (packFemaleBtn) packFemaleBtn.textContent = (packGender === 'female' ? '✓ ' : '') + '👧 মেয়ে';
+        if (packMaleBtn) packMaleBtn.textContent = (packGender === 'male' ? '✓ ' : '') + '👦 ছেলে';
+        if (packGenderRow) packGenderRow.classList.toggle('selected', !!mentorPackOn);
       }
+      function setPackGender(g) {
+        packGender = g;
+        try { localStorage.setItem('ieltsgo_pack_gender', g); } catch (e) {}
+        updateMentorPackUI();
+      }
+      if (packFemaleBtn) packFemaleBtn.addEventListener('click', function () { setPackGender('female'); });
+      if (packMaleBtn) packMaleBtn.addEventListener('click', function () { setPackGender('male'); });
       if (mentorPackToggle) {
         mentorPackToggle.addEventListener('click', function () {
           mentorPackOn = !mentorPackOn;
