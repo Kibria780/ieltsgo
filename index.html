@@ -852,7 +852,7 @@
       }
 
       async function requestGroq(systemPrompt, userPrompt, key) {
-        var models = [GROQ_MODEL, GROQ_FALLBACK_MODEL];
+        var models = [GROQ_MODEL, GROQ_FALLBACK_MODEL, 'qwen/qwen3.6-27b'];
         var lastErr = null;
         for (var mi = 0; mi < models.length; mi++) {
           var controller = new AbortController();
@@ -878,9 +878,15 @@
               }),
               signal: controller.signal
             });
-            if ((response.status === 400 || response.status === 404) && mi === 0) continue;
-            if (!response.ok) throw new Error('Groq returned ' + response.status);
-            var payload = await response.json();
+            var bodyText = '';
+            try { bodyText = await response.text(); } catch (re) { bodyText = ''; }
+            if (!response.ok) {
+              lastErr = new Error('Groq ' + response.status + (bodyText ? ' · ' + bodyText.slice(0, 200) : ''));
+              if ((response.status === 400 || response.status === 404) && mi < models.length - 1) continue;
+              throw lastErr;
+            }
+            var payload;
+            try { payload = JSON.parse(bodyText); } catch (pe) { throw new Error('Groq: bad JSON'); }
             var content = payload && payload.choices && payload.choices[0] && payload.choices[0].message
               ? payload.choices[0].message.content
               : '';
