@@ -453,6 +453,41 @@
       color: var(--ink);
       font-size: 14px;
     }
+    .voice-modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.6);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+    .voice-modal.open { display: flex; }
+    .voice-modal-box {
+      background: var(--surface);
+      border-radius: 16px;
+      padding: 20px;
+      max-width: 420px;
+      width: 100%;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .voice-modal-box h3 { margin: 0 0 6px; }
+    .voice-list { margin: 12px 0; }
+    .voice-item {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      margin-bottom: 8px;
+    }
+    .voice-item .vname { flex: 1; font-size: 14px; }
+    .voice-item.selected { border-color: var(--accent); background: var(--accent-soft); }
+    .voice-modal-actions { display: flex; gap: 8px; }
+    .voice-modal-actions .small-action { flex: 1; }
 
     .coach {
       border-radius: var(--radius-lg) var(--radius-xl) var(--radius-lg) var(--radius-lg);
@@ -746,10 +781,7 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <span class="field-label">AI VOICE · মেন্টর ভয়েস বেছে নাও</span>
-        <select id="voiceSelect" class="voice-select"></select>
-        <button class="small-action" id="voiceTestBtn" type="button" style="width:100%;margin-top:8px">🔊 ভয়েস শুনে দেখো</button>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.2</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.3</div>
       </div>
     </section>
 
@@ -781,6 +813,7 @@
           <div class="composer-foot">
             <span class="bn" id="micHint">মাইকে চাপ দিয়ে ইংরেজিতে বলুন</span>
             <button class="voice-toggle" id="voiceChatBtn" type="button">🎙 Voice chat</button>
+            <button class="voice-toggle" id="voiceListBtn" type="button">🔊 Voice</button>
             <button class="voice-toggle" id="voiceToggle" type="button" aria-pressed="true">Voice reply · On</button>
           </div>
           <div class="voice-meter" id="voiceMeter" aria-hidden="true">
@@ -788,6 +821,18 @@
           </div>
         </div>
       </article>
+
+      <div class="voice-modal" id="voiceModal" aria-hidden="true">
+        <div class="voice-modal-box">
+          <h3>🔊 AI Voice বেছে নাও</h3>
+          <p class="bn">যেটা মেন্টরের মতো শোনাবে — 🔊 চাপ দিয়ে শুনে দেখো, তারপর Select করো।</p>
+          <div id="voiceListEl" class="voice-list"></div>
+          <div class="voice-modal-actions">
+            <button class="small-action" id="voiceReloadBtn" type="button">🔄 Reload</button>
+            <button class="small-action" id="voiceModalClose" type="button">বন্ধ করো</button>
+          </div>
+        </div>
+      </div>
 
       <aside class="coach" aria-label="Language coach feedback">
         <div class="coach-top">
@@ -2067,8 +2112,11 @@
         if (!voiceOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
       });
 
-      var voiceSelect = document.getElementById('voiceSelect');
-      var voiceTestBtn = document.getElementById('voiceTestBtn');
+      var voiceModal = document.getElementById('voiceModal');
+      var voiceListEl = document.getElementById('voiceListEl');
+      var voiceListBtn = document.getElementById('voiceListBtn');
+      var voiceReloadBtn = document.getElementById('voiceReloadBtn');
+      var voiceModalClose = document.getElementById('voiceModalClose');
       var selectedVoiceURI = null;
       try { selectedVoiceURI = localStorage.getItem('ieltsgo_voice_uri'); } catch (e) {}
       function getActiveVoice(voices) {
@@ -2079,62 +2127,100 @@
         }
         return pickMentorVoice(list);
       }
-      function refreshVoiceList() {
-        if (!('speechSynthesis' in window) || !voiceSelect) return;
+      function testVoiceURI(uri) {
+        if (!('speechSynthesis' in window)) { showToast('এই ব্রাউজারে ভয়েস নেই।'); return; }
+        var synth = window.speechSynthesis;
+        try { synth.cancel(); } catch (e) {}
+        var u = new SpeechSynthesisUtterance("Hello! I'm your English mentor. Let's learn together, step by step.");
+        u.lang = 'en-GB';
+        u.rate = 0.88;
+        u.pitch = 1.0;
+        var voices = [];
+        try { voices = synth.getVoices() || []; } catch (e) {}
+        var v = voices.find(function (x) { return x.voiceURI === uri; });
+        if (v) u.voice = v;
+        try { synth.speak(u); } catch (e) {}
+      }
+      function renderVoiceList() {
+        if (!voiceListEl) return;
+        if (!('speechSynthesis' in window)) {
+          voiceListEl.innerHTML = '<p class="bn">এই ব্রাউজারে ভয়েস নেই।</p>';
+          return;
+        }
         var voices = [];
         try { voices = window.speechSynthesis.getVoices() || []; } catch (e) {}
         var en = voices.filter(function (v) { return /^en/i.test(v.lang); });
         var others = voices.filter(function (v) { return !/^en/i.test(v.lang); });
         var sorted = en.concat(others);
-        voiceSelect.innerHTML = '';
+        voiceListEl.innerHTML = '';
         if (!sorted.length) {
-          var empty = document.createElement('option');
-          empty.value = '';
-          empty.textContent = 'কোনো ভয়েস পাওয়া যায়নি';
-          voiceSelect.appendChild(empty);
+          var p = document.createElement('p');
+          p.className = 'bn';
+          p.textContent = 'ভয়েস লোড হয়নি। নিচে 🔄 Reload চাপ দাও।';
+          voiceListEl.appendChild(p);
           return;
         }
         sorted.forEach(function (v) {
-          var opt = document.createElement('option');
-          opt.value = v.voiceURI;
-          opt.textContent = v.name + ' (' + v.lang + ')';
-          voiceSelect.appendChild(opt);
+          var row = document.createElement('div');
+          row.className = 'voice-item' + (v.voiceURI === selectedVoiceURI ? ' selected' : '');
+          var name = document.createElement('span');
+          name.className = 'vname';
+          name.textContent = v.name + ' (' + v.lang + ')';
+          var testB = document.createElement('button');
+          testB.className = 'small-action';
+          testB.type = 'button';
+          testB.textContent = '🔊';
+          testB.addEventListener('click', function () { testVoiceURI(v.voiceURI); });
+          var selB = document.createElement('button');
+          selB.className = 'small-action';
+          selB.type = 'button';
+          selB.textContent = v.voiceURI === selectedVoiceURI ? '✓' : 'Select';
+          selB.addEventListener('click', function () {
+            selectedVoiceURI = v.voiceURI;
+            try { localStorage.setItem('ieltsgo_voice_uri', selectedVoiceURI); } catch (e) {}
+            renderVoiceList();
+            showToast('ভয়েস সিলেক্ট হয়েছে ✅');
+          });
+          row.appendChild(name);
+          row.appendChild(testB);
+          row.appendChild(selB);
+          voiceListEl.appendChild(row);
         });
-        var exists = sorted.some(function (v) { return v.voiceURI === selectedVoiceURI; });
-        if (!exists) {
-          var mentor = pickMentorVoice(sorted);
-          selectedVoiceURI = mentor ? mentor.voiceURI : sorted[0].voiceURI;
-        }
-        voiceSelect.value = selectedVoiceURI;
       }
-      if (voiceSelect) {
-        voiceSelect.addEventListener('change', function () {
-          selectedVoiceURI = voiceSelect.value;
-          try { localStorage.setItem('ieltsgo_voice_uri', selectedVoiceURI); } catch (e) {}
+      function closeVoiceModal() {
+        if (!voiceModal) return;
+        voiceModal.classList.remove('open');
+        voiceModal.setAttribute('aria-hidden', 'true');
+        try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) {}
+      }
+      if (voiceListBtn) {
+        voiceListBtn.addEventListener('click', function () {
+          try { if ('speechSynthesis' in window) window.speechSynthesis.getVoices(); } catch (e) {}
+          renderVoiceList();
+          if (voiceModal) {
+            voiceModal.classList.add('open');
+            voiceModal.setAttribute('aria-hidden', 'false');
+          }
         });
       }
-      if (voiceTestBtn) {
-        voiceTestBtn.addEventListener('click', function () {
-          if (!('speechSynthesis' in window)) { showToast('এই ব্রাউজারে ভয়েস নেই।'); return; }
-          var synth = window.speechSynthesis;
-          try { synth.cancel(); } catch (e) {}
-          var u = new SpeechSynthesisUtterance("Hello! I'm your English mentor. Let's learn together, step by step.");
-          u.lang = 'en-GB';
-          u.rate = 0.88;
-          u.pitch = 1.0;
-          var voices = [];
-          try { voices = synth.getVoices() || []; } catch (e) {}
-          var v = getActiveVoice(voices);
-          if (v) u.voice = v;
-          try { synth.speak(u); } catch (e) {}
+      if (voiceModalClose) voiceModalClose.addEventListener('click', closeVoiceModal);
+      if (voiceReloadBtn) {
+        voiceReloadBtn.addEventListener('click', function () {
+          try { if ('speechSynthesis' in window) window.speechSynthesis.getVoices(); } catch (e) {}
+          showToast('ভয়েস লোড হচ্ছে…');
+          setTimeout(renderVoiceList, 800);
+        });
+      }
+      if (voiceModal) {
+        voiceModal.addEventListener('click', function (e) {
+          if (e.target === voiceModal) closeVoiceModal();
         });
       }
       if ('speechSynthesis' in window) {
-        refreshVoiceList();
+        try { window.speechSynthesis.getVoices(); } catch (e) {}
         var prevVoicesChanged = window.speechSynthesis.onvoiceschanged;
         window.speechSynthesis.onvoiceschanged = function () {
           try { window.speechSynthesis.getVoices(); } catch (e) {}
-          refreshVoiceList();
           if (typeof prevVoicesChanged === 'function') { try { prevVoicesChanged(); } catch (e) {} }
         };
       }
