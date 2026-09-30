@@ -735,15 +735,6 @@
   </style>
 </head>
 <body>
-<script type="module">
-  // Preload Piper TTS in background for reliability
-  import('https://cdn.jsdelivr.net/npm/@mintplex-labs/piper-tts-web@1.0.5/+esm').then(function (mod) {
-    window.piperTTS = mod;
-    window.dispatchEvent(new CustomEvent('piper-ready'));
-  }).catch(function () {
-    window.dispatchEvent(new CustomEvent('piper-failed'));
-  });
-</script>
   <main class="page">
     <section class="intro" aria-labelledby="main-title">
       <h1 id="main-title">Speak. Get corrected. <span>Try again.</span></h1>
@@ -802,7 +793,7 @@
         <button class="small-action" id="testElevenBtn" type="button" style="width:100%;margin-top:8px">🔊 ভয়েস পরীক্ষা</button>
         <div class="key-status bn" id="elevenStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.13</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.14</div>
       </div>
     </section>
 
@@ -862,23 +853,6 @@
             <button class="small-action" id="netVoiceToggle" type="button">On</button>
           </div>
           <div id="voiceListEl" class="voice-list"></div>
-          <div class="voice-item" id="piperRow">
-            <span class="vname">🧠 Beautiful Neural Voice <span class="bn" style="opacity:.6">(সবচেয়ে সুন্দর · key লাগে না)</span></span>
-          </div>
-          <p class="bn" style="opacity:.7;font-size:13px;margin:4px 0">📥 প্রথমবার ~60MB ডাউনলোড (WiFi-তে করো) → তারপর আজীবন ফ্রি, অফলাইনেও চলবে।</p>
-          <div class="voice-item" id="piperFemaleRow">
-            <span class="vname">👧 Neural মেয়ে</span>
-            <button class="small-action" id="piperFemaleBtn" type="button">Select</button>
-          </div>
-          <div class="voice-item" id="piperMaleRow">
-            <span class="vname">👦 Neural ছেলে</span>
-            <button class="small-action" id="piperMaleBtn" type="button">Select</button>
-          </div>
-          <div class="voice-item" id="piperOffRow">
-            <span class="vname">🔇 Neural বন্ধ <span class="bn" style="opacity:.6">(ইন্টারনেট ভয়েস চলবে)</span></span>
-            <button class="small-action" id="piperOffBtn" type="button">Select</button>
-          </div>
-          <div class="key-status bn" id="piperStatus" style="margin-top:8px"></div>
           <div class="voice-modal-actions">
             <button class="small-action" id="voiceReloadBtn" type="button">🔄 Reload</button>
             <button class="small-action" id="voiceModalClose" type="button">বন্ধ করো</button>
@@ -1652,7 +1626,8 @@
       var PIPER_FEMALE = 'en_GB-alba-medium';
       var PIPER_MALE = 'en_GB-alan-medium';
       var piperVoiceId = null;
-      try { piperVoiceId = localStorage.getItem('ieltsgo_piper_voice'); } catch (e) {}
+      try { localStorage.removeItem('ieltsgo_piper_voice'); } catch (e) {}
+      // Piper neural voice removed per user request — only key-based voices now.
       var piperModule = null;
       var piperReadyVoice = null;
       var piperDownloading = false;
@@ -2450,16 +2425,6 @@
       if (piperMaleBtn) piperMaleBtn.addEventListener('click', function () { setPiperVoice(PIPER_MALE); });
       if (piperOffBtn) piperOffBtn.addEventListener('click', function () { setPiperVoice(null); });
       updatePiperUI();
-      if (piperVoiceId) {
-        setTimeout(function () {
-          ensurePiper(piperVoiceId).then(function (ok) {
-            if (!ok) {
-              var statusEl = document.getElementById('piperStatus');
-              if (statusEl) statusEl.textContent = '⚠️ Neural ভয়েস লোড হয়নি — 🔊 Voice থেকে আবার Select করো।';
-            }
-          });
-        }, 2000);
-      }
       if (mentorPackToggle) {
         mentorPackToggle.addEventListener('click', function () {
           mentorPackOn = !mentorPackOn;
