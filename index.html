@@ -839,7 +839,11 @@
       var AI_ENDPOINT = 'https://text.pollinations.ai/openai';
       var GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
       var GROQ_MODEL = 'llama-3.3-70b-versatile';
+      var GROQ_FALLBACK_MODEL = 'llama-3.1-8b-instant';
       var lastProvider = '';
+      var lastAIError = '';
+
+      function errMsg(e) { return (e && e.message) ? e.message : String(e); }
 
       function getGroqKey() {
         try { return (localStorage.getItem('ieltsgo_groq_key') || '').trim(); }
@@ -847,37 +851,45 @@
       }
 
       async function requestGroq(systemPrompt, userPrompt, key) {
-        var controller = new AbortController();
-        var timeout = setTimeout(function () { controller.abort(); }, 25000);
-        try {
-          var response = await fetch(GROQ_ENDPOINT, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': 'Bearer ' + key
-            },
-            body: JSON.stringify({
-              model: GROQ_MODEL,
-              messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userPrompt }
-              ],
-              temperature: 0.25,
-              max_tokens: 1500,
-              response_format: { type: 'json_object' }
-            }),
-            signal: controller.signal
-          });
-          if (!response.ok) throw new Error('Groq returned ' + response.status);
-          var payload = await response.json();
-          var content = payload && payload.choices && payload.choices[0] && payload.choices[0].message
-            ? payload.choices[0].message.content
-            : '';
-          if (!content) throw new Error('Groq response was empty');
-          return extractJsonObject(content);
-        } finally {
-          clearTimeout(timeout);
+        var models = [GROQ_MODEL, GROQ_FALLBACK_MODEL];
+        var lastErr = null;
+        for (var mi = 0; mi < models.length; mi++) {
+          var controller = new AbortController();
+          var timeout = setTimeout(function () { controller.abort(); }, 25000);
+          try {
+            var response = await fetch(GROQ_ENDPOINT, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + key
+              },
+              body: JSON.stringify({
+                model: models[mi],
+                messages: [
+                  { role: 'system', content: systemPrompt },
+                  { role: 'user', content: userPrompt }
+                ],
+                temperature: 0.25,
+                max_tokens: 1500,
+                response_format: { type: 'json_object' }
+              }),
+              signal: controller.signal
+            });
+            if ((response.status === 400 || response.status === 404) && mi === 0) continue;
+            if (!response.ok) throw new Error('Groq returned ' + response.status);
+            var payload = await response.json();
+            var content = payload && payload.choices && payload.choices[0] && payload.choices[0].message
+              ? payload.choices[0].message.content
+              : '';
+            if (!content) throw new Error('Groq response was empty');
+            return extractJsonObject(content);
+          } catch (err) {
+            lastErr = err;
+          } finally {
+            clearTimeout(timeout);
+          }
         }
+        throw lastErr;
       }
 
       function extractJsonObject(raw) {
@@ -1112,16 +1124,22 @@
         ].join(' ');
         try {
           lastResultOffline = false;
+          lastAIError = '';
           var groqKey = getGroqKey();
           if (groqKey) {
             try {
               var g = await requestGroq(systemPrompt, 'Conversation context:\n' + recent + '\n\nLatest learner answer to analyse:\n' + text, groqKey);
               lastProvider = 'groq';
               return normalizeCoachResult(g);
-            } catch (ge) { lastProvider = ''; }
+            } catch (ge) { lastProvider = ''; lastAIError = 'Groq ✗ ' + errMsg(ge); }
           }
           lastProvider = 'pollinations';
-          return normalizeCoachResult(await requestAI(systemPrompt, 'Conversation context:\n' + recent + '\n\nLatest learner answer to analyse:\n' + text));
+          try {
+            return normalizeCoachResult(await requestAI(systemPrompt, 'Conversation context:\n' + recent + '\n\nLatest learner answer to analyse:\n' + text));
+          } catch (pe) {
+            if (!lastAIError) lastAIError = 'Free AI ✗ ' + errMsg(pe);
+            throw pe;
+          }
         } catch (e) {
           lastResultOffline = true;
           lastProvider = 'offline';
@@ -1145,15 +1163,21 @@
         ].join(' ');
         try {
           lastResultOffline = false;
+          lastAIError = '';
           var groqKey = getGroqKey();
           if (groqKey) {
             try {
               lastProvider = 'groq';
               return await requestGroq(systemPrompt, testText, groqKey);
-            } catch (ge) { lastProvider = ''; }
+            } catch (ge) { lastProvider = ''; lastAIError = 'Groq ✗ ' + errMsg(ge); }
           }
           lastProvider = 'pollinations';
-          return await requestAI(systemPrompt, testText);
+          try {
+            return await requestAI(systemPrompt, testText);
+          } catch (pe) {
+            if (!lastAIError) lastAIError = 'Free AI ✗ ' + errMsg(pe);
+            throw pe;
+          }
         } catch (e) {
           lastResultOffline = true;
           lastProvider = 'offline';
@@ -1435,8 +1459,10 @@
           renderFeedback(result);
           speak(result.reply);
           if (lastResultOffline) {
-            setStatus('অফলাইন মোড · মৌলিক সংশোধন', true);
-            showToast('AI সার্ভার ব্যস্ত — অফলাইন মোডে মৌলিক সংশোধন দেখানো হচ্ছে।');
+            setStatus('AI সমস্যা' + (lastAIError ? ' · ' + lastAIError : ''), true);
+            showToast('AI সার্ভারে সমস্যা' + (lastAIError ? ' (' + lastAIError + ')' : '') + ' — অফলাইন মোডে মৌলিক সংশোধন দেখানো হচ্ছে।');
+            var ks = document.getElementById('keyStatus');
+            if (ks && getGroqKey()) ks.textContent = 'Key সেভ আছে। শেষ ত্রুটি: ' + (lastAIError || 'অজানা');
           } else if (lastProvider === 'groq') {
             setStatus('Groq AI · ready', false);
           } else {
