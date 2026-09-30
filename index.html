@@ -793,7 +793,7 @@
         <button class="small-action" id="testElevenBtn" type="button" style="width:100%;margin-top:8px">🔊 ভয়েস পরীক্ষা</button>
         <div class="key-status bn" id="elevenStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.10</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.11</div>
       </div>
     </section>
 
@@ -853,10 +853,10 @@
             <button class="small-action" id="netVoiceToggle" type="button">On</button>
           </div>
           <div id="voiceListEl" class="voice-list"></div>
-          <!-- Neural voices temporarily hidden: 60MB model download is unreliable on mobile data.
           <div class="voice-item" id="piperRow">
-            <span class="vname">🧠 Neural voice <span class="bn" style="opacity:.6">(সবচেয়ে সুন্দর · একবার ডাউনলোড)</span></span>
+            <span class="vname">🧠 Beautiful Neural Voice <span class="bn" style="opacity:.6">(সবচেয়ে সুন্দর · key লাগে না)</span></span>
           </div>
+          <p class="bn" style="opacity:.7;font-size:13px;margin:4px 0">📥 প্রথমবার ~60MB ডাউনলোড (WiFi-তে করো) → তারপর আজীবন ফ্রি, অফলাইনেও চলবে।</p>
           <div class="voice-item" id="piperFemaleRow">
             <span class="vname">👧 Neural মেয়ে</span>
             <button class="small-action" id="piperFemaleBtn" type="button">Select</button>
@@ -869,7 +869,7 @@
             <span class="vname">🔇 Neural বন্ধ <span class="bn" style="opacity:.6">(ইন্টারনেট ভয়েস চলবে)</span></span>
             <button class="small-action" id="piperOffBtn" type="button">Select</button>
           </div>
-          -->
+          <div class="key-status bn" id="piperStatus" style="margin-top:8px"></div>
           <div class="voice-modal-actions">
             <button class="small-action" id="voiceReloadBtn" type="button">🔄 Reload</button>
             <button class="small-action" id="voiceModalClose" type="button">বন্ধ করো</button>
@@ -1643,11 +1643,7 @@
       var PIPER_FEMALE = 'en_GB-alba-medium';
       var PIPER_MALE = 'en_GB-alan-medium';
       var piperVoiceId = null;
-      try {
-        // Neural UI is hidden (v2.8+): ignore any stale saved voice to avoid
-        // trying the 60MB Piper download on mobile data.
-        localStorage.removeItem('ieltsgo_piper_voice');
-      } catch (e) {}
+      try { piperVoiceId = localStorage.getItem('ieltsgo_piper_voice'); } catch (e) {}
       var piperModule = null;
       var piperReadyVoice = null;
       var piperDownloading = false;
@@ -1656,7 +1652,9 @@
           if (piperReadyVoice === voiceId && piperModule) { resolve(true); return; }
           if (piperDownloading) { resolve(false); return; }
           piperDownloading = true;
-          showToast('🧠 Neural ভয়েস ডাউনলোড হচ্ছে…');
+          var statusEl = document.getElementById('piperStatus');
+          function setStatus(t) { if (statusEl) statusEl.textContent = t; showToast(t); }
+          setStatus('🧠 Neural ভয়েস ডাউনলোড হচ্ছে… (WiFi ব্যবহার করো)');
           var modPromise = piperModule
             ? Promise.resolve(piperModule)
             : import('https://esm.sh/@mintplex-labs/piper-tts-web@1.0.5');
@@ -1665,15 +1663,16 @@
             return mod.download(voiceId, function (progress) {
               var pct = progress && progress.total
                 ? Math.round(progress.loaded * 100 / progress.total) : 0;
-              showToast('🧠 Neural ভয়েস ডাউনলোড হচ্ছে… ' + pct + '%');
+              setStatus('🧠 ডাউনলোড হচ্ছে… ' + pct + '% — অপেক্ষা করো');
             });
           }).then(function () {
             piperReadyVoice = voiceId;
             piperDownloading = false;
-            showToast('🧠 Neural ভয়েস রেডি ✅');
+            setStatus('✅ Neural ভয়েস রেডি! এখন থেকে এই গলায় কথা বলবে।');
             resolve(true);
           }).catch(function () {
             piperDownloading = false;
+            setStatus('❌ ডাউনলোড ব্যর্থ — WiFi-তে আবার চেষ্টা করো।');
             resolve(false);
           });
         });
