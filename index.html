@@ -781,7 +781,7 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.8</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.9</div>
       </div>
     </section>
 
@@ -1602,7 +1602,11 @@
       var PIPER_FEMALE = 'en_GB-alba-medium';
       var PIPER_MALE = 'en_GB-alan-medium';
       var piperVoiceId = null;
-      try { piperVoiceId = localStorage.getItem('ieltsgo_piper_voice'); } catch (e) {}
+      try {
+        // Neural UI is hidden (v2.8+): ignore any stale saved voice to avoid
+        // trying the 60MB Piper download on mobile data.
+        localStorage.removeItem('ieltsgo_piper_voice');
+      } catch (e) {}
       var piperModule = null;
       var piperReadyVoice = null;
       var piperDownloading = false;
