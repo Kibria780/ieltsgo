@@ -817,33 +817,40 @@
       }
 
       async function requestAI(systemPrompt, userPrompt) {
-        var controller = new AbortController();
-        var timeout = setTimeout(function () { controller.abort(); }, 45000);
-        try {
-          var response = await fetch(AI_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              model: 'openai',
-              messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userPrompt }
-              ],
-              temperature: 0.25,
-              private: true
-            }),
-            signal: controller.signal
-          });
-          if (!response.ok) throw new Error('AI service returned ' + response.status);
-          var payload = await response.json();
-          var content = payload && payload.choices && payload.choices[0] && payload.choices[0].message
-            ? payload.choices[0].message.content
-            : '';
-          if (!content) throw new Error('AI response was empty');
-          return extractJsonObject(content);
-        } finally {
-          clearTimeout(timeout);
+        var lastError = null;
+        for (var attempt = 1; attempt <= 2; attempt++) {
+          var controller = new AbortController();
+          var timeout = setTimeout(function () { controller.abort(); }, 30000);
+          try {
+            var response = await fetch(AI_ENDPOINT, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                model: 'openai',
+                messages: [
+                  { role: 'system', content: systemPrompt },
+                  { role: 'user', content: userPrompt }
+                ],
+                temperature: 0.25,
+                private: true
+              }),
+              signal: controller.signal
+            });
+            if (!response.ok) throw new Error('AI service returned ' + response.status);
+            var payload = await response.json();
+            var content = payload && payload.choices && payload.choices[0] && payload.choices[0].message
+              ? payload.choices[0].message.content
+              : '';
+            if (!content) throw new Error('AI response was empty');
+            return extractJsonObject(content);
+          } catch (err) {
+            lastError = err;
+            if (attempt === 1) await new Promise(function (r) { setTimeout(r, 2000); });
+          } finally {
+            clearTimeout(timeout);
+          }
         }
+        throw lastError;
       }
 
       function normalizeCoachResult(data) {
@@ -862,6 +869,158 @@
         };
       }
 
+      // ---------- Offline fallback coach (used when the free AI service is unreachable) ----------
+      var lastResultOffline = false;
+
+      var BASE_VERB = {
+        goes: 'go', eats: 'eat', drinks: 'drink', plays: 'play', reads: 'read',
+        writes: 'write', speaks: 'speak', takes: 'take', makes: 'make', comes: 'come',
+        runs: 'run', sleeps: 'sleep', works: 'work', studies: 'study', learns: 'learn',
+        teaches: 'teach', buys: 'buy', does: 'do', has: 'have', says: 'say',
+        tries: 'try', carries: 'carry', flies: 'fly'
+      };
+
+      function baseFormFix(match) {
+        var parts = match.split(/\s+/);
+        var last = parts[parts.length - 1];
+        var lower = last.toLowerCase();
+        parts[parts.length - 1] = BASE_VERB[lower] || lower.replace(/(es|ies)$/, '').replace(/s$/, '') || last;
+        return parts.join(' ');
+      }
+
+      var GRAMMAR_RULES = [
+        { re: /\b(he|she|it)\s+go\b/gi, fix: function (m) { return m.replace(/go$/i, 'goes'); }, bn: 'he/she/it-এর পরে মূল verb-এর শেষে s যোগ হয়। যেমন: He goes (He go নয়)।' },
+        { re: /\b(he|she|it)\s+have\b/gi, fix: function (m) { return m.replace(/have$/i, 'has'); }, bn: 'he/she/it-এর পরে have না হয়ে has হয়। যেমন: She has a pen।' },
+        { re: /\b(he|she|it)\s+do\s+not\b/gi, fix: function (m) { return m.replace(/do\s+not$/i, 'does not'); }, bn: 'he/she/it-এর পরে do not না হয়ে does not হয়।' },
+        { re: /\b(he|she|it)\s+don't\b/gi, fix: function (m) { return m.replace(/don't$/i, "doesn't"); }, bn: "he/she/it-এর পরে don't না হয়ে doesn't হয়।" },
+        { re: /\b(i|you|we|they)\s+goes\b/gi, fix: function (m) { return m.replace(/goes$/i, 'go'); }, bn: 'I/you/we/they-এর পরে verb-এর সাথে s যোগ হয় না। যেমন: They go।' },
+        { re: /\b(i|you|we|they)\s+has\b/gi, fix: function (m) { return m.replace(/has$/i, 'have'); }, bn: 'I/you/we/they-এর পরে has না হয়ে have হয়। যেমন: They have।' },
+        { re: /\b(i|you|we|they)\s+does\b/gi, fix: function (m) { return m.replace(/does$/i, 'do'); }, bn: 'I/you/we/they-এর পরে does না হয়ে do হয়।' },
+        { re: /\b(you|they|we)\s+was\b/gi, fix: function (m) { return m.replace(/was$/i, 'were'); }, bn: 'you/they/we-এর পরে was না হয়ে were হয়।' },
+        { re: /\bi\s+were\b/gi, fix: function () { return 'I was'; }, bn: 'I-এর পরে were না হয়ে was হয়।' },
+        { re: /\bdidn't\s+went\b/gi, fix: function () { return "didn't go"; }, bn: "did/didn't-এর পরে সবসময় verb-এর base form বসে। যেমন: didn't go।" },
+        { re: /\bdid\s+went\b/gi, fix: function () { return 'did go'; }, bn: 'did-এর পরে verb-এর base form বসে: did go।' },
+        { re: /\b(will|can|could|shall|should|may|might|must)\s+(goes|eats|drinks|plays|reads|writes|speaks|takes|makes|comes|runs|sleeps|works|studies|learns|teaches|buys|does|has|says|tries|carries|flies)\b/gi, fix: baseFormFix, bn: 'will/can/must ইত্যাদি modal verb-এর পরে মূল verb-এর base form বসে, s যোগ হয় না। যেমন: will go।' },
+        { re: /\bto\s+(goes|eats|drinks|plays|reads|writes|speaks|takes|makes|comes|runs|sleeps|works|studies|learns|teaches|buys)\b/gi, fix: baseFormFix, bn: 'to-এর পরে verb-এর base form বসে (infinitive)। যেমন: to go, to eat।' },
+        { re: /\ba\s+([aeiou][a-z]*)/gi, fix: function (m) { return m.replace(/^a(\s+)/i, 'an$1'); }, bn: 'vowel (a, e, i, o, u) দিয়ে শুরু হওয়া শব্দের আগে a না হয়ে an বসে। যেমন: an apple।' },
+        { re: /\binformations\b/gi, fix: function () { return 'information'; }, bn: 'information অগণনাযোগ্য (uncountable noun), এর plural হয় না।' },
+        { re: /\bchilds\b/gi, fix: function () { return 'children'; }, bn: 'child-এর plural children, childs নয়।' },
+        { re: /\badvices\b/gi, fix: function () { return 'advice'; }, bn: 'advice অগণনাযোগ্য, এর plural হয় না।' },
+        { re: /\bfurnitures\b/gi, fix: function () { return 'furniture'; }, bn: 'furniture অগণনাযোগ্য, এর plural হয় না।' },
+        { re: /\bluggages\b/gi, fix: function () { return 'luggage'; }, bn: 'luggage অগণনাযোগ্য, এর plural হয় না।' },
+        { re: /\bmore\s+better\b/gi, fix: function () { return 'better'; }, bn: 'better নিজেই comparative form, এর আগে more বসে না।' },
+        { re: /\bthere\s+is\s+many\b/gi, fix: function () { return 'there are many'; }, bn: 'plural noun-এর আগে there is না হয়ে there are হয়।' },
+        { re: /\bmarried\s+with\b/gi, fix: function () { return 'married to'; }, bn: 'married-এর পরে with না হয়ে to বসে: married to।' },
+        { re: /\bdiscuss\s+about\b/gi, fix: function () { return 'discuss'; }, bn: 'discuss-এর পরে about বসে না, সরাসরি object বসে।' },
+        { re: /\benter\s+into\b/gi, fix: function () { return 'enter'; }, bn: 'enter-এর পরে into বসে না: enter the room।' },
+        { re: /\baccording\s+to\s+me\b/gi, fix: function () { return 'in my opinion'; }, bn: "নিজের মতামত দিতে 'according to me' না বলে 'in my opinion' বলুন।" },
+        { re: /\bdo\s+a\s+mistake\b/gi, fix: function () { return 'make a mistake'; }, bn: 'mistake-এর সাথে do না হয়ে make বসে: make a mistake।' },
+        { re: /\bi\s+am\s+agree\b/gi, fix: function () { return 'I agree'; }, bn: "'agree' নিজেই verb, এর আগে am বসে না: I agree।" },
+        { re: /\bhave\s+went\b/gi, fix: function () { return 'have gone'; }, bn: 'have/has-এর পরে verb-এর past participle বসে: have gone।' },
+        { re: /\bhas\s+went\b/gi, fix: function () { return 'has gone'; }, bn: 'have/has-এর পরে verb-এর past participle বসে: has gone।' },
+        { re: /\bwas\s+went\b/gi, fix: function () { return 'went'; }, bn: 'went-এর আগে was বসে না, শুধু went-ই যথেষ্ট।' },
+        { re: /\bis\s+is\b/gi, fix: function () { return 'is'; }, bn: 'একই helping verb দুবার বসে গেছে, একবারই যথেষ্ট।' }
+      ];
+
+      function checkGrammar(text) {
+        var found = [];
+        var str = String(text || '');
+        for (var i = 0; i < GRAMMAR_RULES.length && found.length < 6; i++) {
+          var rule = GRAMMAR_RULES[i];
+          var matches = str.match(rule.re);
+          if (!matches) continue;
+          for (var j = 0; j < matches.length && found.length < 6; j++) {
+            var original = matches[j];
+            var corrected = '';
+            try { corrected = rule.fix(original); } catch (e) { corrected = ''; }
+            if (corrected && corrected.toLowerCase() !== original.toLowerCase()) {
+              found.push({ original: original, corrected: corrected, explanation_bn: rule.bn });
+            }
+          }
+        }
+        return found;
+      }
+
+      function localReply(text, corrections) {
+        var t = String(text).toLowerCase();
+        var question = 'Could you tell me a little more about that?';
+        var topics = [
+          [/family|mother|father|brother|sister|parents/, 'How many members are there in your family?'],
+          [/school|college|study|teacher|exam|subject/, 'What is your favourite subject and why?'],
+          [/food|eat|lunch|dinner|breakfast|restaurant/, 'What kind of food do you like most?'],
+          [/football|cricket|game|hobby|music|movie/, 'How often do you do that in your free time?'],
+          [/travel|visit|journey|tour/, 'Which place would you like to visit one day?'],
+          [/work|job|office|business/, 'What do you do for work?'],
+          [/friend/, 'What do you usually do together with your friends?'],
+          [/morning|evening|daily|every day/, 'What do you usually do in the evening?'],
+          [/dream|future|want to be/, 'What would you like to do in the future?']
+        ];
+        for (var i = 0; i < topics.length; i++) {
+          if (topics[i][0].test(t)) { question = topics[i][1]; break; }
+        }
+        var openersFix = [
+          'Good try! I found some small mistakes — let us fix them together.',
+          'Nice effort! A few small corrections will make it even better.'
+        ];
+        var openersGood = ['Well said!', 'Nice answer!', 'Good, very clear!'];
+        var opener = corrections.length
+          ? openersFix[Math.floor(Math.random() * openersFix.length)]
+          : openersGood[Math.floor(Math.random() * openersGood.length)];
+        return opener + ' ' + question;
+      }
+
+      function localPracticeResult(text) {
+        var corrections = checkGrammar(text);
+        var encouragement = corrections.length
+          ? 'ভুলগুলো দেখে বাক্যটি আরেকবার সঠিকভাবে বলার চেষ্টা করুন।'
+          : 'দারুণ! এই উত্তরে গুরুত্বপূর্ণ কোনো ভুল পাওয়া যায়নি।';
+        return {
+          reply: localReply(text, corrections),
+          corrections: corrections,
+          score: Math.max(40, 96 - corrections.length * 9),
+          encouragement: encouragement,
+          encouragement_bn: encouragement
+        };
+      }
+
+      function localMockResult() {
+        var answers = transcript.filter(function (item) { return item.role === 'user'; }).map(function (a) { return a.text; });
+        var words = [];
+        answers.forEach(function (a) {
+          var w = String(a).toLowerCase().match(/[a-z']+/g);
+          if (w) words = words.concat(w);
+        });
+        var totalWords = words.length;
+        var avgLen = answers.length ? totalWords / answers.length : 0;
+        var totalErrors = 0;
+        answers.forEach(function (a) { totalErrors += checkGrammar(a).length; });
+        var errPer100 = totalWords ? (totalErrors / totalWords) * 100 : 0;
+        var uniqueRatio = totalWords ? new Set(words).size / totalWords : 0;
+        function band(v) { return Math.max(4.0, Math.min(7.0, Math.round(v * 2) / 2)); }
+        var fluency = band(avgLen >= 40 ? 6.5 : avgLen >= 25 ? 6.0 : avgLen >= 15 ? 5.5 : avgLen >= 8 ? 5.0 : 4.5);
+        var grammar = band(errPer100 <= 3 ? 6.5 : errPer100 <= 6 ? 6.0 : errPer100 <= 10 ? 5.5 : 5.0);
+        var lexical = band(uniqueRatio > 0.6 ? 6.5 : uniqueRatio > 0.45 ? 6.0 : 5.5);
+        var overall = Math.round(((fluency + grammar + lexical) / 3) * 2) / 2;
+        var strengths = [];
+        if (avgLen >= 20) strengths.push('আপনি প্রতিটি প্রশ্নে ভালো দৈর্ঘ্যের উত্তর দিয়েছেন');
+        if (errPer100 <= 6) strengths.push('ব্যাকরণের ভুল তুলনামূলক কম ছিল');
+        if (!strengths.length) strengths.push('আপনি সবগুলো প্রশ্নের উত্তর দেওয়ার চেষ্টা করেছেন');
+        var next = [
+          '1. প্রতিটি উত্তরে অন্তত ২-৩টি সম্পূর্ণ বাক্য বলার অভ্যাস করুন।',
+          '2. he/she/it-এর পরে verb-এর সাথে s/es যোগ করতে ভুলবেন না।',
+          '3. did/will/can-এর পরে সবসময় verb-এর base form ব্যবহার করুন।'
+        ];
+        return {
+          overall_band: overall,
+          fluency: fluency,
+          lexical: lexical,
+          grammar: grammar,
+          pronunciation: null,
+          strengths_bn: strengths.join('। ') + '।',
+          next_steps_bn: next.join('\n')
+        };
+      }
+
       async function getPracticeFeedback(text) {
         var recent = transcript.slice(-8).map(function (item) {
           return (item.role === 'user' ? 'Learner: ' : 'Coach: ') + item.text;
@@ -874,7 +1033,13 @@
           'Return ONLY valid JSON with exactly these keys: reply (English string), corrections (array of objects with original, corrected, explanation_bn), score (integer 0-100 for grammar and clarity), encouragement_bn (Bengali string).',
           'Each original must quote the learner’s exact problematic words. Each corrected must show the improved wording. Each explanation_bn must clearly explain the rule in Bengali. If there is no meaningful error, return an empty corrections array.'
         ].join(' ');
-        return normalizeCoachResult(await requestAI(systemPrompt, 'Conversation context:\n' + recent + '\n\nLatest learner answer to analyse:\n' + text));
+        try {
+          lastResultOffline = false;
+          return normalizeCoachResult(await requestAI(systemPrompt, 'Conversation context:\n' + recent + '\n\nLatest learner answer to analyse:\n' + text));
+        } catch (e) {
+          lastResultOffline = true;
+          return localPracticeResult(text);
+        }
       }
 
       async function getMockFeedback() {
@@ -891,7 +1056,13 @@
           'Return ONLY valid JSON with exactly these keys: overall_band, fluency, lexical, grammar, pronunciation, strengths_bn, next_steps_bn.',
           'overall_band must average only the three assessable criteria. strengths_bn and next_steps_bn must be specific Bengali feedback grounded in these answers; format next_steps_bn as numbered points in one string.'
         ].join(' ');
-        return requestAI(systemPrompt, testText);
+        try {
+          lastResultOffline = false;
+          return await requestAI(systemPrompt, testText);
+        } catch (e) {
+          lastResultOffline = true;
+          return localMockResult();
+        }
       }
 
       function setStatus(text, active) {
@@ -1123,6 +1294,7 @@
           renderMockResult(result);
           scoreLabel.textContent = 'Estimated overall band';
           setStatus('Mock test complete', false);
+          if (lastResultOffline) showToast('AI সার্ভার ব্যস্ত — অফলাইন অনুমানভিত্তিক স্কোর দেখানো হচ্ছে।');
           newSessionBtn.textContent = 'Try another test';
           speak('That is the end of the speaking test. Your practice result is ready.');
         } catch (error) {
@@ -1166,7 +1338,12 @@
           transcript.push({ role: 'assistant', text: result.reply });
           renderFeedback(result);
           speak(result.reply);
-          setStatus('AI coach · ready', false);
+          if (lastResultOffline) {
+            setStatus('অফলাইন মোড · মৌলিক সংশোধন', true);
+            showToast('AI সার্ভার ব্যস্ত — অফলাইন মোডে মৌলিক সংশোধন দেখানো হচ্ছে।');
+          } else {
+            setStatus('AI coach · ready', false);
+          }
         } catch (error) {
           removeTyping();
           addMessage('assistant', 'I could not reach the AI coach just now. Please send your answer again.', false);
