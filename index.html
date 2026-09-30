@@ -781,7 +781,7 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.6</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.7</div>
       </div>
     </section>
 
@@ -839,6 +839,21 @@
           <div class="voice-item" id="netVoiceRow">
             <span class="vname">🌐 Internet voice <span class="bn" style="opacity:.6">(কথোপকথনে ব্যবহার হবে)</span></span>
             <button class="small-action" id="netVoiceToggle" type="button">On</button>
+          </div>
+          <div class="voice-item" id="piperRow">
+            <span class="vname">🧠 Neural voice <span class="bn" style="opacity:.6">(সবচেয়ে সুন্দর · একবার ডাউনলোড)</span></span>
+          </div>
+          <div class="voice-item" id="piperFemaleRow">
+            <span class="vname">👧 Neural মেয়ে</span>
+            <button class="small-action" id="piperFemaleBtn" type="button">Select</button>
+          </div>
+          <div class="voice-item" id="piperMaleRow">
+            <span class="vname">👦 Neural ছেলে</span>
+            <button class="small-action" id="piperMaleBtn" type="button">Select</button>
+          </div>
+          <div class="voice-item" id="piperOffRow">
+            <span class="vname">🔇 Neural বন্ধ <span class="bn" style="opacity:.6">(ইন্টারনেট ভয়েস চলবে)</span></span>
+            <button class="small-action" id="piperOffBtn" type="button">Select</button>
           </div>
           <div id="voiceListEl" class="voice-list"></div>
           <div class="voice-modal-actions">
@@ -1416,7 +1431,16 @@
       }
       function speak(text) {
         if (!voiceOn) return;
-        if (netVoiceOn) {
+        if (piperVoiceId) {
+          speakPiper(text, piperVoiceId, function (ok) {
+            if (ok) return;
+            if (netVoiceOn) {
+              speakNetVoice(text, function (ok2) { if (!ok2) speakPhone(text); });
+            } else {
+              speakPhone(text);
+            }
+          });
+        } else if (netVoiceOn) {
           speakNetVoice(text, function (ok) { if (!ok) speakPhone(text); });
         } else {
           speakPhone(text);
@@ -1482,6 +1506,17 @@
       }
       function speakAndWait(text) {
         return new Promise(function (resolve) {
+          if (piperVoiceId) {
+            speakPiper(text, piperVoiceId, function (ok) {
+              if (ok) { resolve(); return; }
+              if (!netVoiceOn) { speakAndWaitPhone(text).then(resolve); return; }
+              speakNetVoice(text, function (ok2) {
+                if (ok2) { resolve(); return; }
+                speakAndWaitPhone(text).then(resolve);
+              });
+            });
+            return;
+          }
           if (!netVoiceOn) { speakAndWaitPhone(text).then(resolve); return; }
           speakNetVoice(text, function (ok) {
             if (ok) { resolve(); return; }
@@ -1561,6 +1596,69 @@
           } catch (e) { failed = true; onDone(false); }
         }
         playNext();
+      }
+      var PIPER_FEMALE = 'en_GB-alba-medium';
+      var PIPER_MALE = 'en_GB-alan-medium';
+      var piperVoiceId = null;
+      try { piperVoiceId = localStorage.getItem('ieltsgo_piper_voice'); } catch (e) {}
+      var piperModule = null;
+      var piperReadyVoice = null;
+      var piperDownloading = false;
+      function ensurePiper(voiceId) {
+        return new Promise(function (resolve) {
+          if (piperReadyVoice === voiceId && piperModule) { resolve(true); return; }
+          if (piperDownloading) { resolve(false); return; }
+          piperDownloading = true;
+          showToast('🧠 Neural ভয়েস ডাউনলোড হচ্ছে…');
+          var modPromise = piperModule
+            ? Promise.resolve(piperModule)
+            : import('https://esm.sh/@mintplex-labs/piper-tts-web@1.0.5');
+          modPromise.then(function (mod) {
+            piperModule = mod;
+            return mod.download(voiceId, function (progress) {
+              var pct = progress && progress.total
+                ? Math.round(progress.loaded * 100 / progress.total) : 0;
+              showToast('🧠 Neural ভয়েস ডাউনলোড হচ্ছে… ' + pct + '%');
+            });
+          }).then(function () {
+            piperReadyVoice = voiceId;
+            piperDownloading = false;
+            showToast('🧠 Neural ভয়েস রেডি ✅');
+            resolve(true);
+          }).catch(function () {
+            piperDownloading = false;
+            resolve(false);
+          });
+        });
+      }
+      function speakPiper(text, voiceId, onDone) {
+        ensurePiper(voiceId).then(function (ok) {
+          if (!ok || !piperModule) { onDone(false); return; }
+          var chunks = googleTTSChunks(text);
+          if (!chunks.length) { onDone(true); return; }
+          if ('speechSynthesis' in window) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+          var i = 0;
+          var failed = false;
+          function next() {
+            if (failed) return;
+            if (i >= chunks.length) { onDone(true); return; }
+            var chunk = chunks[i++];
+            try {
+              piperModule.predict({ text: chunk, voiceId: voiceId }).then(function (wav) {
+                if (failed) return;
+                try {
+                  var audio = new Audio(URL.createObjectURL(wav));
+                  audio.onended = next;
+                  audio.onerror = function () { failed = true; onDone(false); };
+                  var p = null;
+                  try { p = audio.play(); } catch (e) { failed = true; onDone(false); return; }
+                  if (p && typeof p.catch === 'function') { p.catch(function () { failed = true; onDone(false); }); }
+                } catch (e) { failed = true; onDone(false); }
+              }).catch(function () { failed = true; onDone(false); });
+            } catch (e) { failed = true; onDone(false); }
+          }
+          next();
+        });
       }
 
       function listenWithSilenceDetection() {
@@ -2245,6 +2343,39 @@
       }
       if (packFemaleBtn) packFemaleBtn.addEventListener('click', function () { setPackGender('female'); });
       if (packMaleBtn) packMaleBtn.addEventListener('click', function () { setPackGender('male'); });
+      var piperFemaleBtn = document.getElementById('piperFemaleBtn');
+      var piperMaleBtn = document.getElementById('piperMaleBtn');
+      var piperOffBtn = document.getElementById('piperOffBtn');
+      var piperRow = document.getElementById('piperRow');
+      var piperFemaleRow = document.getElementById('piperFemaleRow');
+      var piperMaleRow = document.getElementById('piperMaleRow');
+      var piperOffRow = document.getElementById('piperOffRow');
+      function updatePiperUI() {
+        if (piperFemaleBtn) piperFemaleBtn.textContent = (piperVoiceId === PIPER_FEMALE ? '✓ ' : '') + 'Select';
+        if (piperMaleBtn) piperMaleBtn.textContent = (piperVoiceId === PIPER_MALE ? '✓ ' : '') + 'Select';
+        if (piperOffBtn) piperOffBtn.textContent = (!piperVoiceId ? '✓ ' : '') + 'Select';
+        if (piperRow) piperRow.classList.toggle('selected', !!piperVoiceId);
+        if (piperFemaleRow) piperFemaleRow.classList.toggle('selected', piperVoiceId === PIPER_FEMALE);
+        if (piperMaleRow) piperMaleRow.classList.toggle('selected', piperVoiceId === PIPER_MALE);
+        if (piperOffRow) piperOffRow.classList.toggle('selected', !piperVoiceId);
+      }
+      function setPiperVoice(id) {
+        piperVoiceId = id;
+        try {
+          if (id) localStorage.setItem('ieltsgo_piper_voice', id);
+          else localStorage.removeItem('ieltsgo_piper_voice');
+        } catch (e) {}
+        updatePiperUI();
+        if (id) {
+          ensurePiper(id).then(function (ok) {
+            if (!ok) showToast('ডাউনলোড ব্যর্থ — ইন্টারনেট ভয়েস চলবে।');
+          });
+        }
+      }
+      if (piperFemaleBtn) piperFemaleBtn.addEventListener('click', function () { setPiperVoice(PIPER_FEMALE); });
+      if (piperMaleBtn) piperMaleBtn.addEventListener('click', function () { setPiperVoice(PIPER_MALE); });
+      if (piperOffBtn) piperOffBtn.addEventListener('click', function () { setPiperVoice(null); });
+      updatePiperUI();
       if (mentorPackToggle) {
         mentorPackToggle.addEventListener('click', function () {
           mentorPackOn = !mentorPackOn;
