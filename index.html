@@ -1535,7 +1535,11 @@
         };
         recognition.onerror = function (event) {
           delete input.dataset.finalSpeech;
-          if (event.error !== 'aborted') showToast('মাইক্রোফোন শোনা যায়নি। অনুমতি দিন অথবা লিখে পাঠান।');
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            showToast('মাইকের অনুমতি বন্ধ আছে। অ্যাড্রেস বারের 🔒 → Microphone → Allow করুন।');
+          } else if (event.error !== 'aborted') {
+            showToast('মাইক্রোফোন শোনা যায়নি। আবার চেষ্টা করুন অথবা লিখে পাঠান।');
+          }
         };
       } else {
         micBtn.disabled = true;
