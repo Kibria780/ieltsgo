@@ -721,7 +721,7 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v1.8</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v1.9</div>
       </div>
     </section>
 
@@ -1790,6 +1790,8 @@
         }
       }
       async function handleWhisperStop() {
+        try { if (whisperStopTimer) clearTimeout(whisperStopTimer); } catch (e) {}
+        whisperStopTimer = null;
         cleanupMediaStream();
         whisperRecording = false;
         isListening = false;
@@ -1816,8 +1818,11 @@
           setStatus('Ready to practise', false);
         }
       }
+      var whisperStopTimer = null;
       async function toggleWhisperRecording() {
         if (whisperRecording) {
+          try { if (whisperStopTimer) clearTimeout(whisperStopTimer); } catch (e) {}
+          whisperStopTimer = null;
           try { if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop(); }
           catch (e) { handleWhisperStop(); }
           return;
@@ -1843,8 +1848,12 @@
         isListening = true;
         micBtn.classList.add('listening');
         micBtn.setAttribute('aria-label', 'Stop listening');
-        micHint.textContent = 'শুনছি… শেষ হলে আবার মাইকে চাপ দিন';
-        setStatus('Listening to you…', true);
+        micHint.textContent = '🔴 রেকর্ড হচ্ছে… শেষ হলে আবার মাইকে চাপ দিন';
+        setStatus('Recording… tap mic to stop', true);
+        try { if (whisperStopTimer) clearTimeout(whisperStopTimer); } catch (e) {}
+        whisperStopTimer = setTimeout(function () {
+          if (whisperRecording) toggleWhisperRecording();
+        }, 30000);
       }
       if (SpeechRecognition) {
         recognition = new SpeechRecognition();
@@ -1908,20 +1917,18 @@
       refreshMicButton();
 
       micBtn.addEventListener('click', function () {
-        if (isBusy) return;
-        if (recognition && !preferWhisper) {
+        if (isBusy || voiceChatActive) return;
+        if (getGroqKey() && hasMediaRecorder) {
+          toggleWhisperRecording();
+        } else if (recognition) {
           if (isListening) recognition.stop();
           else {
             input.value = '';
             delete input.dataset.finalSpeech;
             try { recognition.start(); } catch (e) { showToast('মাইক্রোফোন আবার চালু করতে একটু অপেক্ষা করুন।'); }
           }
-        } else if (hasMediaRecorder && getGroqKey()) {
-          toggleWhisperRecording();
-        } else if (hasMediaRecorder) {
-          showToast('ভয়েসের জন্য ⚙ AI Key-তে Groq key সেভ করুন।');
         } else {
-          showToast('এই ব্রাউজারে ভয়েস ইনপুট নেই।');
+          showToast('ভয়েসের জন্য ⚙ AI Key-তে Groq key সেভ করুন।');
         }
       });
       sendBtn.addEventListener('click', submitMessage);
