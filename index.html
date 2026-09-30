@@ -781,7 +781,7 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.3</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.4</div>
       </div>
     </section>
 
@@ -826,6 +826,11 @@
         <div class="voice-modal-box">
           <h3>🔊 AI Voice বেছে নাও</h3>
           <p class="bn">যেটা মেন্টরের মতো শোনাবে — 🔊 চাপ দিয়ে শুনে দেখো, তারপর Select করো।</p>
+          <div class="voice-item" id="mentorPackRow">
+            <span class="vname">🎙 Mentor voice pack <span class="bn" style="opacity:.6">(GitHub · warm human-like voice)</span></span>
+            <button class="small-action" id="mentorPackTest" type="button">🔊</button>
+            <button class="small-action" id="mentorPackToggle" type="button">On</button>
+          </div>
           <div id="voiceListEl" class="voice-list"></div>
           <div class="voice-modal-actions">
             <button class="small-action" id="voiceReloadBtn" type="button">🔄 Reload</button>
@@ -1459,6 +1464,33 @@
         });
       }
 
+      var mentorPackOn = true;
+      try { mentorPackOn = localStorage.getItem('ieltsgo_mentor_pack') !== 'off'; } catch (e) {}
+      function playPackAudio(name) {
+        return new Promise(function (resolve) {
+          if (!voiceOn || !mentorPackOn) { resolve(false); return; }
+          try {
+            if ('speechSynthesis' in window) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+            var audio = new Audio('voices/' + name + '.mp3');
+            var done = false;
+            function finish(ok) { if (!done) { done = true; resolve(ok); } }
+            audio.onended = function () { finish(true); };
+            audio.onerror = function () { finish(false); };
+            var p = null;
+            try { p = audio.play(); } catch (e) { finish(false); return; }
+            if (p && typeof p.catch === 'function') { p.catch(function () { finish(false); }); }
+            setTimeout(function () { finish(false); }, 60000);
+          } catch (e) { resolve(false); }
+        });
+      }
+      function speakPack(packName, fallbackText) {
+        playPackAudio(packName).then(function (ok) { if (!ok) speak(fallbackText); });
+      }
+      async function speakPackWait(packName, fallbackText) {
+        var ok = await playPackAudio(packName);
+        if (!ok) await speakAndWait(fallbackText);
+      }
+
       function listenWithSilenceDetection() {
         return new Promise(function (resolve) {
           var stopped = false;
@@ -1616,7 +1648,7 @@
         updateVoiceChatUI();
         setStatus('Voice chat starting…', true);
         addMessage('assistant', "Hi! Let's practise English together. Speak, and I'll reply — just keep talking!", false);
-        await speakAndWait("Hi! Let's practise English together. Speak, and I'll reply.");
+        await speakPackWait('voice-hello', "Hi! Let's practise English together. Speak, and I'll reply.");
         if (!voiceChatActive) return;
         voiceChatLoop();
       }
@@ -1751,7 +1783,7 @@
             transcript.push({ role: 'assistant', text: next.text });
             renderMockProgress();
             updateMockHeader();
-            speak(transition + next.text);
+            speakPack('mock-q' + (mockQuestionIndex + 1), transition + next.text);
             isBusy = false;
             sendBtn.disabled = false;
             micBtn.disabled = false;
@@ -1773,7 +1805,7 @@
           setStatus('Mock test complete', false);
           if (lastResultOffline) showToast('AI সার্ভার ব্যস্ত — অফলাইন অনুমানভিত্তিক স্কোর দেখানো হচ্ছে।');
           newSessionBtn.textContent = 'Try another test';
-          speak('That is the end of the speaking test. Your practice result is ready.');
+          speakPack('mock-end', 'That is the end of the speaking test. Your practice result is ready.');
         } catch (error) {
           removeTyping();
           addMessage('assistant', 'I could not reach the AI examiner, so no score was created. Please restart the test when your connection is available.', false);
@@ -2117,6 +2149,31 @@
       var voiceListBtn = document.getElementById('voiceListBtn');
       var voiceReloadBtn = document.getElementById('voiceReloadBtn');
       var voiceModalClose = document.getElementById('voiceModalClose');
+      var mentorPackToggle = document.getElementById('mentorPackToggle');
+      var mentorPackTest = document.getElementById('mentorPackTest');
+      var mentorPackRow = document.getElementById('mentorPackRow');
+      function updateMentorPackUI() {
+        if (mentorPackToggle) mentorPackToggle.textContent = mentorPackOn ? 'On' : 'Off';
+        if (mentorPackRow) mentorPackRow.classList.toggle('selected', !!mentorPackOn);
+      }
+      if (mentorPackToggle) {
+        mentorPackToggle.addEventListener('click', function () {
+          mentorPackOn = !mentorPackOn;
+          try { localStorage.setItem('ieltsgo_mentor_pack', mentorPackOn ? 'on' : 'off'); } catch (e) {}
+          updateMentorPackUI();
+        });
+      }
+      if (mentorPackTest) {
+        mentorPackTest.addEventListener('click', function () {
+          var wasOn = mentorPackOn;
+          mentorPackOn = true;
+          playPackAudio('voice-hello').then(function (ok) {
+            if (!ok) showToast('ভয়েস ফাইল লোড হয়নি।');
+            mentorPackOn = wasOn;
+          });
+        });
+      }
+      updateMentorPackUI();
       var selectedVoiceURI = null;
       try { selectedVoiceURI = localStorage.getItem('ieltsgo_voice_uri'); } catch (e) {}
       function getActiveVoice(voices) {
@@ -2295,7 +2352,7 @@
         renderMockProgress();
         updateMockHeader();
         mockTimer = setInterval(updateMockHeader, 1000);
-        speak('Part 1. ' + question.text);
+        speakPack('mock-q1', 'Part 1. ' + question.text);
         input.focus();
       }
 
