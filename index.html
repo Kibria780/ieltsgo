@@ -422,6 +422,12 @@
       cursor: pointer;
       font-weight: 600;
     }
+    .voice-toggle.active {
+      color: #fff;
+      background: var(--accent);
+      border-radius: 999px;
+      padding: 6px 14px;
+    }
 
     .coach {
       border-radius: var(--radius-lg) var(--radius-xl) var(--radius-lg) var(--radius-lg);
@@ -715,7 +721,7 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v1.7</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v1.8</div>
       </div>
     </section>
 
@@ -746,6 +752,7 @@
           </div>
           <div class="composer-foot">
             <span class="bn" id="micHint">মাইকে চাপ দিয়ে ইংরেজিতে বলুন</span>
+            <button class="voice-toggle" id="voiceChatBtn" type="button">🎙 Voice chat</button>
             <button class="voice-toggle" id="voiceToggle" type="button" aria-pressed="true">Voice reply · On</button>
           </div>
         </div>
@@ -1310,6 +1317,229 @@
           };
         } catch (e) {}
       }
+
+      var voiceChatBtn = document.getElementById('voiceChatBtn');
+      var voiceChatActive = false;
+
+      function updateVoiceChatUI() {
+        if (voiceChatActive) {
+          voiceChatBtn.textContent = '⏹ Stop';
+          voiceChatBtn.classList.add('active');
+          micBtn.disabled = true;
+          sendBtn.disabled = true;
+          input.disabled = true;
+        } else {
+          voiceChatBtn.textContent = '🎙 Voice chat';
+          voiceChatBtn.classList.remove('active');
+          sendBtn.disabled = false;
+          input.disabled = false;
+          refreshMicButton();
+        }
+      }
+
+      function speakAndWait(text) {
+        return new Promise(function (resolve) {
+          if (!voiceChatActive) { resolve(); return; }
+          if (!voiceOn || !('speechSynthesis' in window)) { resolve(); return; }
+          var synth = window.speechSynthesis;
+          try { synth.cancel(); } catch (e) {}
+          var clean = String(text).replace(/\s+/g, ' ').trim();
+          if (!clean) { resolve(); return; }
+          var chunks = clean.match(/[^.!?।]+[.!?।]+|[^.!?।]+$/g) || [clean];
+          var voices = [];
+          try { voices = synth.getVoices() || []; } catch (e) {}
+          var preferred = voices.find(function (v) { return /en[-_]GB/i.test(v.lang); }) ||
+                          voices.find(function (v) { return /^en/i.test(v.lang); });
+          var i = 0;
+          function next() {
+            if (!voiceChatActive) { try { synth.cancel(); } catch (e) {} resolve(); return; }
+            if (i >= chunks.length) { resolve(); return; }
+            var c = chunks[i++].trim();
+            if (!c) { next(); return; }
+            var u = new SpeechSynthesisUtterance(c);
+            u.lang = 'en-GB';
+            u.rate = 0.95;
+            if (preferred) u.voice = preferred;
+            u.onend = next;
+            u.onerror = next;
+            try { synth.speak(u); } catch (e) { next(); }
+          }
+          next();
+        });
+      }
+
+      function listenWithSilenceDetection() {
+        return new Promise(function (resolve) {
+          var stopped = false;
+          function finish(blob) {
+            if (stopped) return;
+            stopped = true;
+            resolve(blob);
+          }
+          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            showToast('এই ব্রাউজারে মাইক চলবে না।');
+            finish(null);
+            return;
+          }
+          navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+            var audioCtx = null;
+            try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
+            catch (e) { audioCtx = null; }
+            var chunks = [];
+            var recorder = null;
+            try { recorder = new MediaRecorder(stream); }
+            catch (e) {
+              try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e2) {}
+              finish(null);
+              return;
+            }
+            function cleanup() {
+              try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+              try { if (audioCtx) audioCtx.close(); } catch (e) {}
+            }
+            recorder.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+            recorder.onstop = function () {
+              cleanup();
+              if (!chunks.length) finish(null);
+              else finish(new Blob(chunks, { type: 'audio/webm' }));
+            };
+            function stopRec() {
+              try { recorder.stop(); } catch (e) { cleanup(); finish(null); }
+            }
+            var startTime = Date.now();
+            if (!audioCtx) {
+              try { recorder.start(); } catch (e) { finish(null); return; }
+              setTimeout(stopRec, 10000);
+              return;
+            }
+            var source = audioCtx.createMediaStreamSource(stream);
+            var analyser = audioCtx.createAnalyser();
+            analyser.fftSize = 512;
+            source.connect(analyser);
+            var dataArray = new Uint8Array(analyser.frequencyBinCount);
+            var speaking = false;
+            var silenceStart = 0;
+            var rafId = 0;
+            function check() {
+              if (!voiceChatActive) { try { cancelAnimationFrame(rafId); } catch (e) {} stopRec(); return; }
+              analyser.getByteFrequencyData(dataArray);
+              var sum = 0;
+              for (var i = 0; i < dataArray.length; i++) sum += dataArray[i];
+              var avg = sum / dataArray.length;
+              var elapsed = Date.now() - startTime;
+              if (avg > 14) {
+                speaking = true;
+                silenceStart = 0;
+              } else if (speaking) {
+                if (!silenceStart) silenceStart = Date.now();
+                if (Date.now() - silenceStart > 1600) {
+                  try { cancelAnimationFrame(rafId); } catch (e) {}
+                  stopRec();
+                  return;
+                }
+              } else if (elapsed > 12000) {
+                try { cancelAnimationFrame(rafId); } catch (e) {}
+                stopRec();
+                return;
+              }
+              if (elapsed > 45000) {
+                try { cancelAnimationFrame(rafId); } catch (e) {}
+                stopRec();
+                return;
+              }
+              rafId = requestAnimationFrame(check);
+            }
+            try { recorder.start(); } catch (e) { finish(null); return; }
+            check();
+          }).catch(function () {
+            showToast('মাইকের অনুমতি দিন।');
+            finish(null);
+          });
+        });
+      }
+
+      async function voiceChatLoop() {
+        while (voiceChatActive) {
+          setStatus('Listening… speak in English', true);
+          micHint.textContent = '🎙 শুনছি… থামলেই উত্তর আসবে';
+          var blob = await listenWithSilenceDetection();
+          if (!voiceChatActive) break;
+          if (!blob) continue;
+          setStatus('Understanding…', true);
+          micHint.textContent = 'বুঝছি…';
+          var text = '';
+          try {
+            text = await transcribeWithWhisper(blob);
+          } catch (e) {
+            if (!voiceChatActive) break;
+            showToast('বুঝতে পারিনি। আবার বলুন।');
+            continue;
+          }
+          if (!voiceChatActive) break;
+          text = String(text).trim();
+          if (!text) continue;
+          addMessage('user', text, false);
+          transcript.push({ role: 'user', text: text });
+          turns += 1;
+          turnCount.textContent = turns + (turns === 1 ? ' turn' : ' turns');
+          setStatus('AI coach is checking…', true);
+          micHint.textContent = 'AI ভাবছে…';
+          addMessage('assistant', '', true);
+          try {
+            var result = await getPracticeFeedback(text);
+            if (!voiceChatActive) break;
+            removeTyping();
+            addMessage('assistant', result.reply, false);
+            transcript.push({ role: 'assistant', text: result.reply });
+            renderFeedback(result);
+            setStatus('Speaking…', true);
+            micHint.textContent = '🔊 AI বলছে…';
+            await speakAndWait(result.reply);
+          } catch (e) {
+            if (!voiceChatActive) break;
+            removeTyping();
+            addMessage('assistant', 'Sorry, I had a little trouble. Please say that again.', false);
+          }
+        }
+      }
+
+      async function startVoiceChat() {
+        if (voiceChatActive) return;
+        if (appMode === 'mock') {
+          showToast('ভয়েস চ্যাট প্র্যাকটিস মোডে চলে।');
+          return;
+        }
+        if (!getGroqKey()) {
+          showToast('ভয়েস চ্যাটের জন্য ⚙ AI Key-তে Groq key সেভ করুন।');
+          return;
+        }
+        if (!hasMediaRecorder) {
+          showToast('এই ব্রাউজারে ভয়েস চ্যাট চলবে না।');
+          return;
+        }
+        if (isListening && recognition) { try { recognition.stop(); } catch (e) {} }
+        if (whisperRecording) { whisperRecording = false; }
+        voiceChatActive = true;
+        updateVoiceChatUI();
+        setStatus('Voice chat starting…', true);
+        addMessage('assistant', "Hi! Let's practise English together. Speak, and I'll reply — just keep talking!", false);
+        await speakAndWait("Hi! Let's practise English together. Speak, and I'll reply.");
+        if (!voiceChatActive) return;
+        voiceChatLoop();
+      }
+
+      function stopVoiceChat() {
+        voiceChatActive = false;
+        try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) {}
+        updateVoiceChatUI();
+        setStatus('Ready to practise', false);
+        micHint.textContent = 'মাইকে চাপ দিয়ে ইংরেজিতে বলুন';
+      }
+
+      voiceChatBtn.addEventListener('click', function () {
+        if (voiceChatActive) stopVoiceChat();
+        else startVoiceChat();
+      });
 
       function renderFeedback(result) {
         var score = result.score || (result.corrections.length ? Math.max(55, 90 - result.corrections.length * 10) : 94);
