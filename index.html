@@ -781,7 +781,7 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.4</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.5</div>
       </div>
     </section>
 
@@ -830,6 +830,10 @@
             <span class="vname">🎙 Mentor voice pack <span class="bn" style="opacity:.6">(GitHub · warm human-like voice)</span></span>
             <button class="small-action" id="mentorPackTest" type="button">🔊</button>
             <button class="small-action" id="mentorPackToggle" type="button">On</button>
+          </div>
+          <div class="voice-item" id="netVoiceRow">
+            <span class="vname">🌐 Internet voice <span class="bn" style="opacity:.6">(কথোপকথনে ব্যবহার হবে)</span></span>
+            <button class="small-action" id="netVoiceToggle" type="button">On</button>
           </div>
           <div id="voiceListEl" class="voice-list"></div>
           <div class="voice-modal-actions">
@@ -1384,7 +1388,7 @@
         }
         return null;
       }
-      function speak(text) {
+      function speakPhone(text) {
         if (!voiceOn || !('speechSynthesis' in window)) return;
         var synth = window.speechSynthesis;
         try { synth.cancel(); } catch (e) {}
@@ -1404,6 +1408,14 @@
           if (preferred) utterance.voice = preferred;
           try { synth.speak(utterance); } catch (e) {}
         });
+      }
+      function speak(text) {
+        if (!voiceOn) return;
+        if (netVoiceOn) {
+          speakNetVoice(text, function (ok) { if (!ok) speakPhone(text); });
+        } else {
+          speakPhone(text);
+        }
       }
       if ('speechSynthesis' in window) {
         try {
@@ -1433,7 +1445,7 @@
         }
       }
 
-      function speakAndWait(text) {
+      function speakAndWaitPhone(text) {
         return new Promise(function (resolve) {
           if (!voiceChatActive) { resolve(); return; }
           if (!voiceOn || !('speechSynthesis' in window)) { resolve(); return; }
@@ -1463,9 +1475,20 @@
           next();
         });
       }
+      function speakAndWait(text) {
+        return new Promise(function (resolve) {
+          if (!netVoiceOn) { speakAndWaitPhone(text).then(resolve); return; }
+          speakNetVoice(text, function (ok) {
+            if (ok) { resolve(); return; }
+            speakAndWaitPhone(text).then(resolve);
+          });
+        });
+      }
 
       var mentorPackOn = true;
       try { mentorPackOn = localStorage.getItem('ieltsgo_mentor_pack') !== 'off'; } catch (e) {}
+      var netVoiceOn = true;
+      try { netVoiceOn = localStorage.getItem('ieltsgo_net_voice') !== 'off'; } catch (e) {}
       function playPackAudio(name) {
         return new Promise(function (resolve) {
           if (!voiceOn || !mentorPackOn) { resolve(false); return; }
@@ -1489,6 +1512,47 @@
       async function speakPackWait(packName, fallbackText) {
         var ok = await playPackAudio(packName);
         if (!ok) await speakAndWait(fallbackText);
+      }
+      function googleTTSChunks(text) {
+        var clean = String(text).replace(/\s+/g, ' ').trim();
+        var chunks = [];
+        var sentences = clean.match(/[^.!?।]+[.!?।]+|[^.!?।]+$/g) || [clean];
+        var current = '';
+        sentences.forEach(function (s) {
+          s = s.trim();
+          if (!s) return;
+          if ((current + ' ' + s).length > 180) {
+            if (current) chunks.push(current.trim());
+            current = s;
+          } else {
+            current = (current ? current + ' ' : '') + s;
+          }
+        });
+        if (current.trim()) chunks.push(current.trim());
+        return chunks;
+      }
+      function speakNetVoice(text, onDone) {
+        var chunks = googleTTSChunks(text);
+        if (!chunks.length) { onDone(true); return; }
+        if ('speechSynthesis' in window) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+        var i = 0;
+        var failed = false;
+        function playNext() {
+          if (failed) return;
+          if (i >= chunks.length) { onDone(true); return; }
+          var url = 'https://translate.google.com/translate_tts?client=tw-ob&q=' +
+            encodeURIComponent(chunks[i]) + '&tl=en';
+          i += 1;
+          try {
+            var audio = new Audio(url);
+            audio.onended = playNext;
+            audio.onerror = function () { failed = true; onDone(false); };
+            var p = null;
+            try { p = audio.play(); } catch (e) { failed = true; onDone(false); return; }
+            if (p && typeof p.catch === 'function') { p.catch(function () { failed = true; onDone(false); }); }
+          } catch (e) { failed = true; onDone(false); }
+        }
+        playNext();
       }
 
       function listenWithSilenceDetection() {
@@ -2152,9 +2216,13 @@
       var mentorPackToggle = document.getElementById('mentorPackToggle');
       var mentorPackTest = document.getElementById('mentorPackTest');
       var mentorPackRow = document.getElementById('mentorPackRow');
+      var netVoiceToggle = document.getElementById('netVoiceToggle');
+      var netVoiceRow = document.getElementById('netVoiceRow');
       function updateMentorPackUI() {
         if (mentorPackToggle) mentorPackToggle.textContent = mentorPackOn ? 'On' : 'Off';
         if (mentorPackRow) mentorPackRow.classList.toggle('selected', !!mentorPackOn);
+        if (netVoiceToggle) netVoiceToggle.textContent = netVoiceOn ? 'On' : 'Off';
+        if (netVoiceRow) netVoiceRow.classList.toggle('selected', !!netVoiceOn);
       }
       if (mentorPackToggle) {
         mentorPackToggle.addEventListener('click', function () {
@@ -2171,6 +2239,14 @@
             if (!ok) showToast('ভয়েস ফাইল লোড হয়নি।');
             mentorPackOn = wasOn;
           });
+        });
+      }
+      if (netVoiceToggle) {
+        netVoiceToggle.addEventListener('click', function () {
+          netVoiceOn = !netVoiceOn;
+          try { localStorage.setItem('ieltsgo_net_voice', netVoiceOn ? 'on' : 'off'); } catch (e) {}
+          updateMentorPackUI();
+          if (netVoiceOn) showToast('ইন্টারনেট ভয়েস চালু ✅');
         });
       }
       updateMentorPackUI();
