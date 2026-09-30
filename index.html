@@ -1,0 +1,1364 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="color-scheme" content="light dark" />
+  <link rel="icon" href="data:," />
+  <title>IELTSgo</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      color-scheme: light dark;
+      --bg: #f3f7f5;
+      --surface: #ffffff;
+      --surface-2: #eaf1ed;
+      --surface-3: #dde9e2;
+      --ink: #14251d;
+      --muted: #5c6d64;
+      --line: #ccd9d1;
+      --accent: #e6542f;
+      --accent-strong: #bf3718;
+      --accent-soft: #ffded3;
+      --green: #0b6f4e;
+      --green-soft: #d9f0e6;
+      --amber: #9a5a08;
+      --amber-soft: #ffedc7;
+      --danger: #a92828;
+      --danger-soft: #ffe2df;
+      --shadow: 0 18px 50px rgba(23, 56, 42, .10);
+      --shadow-small: 0 7px 22px rgba(23, 56, 42, .08);
+      --radius-xl: 30px;
+      --radius-lg: 22px;
+      --radius-md: 14px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #101713;
+        --surface: #18211c;
+        --surface-2: #202d26;
+        --surface-3: #2a3931;
+        --ink: #eef8f2;
+        --muted: #aebfb5;
+        --line: #35463c;
+        --accent: #ff7956;
+        --accent-strong: #ff9b7f;
+        --accent-soft: #4f261d;
+        --green: #70d4ac;
+        --green-soft: #183b2d;
+        --amber: #f0bd64;
+        --amber-soft: #47371c;
+        --danger: #ff938d;
+        --danger-soft: #4d2423;
+        --shadow: 0 18px 50px rgba(0, 0, 0, .27);
+        --shadow-small: 0 7px 22px rgba(0, 0, 0, .20);
+      }
+    }
+
+    * { box-sizing: border-box; }
+    html { scroll-behavior: smooth; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(110deg, transparent 0 70%, color-mix(in srgb, var(--green-soft) 55%, transparent) 70% 100%),
+        var(--bg);
+      color: var(--ink);
+      font-family: "Lexend", "Noto Sans Bengali", sans-serif;
+      -webkit-font-smoothing: antialiased;
+    }
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+    .bn { font-family: "Noto Sans Bengali", "Lexend", sans-serif; }
+
+    .page {
+      width: min(1240px, 100%);
+      margin: 0 auto;
+      padding: clamp(18px, 4vw, 46px);
+      padding-bottom: calc(32px + env(safe-area-inset-bottom));
+    }
+
+    .intro {
+      display: grid;
+      grid-template-columns: minmax(0, 1.25fr) minmax(280px, .75fr);
+      align-items: end;
+      gap: 28px;
+      margin: 8px 0 26px;
+    }
+    .intro h1 {
+      margin: 0;
+      max-width: 760px;
+      font-size: clamp(2.35rem, 6vw, 5.7rem);
+      line-height: .94;
+      letter-spacing: -.065em;
+      font-weight: 700;
+    }
+    .intro h1 span { color: var(--accent); }
+    .intro-copy {
+      max-width: 470px;
+      margin: 0 0 3px auto;
+      color: var(--muted);
+      font-size: clamp(.98rem, 1.3vw, 1.12rem);
+      line-height: 1.75;
+    }
+
+    .setup {
+      display: grid;
+      grid-template-columns: .95fr .9fr 1.65fr auto;
+      gap: 14px;
+      align-items: end;
+      margin-bottom: 16px;
+      padding: 16px;
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-small);
+    }
+    .mode-switch {
+      min-height: 45px;
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4px;
+      padding: 4px;
+      border-radius: 12px;
+      background: var(--surface-2);
+      border: 1px solid var(--line);
+    }
+    .mode-btn {
+      min-width: 0;
+      padding: 0 10px;
+      border: 0;
+      border-radius: 8px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: .8rem;
+      font-weight: 600;
+    }
+    .mode-btn[aria-pressed="true"] {
+      background: var(--ink);
+      color: var(--surface);
+      box-shadow: var(--shadow-small);
+    }
+    .field-label {
+      display: block;
+      margin: 0 0 8px;
+      color: var(--muted);
+      font-size: .76rem;
+      font-weight: 600;
+      letter-spacing: .04em;
+    }
+    .select-wrap { position: relative; }
+    select {
+      width: 100%;
+      min-height: 45px;
+      padding: 0 40px 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: var(--surface-2);
+      color: var(--ink);
+      appearance: none;
+      outline: none;
+    }
+    .select-wrap::after {
+      content: "⌄";
+      position: absolute;
+      right: 14px;
+      bottom: 11px;
+      color: var(--muted);
+      pointer-events: none;
+    }
+    select:focus-visible, input:focus-visible, button:focus-visible {
+      outline: 3px solid color-mix(in srgb, var(--accent) 35%, transparent);
+      outline-offset: 2px;
+    }
+    .topics {
+      display: flex;
+      gap: 8px;
+      overflow-x: auto;
+      scrollbar-width: none;
+      padding-bottom: 2px;
+    }
+    .topics::-webkit-scrollbar { display: none; }
+    .chip {
+      min-height: 44px;
+      white-space: nowrap;
+      padding: 0 14px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: var(--surface-2);
+      cursor: pointer;
+      transition: background .2s, border-color .2s;
+    }
+    .chip[aria-pressed="true"] {
+      background: var(--green);
+      color: #fff;
+      border-color: var(--green);
+    }
+    @media (prefers-color-scheme: dark) {
+      .chip[aria-pressed="true"] { color: #0d2018; }
+    }
+    .small-action {
+      min-height: 45px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 12px;
+      background: var(--surface-3);
+      color: var(--ink);
+      cursor: pointer;
+      white-space: nowrap;
+    }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(300px, 370px);
+      gap: 16px;
+      align-items: stretch;
+    }
+    .conversation, .coach {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      box-shadow: var(--shadow);
+    }
+    .conversation {
+      min-height: 640px;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      border-radius: var(--radius-xl) var(--radius-lg) var(--radius-lg) var(--radius-lg);
+      overflow: hidden;
+    }
+    .panel-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 17px 20px;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--surface) 88%, var(--green-soft));
+    }
+    .status {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: .86rem;
+      font-weight: 600;
+    }
+    .dot {
+      width: 9px;
+      height: 9px;
+      border-radius: 50%;
+      background: var(--green);
+      box-shadow: 0 0 0 5px var(--green-soft);
+    }
+    .turn-count { color: var(--muted); font-size: .78rem; }
+
+    .messages {
+      height: 430px;
+      overflow-y: auto;
+      padding: 24px clamp(16px, 3vw, 30px);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+      scroll-behavior: smooth;
+    }
+    .message {
+      display: grid;
+      grid-template-columns: 32px minmax(0, auto);
+      gap: 10px;
+      max-width: 86%;
+      align-self: flex-start;
+    }
+    .message.user {
+      grid-template-columns: minmax(0, auto) 32px;
+      align-self: flex-end;
+    }
+    .avatar {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--green-soft);
+      color: var(--green);
+      font-size: .72rem;
+      font-weight: 700;
+    }
+    .user .avatar {
+      grid-column: 2;
+      background: var(--accent-soft);
+      color: var(--accent-strong);
+    }
+    .bubble {
+      grid-column: 2;
+      padding: 12px 15px;
+      border-radius: 5px 17px 17px 17px;
+      background: var(--surface-2);
+      line-height: 1.55;
+      font-size: .94rem;
+    }
+    .user .bubble {
+      grid-column: 1;
+      grid-row: 1;
+      border-radius: 17px 5px 17px 17px;
+      background: var(--accent);
+      color: #fff;
+    }
+    .typing {
+      display: inline-flex;
+      gap: 4px;
+      align-items: center;
+      min-width: 54px;
+      min-height: 22px;
+    }
+    .typing i {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--muted);
+      animation: bounce 1s infinite ease-in-out;
+    }
+    .typing i:nth-child(2) { animation-delay: .12s; }
+    .typing i:nth-child(3) { animation-delay: .24s; }
+    @keyframes bounce { 0%, 70%, 100% { transform: translateY(0); } 35% { transform: translateY(-5px); } }
+
+    .composer {
+      padding: 17px;
+      border-top: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .voice-row {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .mic {
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 50%;
+      color: #fff;
+      background: var(--accent);
+      cursor: pointer;
+      box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 32%, transparent);
+      position: relative;
+      flex: 0 0 auto;
+    }
+    .mic svg { width: 23px; height: 23px; }
+    .mic.listening::after {
+      content: "";
+      position: absolute;
+      inset: -7px;
+      border: 2px solid var(--accent);
+      border-radius: 50%;
+      animation: pulse 1.25s ease-out infinite;
+    }
+    @keyframes pulse { from { transform: scale(.9); opacity: .8; } to { transform: scale(1.25); opacity: 0; } }
+    .text-input {
+      width: 100%;
+      height: 52px;
+      padding: 0 15px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface-2);
+      color: var(--ink);
+      outline: none;
+    }
+    .send {
+      min-width: 78px;
+      height: 52px;
+      padding: 0 16px;
+      border: 0;
+      border-radius: 14px;
+      background: var(--ink);
+      color: var(--surface);
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .send:disabled, .mic:disabled { opacity: .45; cursor: not-allowed; }
+    .composer-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-top: 10px;
+      color: var(--muted);
+      font-size: .75rem;
+    }
+    .voice-toggle {
+      border: 0;
+      background: transparent;
+      padding: 3px 0;
+      color: var(--green);
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    .coach {
+      border-radius: var(--radius-lg) var(--radius-xl) var(--radius-lg) var(--radius-lg);
+      overflow: hidden;
+      display: flex;
+      min-height: 640px;
+      flex-direction: column;
+    }
+    .coach-top {
+      padding: 22px 20px 17px;
+      border-bottom: 1px solid var(--line);
+    }
+    .coach-top h2 { margin: 0 0 5px; font-size: 1.17rem; }
+    .coach-top p { margin: 0; color: var(--muted); font-size: .78rem; line-height: 1.5; }
+    .score-wrap {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-top: 17px;
+    }
+    .score-ring {
+      --score: 0deg;
+      width: 58px;
+      height: 58px;
+      flex: 0 0 auto;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      background: conic-gradient(var(--green) var(--score), var(--surface-3) 0);
+      position: relative;
+    }
+    .score-ring::before {
+      content: "";
+      position: absolute;
+      inset: 6px;
+      border-radius: 50%;
+      background: var(--surface);
+    }
+    .score-ring strong { position: relative; font-size: .8rem; }
+    .score-copy strong { display: block; font-size: .88rem; }
+    .score-copy span { color: var(--muted); font-size: .72rem; }
+
+    .feedback {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px;
+    }
+    .empty-feedback {
+      min-height: 300px;
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 28px;
+      color: var(--muted);
+      line-height: 1.65;
+      font-size: .9rem;
+    }
+    .empty-mark {
+      width: 58px;
+      height: 58px;
+      margin: 0 auto 14px;
+      display: grid;
+      place-items: center;
+      border-radius: 18px 18px 18px 5px;
+      background: var(--green-soft);
+      color: var(--green);
+      font-size: 1.4rem;
+      font-weight: 700;
+    }
+    .feedback-title {
+      margin: 0 0 10px;
+      font-size: .76rem;
+      color: var(--muted);
+      letter-spacing: .04em;
+    }
+    .correction {
+      margin-bottom: 12px;
+      padding: 14px;
+      border-radius: 16px;
+      background: var(--surface-2);
+    }
+    .correction-index {
+      width: 24px;
+      height: 24px;
+      margin-bottom: 10px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--amber-soft);
+      color: var(--amber);
+      font-size: .72rem;
+      font-weight: 700;
+    }
+    .wrong, .right {
+      margin: 0;
+      font-size: .83rem;
+      line-height: 1.5;
+    }
+    .wrong { color: var(--danger); text-decoration: line-through; text-decoration-thickness: 1px; }
+    .right { margin-top: 5px; color: var(--green); font-weight: 600; }
+    .explain {
+      margin: 9px 0 0;
+      padding-top: 9px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .78rem;
+      line-height: 1.6;
+    }
+    .celebrate {
+      padding: 15px;
+      border-radius: 16px;
+      background: var(--green-soft);
+      color: var(--green);
+      line-height: 1.6;
+      font-size: .86rem;
+    }
+    .mock-progress { display: grid; gap: 14px; }
+    .mock-note {
+      margin: 0;
+      padding: 14px;
+      border-radius: 14px;
+      background: var(--amber-soft);
+      color: var(--amber);
+      font-size: .78rem;
+      line-height: 1.6;
+    }
+    .parts { display: grid; gap: 7px; }
+    .part-row {
+      display: grid;
+      grid-template-columns: 31px 1fr auto;
+      align-items: center;
+      gap: 10px;
+      min-height: 48px;
+      padding: 8px 10px;
+      border-radius: 13px;
+      color: var(--muted);
+      background: var(--surface-2);
+    }
+    .part-row.active { color: var(--ink); background: var(--green-soft); }
+    .part-row.done { color: var(--green); }
+    .part-num {
+      width: 29px;
+      height: 29px;
+      display: grid;
+      place-items: center;
+      border-radius: 50%;
+      background: var(--surface);
+      font-size: .72rem;
+      font-weight: 700;
+    }
+    .part-row strong { display: block; font-size: .8rem; }
+    .part-row span { font-size: .68rem; }
+    .part-state { font-weight: 600; }
+    .result-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 12px; }
+    .band-card { padding: 12px; border-radius: 13px; background: var(--surface-2); }
+    .band-card span { display: block; color: var(--muted); font-size: .68rem; line-height: 1.4; }
+    .band-card strong { display: block; margin-top: 5px; color: var(--green); font-size: 1.05rem; }
+    .test-summary { margin-top: 10px; padding: 14px; border-radius: 14px; background: var(--green-soft); }
+    .test-summary strong { display: block; margin-bottom: 5px; color: var(--green); font-size: .8rem; }
+    .test-summary p { margin: 0; color: var(--ink); font-size: .78rem; line-height: 1.65; }
+    .timer { font-variant-numeric: tabular-nums; }
+
+    .hint-strip {
+      margin-top: 16px;
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      align-items: center;
+      padding: 16px 18px;
+      background: var(--amber-soft);
+      color: var(--amber);
+      border-radius: 7px 18px 18px 18px;
+    }
+    .hint-strip strong { font-size: .82rem; }
+    .hint-strip p { margin: 2px 0 0; font-size: .8rem; line-height: 1.55; }
+    .key {
+      min-width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border: 1px solid color-mix(in srgb, var(--amber) 35%, transparent);
+      border-radius: 11px;
+      background: color-mix(in srgb, var(--surface) 55%, transparent);
+      font-size: .72rem;
+      font-weight: 700;
+    }
+
+    .toast {
+      position: fixed;
+      z-index: 10;
+      left: 50%;
+      bottom: calc(22px + env(safe-area-inset-bottom));
+      width: min(520px, calc(100% - 28px));
+      transform: translate(-50%, 20px);
+      padding: 13px 16px;
+      border-radius: 14px;
+      background: var(--ink);
+      color: var(--surface);
+      box-shadow: var(--shadow);
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity .2s, transform .2s;
+      font-size: .83rem;
+      line-height: 1.5;
+      text-align: center;
+    }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    @media (max-width: 900px) {
+      .intro { grid-template-columns: 1fr; gap: 15px; }
+      .intro-copy { margin: 0; }
+      .setup { grid-template-columns: 1fr 1fr; }
+      .topic-field { grid-column: 1 / -1; }
+      .small-action { justify-self: stretch; }
+      .workspace { grid-template-columns: 1fr; }
+      .conversation { min-height: 610px; }
+      .coach { min-height: auto; }
+      .feedback { max-height: 520px; }
+    }
+    @media (max-width: 640px) {
+      .page { padding: 18px 12px 30px; }
+      .intro { margin-top: 9px; }
+      .intro h1 { font-size: clamp(2.7rem, 14vw, 4.2rem); }
+      .setup { grid-template-columns: 1fr 1fr; padding: 12px; }
+      .mode-field, .level-field { min-width: 0; }
+      .topic-field { grid-column: 1 / -1; grid-row: auto; }
+      .small-action { grid-column: 1 / -1; width: 100%; }
+      .topics { flex-wrap: wrap; overflow: visible; }
+      .chip { min-height: 38px; padding: 0 12px; font-size: .82rem; }
+      .small-action { align-self: end; padding: 0 12px; }
+      .conversation { min-height: 570px; border-radius: 24px 16px 16px 16px; }
+      .messages { height: 360px; padding: 18px 13px; }
+      .message { max-width: 94%; }
+      .voice-row { grid-template-columns: auto minmax(0, 1fr); }
+      .send { grid-column: 1 / -1; width: 100%; height: 46px; }
+      .text-input, .mic { height: 50px; }
+      .mic { width: 50px; }
+      .composer-foot { align-items: flex-start; }
+      .coach { border-radius: 16px 24px 16px 16px; }
+      .hint-strip { align-items: start; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
+    }
+  </style>
+</head>
+<body>
+  <main class="page">
+    <section class="intro" aria-labelledby="main-title">
+      <h1 id="main-title">Speak. Get corrected. <span>Try again.</span></h1>
+      <p class="intro-copy bn"><strong lang="en">IELTSgo</strong>-তে মাইকে ইংরেজিতে কথা বলুন। আপনার ভার্চুয়াল পার্টনার সঙ্গে সঙ্গে উত্তর দেবে, আর ভুল থাকলে সহজ বাংলায় পয়েন্ট আকারে বুঝিয়ে দেবে—কোনো অ্যাকাউন্ট বা সাইন-ইন ছাড়াই।</p>
+    </section>
+
+    <section class="setup" aria-label="Practice setup">
+      <div class="mode-field">
+        <span class="field-label">MODE</span>
+        <div class="mode-switch" id="modeSwitch">
+          <button class="mode-btn" type="button" aria-pressed="true" data-mode="practice">Practice</button>
+          <button class="mode-btn" type="button" aria-pressed="false" data-mode="mock">Mock test</button>
+        </div>
+      </div>
+      <div class="level-field">
+        <label class="field-label" for="level">YOUR LEVEL</label>
+        <div class="select-wrap">
+          <select id="level">
+            <option value="A1 beginner">A1 · Beginner</option>
+            <option value="A2 elementary" selected>A2 · Elementary</option>
+            <option value="B1 intermediate">B1 · Intermediate</option>
+            <option value="IELTS speaking">IELTS · Speaking</option>
+          </select>
+        </div>
+      </div>
+      <div class="topic-field">
+        <span class="field-label" id="topicLabel">CONVERSATION TOPIC</span>
+        <div class="topics" id="topics">
+          <button class="chip" type="button" aria-pressed="true" data-topic="Daily life">Daily life</button>
+          <button class="chip" type="button" aria-pressed="false" data-topic="Travel">Travel</button>
+          <button class="chip" type="button" aria-pressed="false" data-topic="Study">Study</button>
+          <button class="chip" type="button" aria-pressed="false" data-topic="IELTS Part 1">IELTS Part 1</button>
+        </div>
+      </div>
+      <button class="small-action" id="newSession" type="button">New session</button>
+    </section>
+
+    <section class="workspace">
+      <article class="conversation" aria-label="Live English conversation">
+        <header class="panel-head">
+          <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Ready to practise</span></div>
+          <span class="turn-count" id="turnCount">0 turns</span>
+        </header>
+
+        <div class="messages" id="messages" aria-live="polite">
+          <div class="message assistant">
+            <div class="avatar">AI</div>
+            <div class="bubble">Hi! Let’s practise everyday English. What did you do this morning?</div>
+          </div>
+        </div>
+
+        <div class="composer">
+          <div class="voice-row">
+            <button class="mic" id="micBtn" type="button" aria-label="Start speaking">
+              <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                <rect x="8" y="3" width="8" height="12" rx="4" stroke="currentColor" stroke-width="2"/>
+                <path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+              </svg>
+            </button>
+            <input class="text-input" id="textInput" type="text" autocomplete="off" placeholder="Speak, or type your answer in English…" aria-label="Your English answer" />
+            <button class="send" id="sendBtn" type="button">Send</button>
+          </div>
+          <div class="composer-foot">
+            <span class="bn" id="micHint">মাইকে চাপ দিয়ে ইংরেজিতে বলুন</span>
+            <button class="voice-toggle" id="voiceToggle" type="button" aria-pressed="true">Voice reply · On</button>
+          </div>
+        </div>
+      </article>
+
+      <aside class="coach" aria-label="Language coach feedback">
+        <div class="coach-top">
+          <h2>Coach notes</h2>
+          <p class="bn">সর্বশেষ উত্তরের ভুল ও উন্নতির জায়গা</p>
+          <div class="score-wrap">
+            <div class="score-ring" id="scoreRing" style="--score:0deg"><strong id="scoreValue">—</strong></div>
+            <div class="score-copy">
+              <strong id="scoreLabel">Waiting for your answer</strong>
+              <span id="scoreSub">Grammar & clarity</span>
+            </div>
+          </div>
+        </div>
+        <div class="feedback" id="feedback">
+          <div class="empty-feedback">
+            <div>
+              <div class="empty-mark">✓</div>
+              <strong>Speak without fear.</strong><br />
+              <span class="bn">আপনার প্রথম উত্তর দেওয়ার পর এখানে প্রতিটি ভুল আলাদা পয়েন্টে দেখানো হবে।</span>
+            </div>
+          </div>
+        </div>
+      </aside>
+    </section>
+
+    <section class="hint-strip" aria-label="How to use">
+      <div class="key">TIP</div>
+      <div>
+        <strong>Use complete sentences—even when you are unsure.</strong>
+        <p class="bn">কোনো অ্যাকাউন্ট বা API key লাগবে না। মাইক চালু করতে ব্রাউজারের permission-এ “Allow” দিন; মাইক কাজ না করলে লিখে পাঠান।</p>
+      </div>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    (function () {
+      var messagesEl = document.getElementById('messages');
+      var feedbackEl = document.getElementById('feedback');
+      var input = document.getElementById('textInput');
+      var sendBtn = document.getElementById('sendBtn');
+      var micBtn = document.getElementById('micBtn');
+      var micHint = document.getElementById('micHint');
+      var statusText = document.getElementById('statusText');
+      var statusDot = document.getElementById('statusDot');
+      var turnCount = document.getElementById('turnCount');
+      var levelSelect = document.getElementById('level');
+      var voiceToggle = document.getElementById('voiceToggle');
+      var toast = document.getElementById('toast');
+      var scoreRing = document.getElementById('scoreRing');
+      var scoreValue = document.getElementById('scoreValue');
+      var scoreLabel = document.getElementById('scoreLabel');
+      var scoreSub = document.getElementById('scoreSub');
+      var newSessionBtn = document.getElementById('newSession');
+      var topicLabel = document.getElementById('topicLabel');
+      var topicField = document.querySelector('.topic-field');
+
+      var selectedTopic = 'Daily life';
+      var appMode = 'practice';
+      var isBusy = false;
+      var voiceOn = true;
+      var turns = 0;
+      var transcript = [{ role: 'assistant', text: 'Hi! Let’s practise everyday English. What did you do this morning?' }];
+      var recognition = null;
+      var isListening = false;
+      var toastTimer = null;
+      var mockStarted = false;
+      var mockQuestionIndex = 0;
+      var mockStartedAt = 0;
+      var mockTimer = null;
+      var mockQuestions = [
+        { part: 1, text: 'Let’s talk about your home. What kind of place do you live in?', hint: 'Short personal questions' },
+        { part: 1, text: 'What do you like most about the area where you live?', hint: 'Short personal questions' },
+        { part: 1, text: 'Would you like to live somewhere different in the future? Why?', hint: 'Short personal questions' },
+        { part: 2, text: 'Now speak for one to two minutes. Describe a skill you would like to learn. Say what it is, why you want to learn it, how you would learn it, and explain how it could help you.', hint: 'Long turn · aim for 1–2 minutes' },
+        { part: 3, text: 'Why do some people find it difficult to learn new skills?', hint: 'Discussion questions' },
+        { part: 3, text: 'Do you think schools should teach more practical skills?', hint: 'Discussion questions' },
+        { part: 3, text: 'How might technology change the way people learn skills in the future?', hint: 'Discussion questions' }
+      ];
+
+      function showToast(text) {
+        toast.textContent = text;
+        toast.classList.add('show');
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 4200);
+      }
+
+      var AI_ENDPOINT = 'https://text.pollinations.ai/openai';
+
+      function extractJsonObject(raw) {
+        var text = String(raw || '').trim();
+        if (text.indexOf('```') === 0) {
+          text = text.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '');
+        }
+        try { return JSON.parse(text); } catch (firstError) {
+          var start = text.indexOf('{');
+          var end = text.lastIndexOf('}');
+          if (start !== -1 && end > start) return JSON.parse(text.slice(start, end + 1));
+          throw firstError;
+        }
+      }
+
+      async function requestAI(systemPrompt, userPrompt) {
+        var controller = new AbortController();
+        var timeout = setTimeout(function () { controller.abort(); }, 45000);
+        try {
+          var response = await fetch(AI_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'openai',
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+              ],
+              temperature: 0.25,
+              private: true
+            }),
+            signal: controller.signal
+          });
+          if (!response.ok) throw new Error('AI service returned ' + response.status);
+          var payload = await response.json();
+          var content = payload && payload.choices && payload.choices[0] && payload.choices[0].message
+            ? payload.choices[0].message.content
+            : '';
+          if (!content) throw new Error('AI response was empty');
+          return extractJsonObject(content);
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+
+      function normalizeCoachResult(data) {
+        var corrections = Array.isArray(data.corrections) ? data.corrections.slice(0, 6).map(function (item) {
+          return {
+            original: String(item.original || ''),
+            corrected: String(item.corrected || ''),
+            explanation_bn: String(item.explanation_bn || '')
+          };
+        }).filter(function (item) { return item.original && item.corrected; }) : [];
+        return {
+          reply: String(data.reply || 'Could you tell me a little more about that?'),
+          corrections: corrections,
+          score: Math.max(0, Math.min(100, Math.round(Number(data.score) || 0))),
+          encouragement_bn: String(data.encouragement_bn || 'ভালো চেষ্টা। সংশোধনগুলো দেখে বাক্যটি আরেকবার বলুন।')
+        };
+      }
+
+      async function getPracticeFeedback(text) {
+        var recent = transcript.slice(-8).map(function (item) {
+          return (item.role === 'user' ? 'Learner: ' : 'Coach: ') + item.text;
+        }).join('\n');
+        var systemPrompt = [
+          'You are IELTSgo, a real-time English speaking coach for Bengali learners.',
+          'The learner level is ' + levelSelect.value + ' and the topic is ' + selectedTopic + '.',
+          'Analyse the learner’s latest English text carefully, including grammar, tense, articles, prepositions, word choice, word order and naturalness.',
+          'Identify every meaningful error you can find, up to six. Never invent an error. Keep the English reply friendly, concise, and continue the conversation with one natural follow-up question.',
+          'Return ONLY valid JSON with exactly these keys: reply (English string), corrections (array of objects with original, corrected, explanation_bn), score (integer 0-100 for grammar and clarity), encouragement_bn (Bengali string).',
+          'Each original must quote the learner’s exact problematic words. Each corrected must show the improved wording. Each explanation_bn must clearly explain the rule in Bengali. If there is no meaningful error, return an empty corrections array.'
+        ].join(' ');
+        return normalizeCoachResult(await requestAI(systemPrompt, 'Conversation context:\n' + recent + '\n\nLatest learner answer to analyse:\n' + text));
+      }
+
+      async function getMockFeedback() {
+        var answers = transcript.filter(function (item) { return item.role === 'user'; });
+        var answerIndex = 0;
+        var testText = mockQuestions.map(function (question, index) {
+          var answer = answers[answerIndex++] || { text: '' };
+          return 'Question ' + (index + 1) + ' (Part ' + question.part + '): ' + question.text + '\nAnswer: ' + answer.text;
+        }).join('\n\n');
+        var systemPrompt = [
+          'You are an IELTS Speaking examiner and Bengali-language coach.',
+          'Evaluate the seven written speaking transcripts using IELTS-style Fluency and Coherence, Lexical Resource, and Grammatical Range and Accuracy.',
+          'Do not claim to assess pronunciation from text; set pronunciation to null. Use half-band increments from 0 to 9.',
+          'Return ONLY valid JSON with exactly these keys: overall_band, fluency, lexical, grammar, pronunciation, strengths_bn, next_steps_bn.',
+          'overall_band must average only the three assessable criteria. strengths_bn and next_steps_bn must be specific Bengali feedback grounded in these answers; format next_steps_bn as numbered points in one string.'
+        ].join(' ');
+        return requestAI(systemPrompt, testText);
+      }
+
+      function setStatus(text, active) {
+        statusText.textContent = text;
+        statusDot.style.background = active ? 'var(--accent)' : 'var(--green)';
+        statusDot.style.boxShadow = active ? '0 0 0 5px var(--accent-soft)' : '0 0 0 5px var(--green-soft)';
+      }
+
+      function formatTime(seconds) {
+        var mins = Math.floor(seconds / 60);
+        var secs = seconds % 60;
+        return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+      }
+
+      function stopMockTimer() {
+        if (mockTimer) clearInterval(mockTimer);
+        mockTimer = null;
+      }
+
+      function updateMockHeader() {
+        if (appMode !== 'mock') return;
+        var current = mockQuestions[Math.min(mockQuestionIndex, mockQuestions.length - 1)];
+        var elapsed = mockStartedAt ? Math.floor((Date.now() - mockStartedAt) / 1000) : 0;
+        statusText.textContent = mockStarted ? 'Mock test · Part ' + current.part : 'Mock test ready';
+        turnCount.innerHTML = '<span class="timer">' + formatTime(elapsed) + '</span>';
+        if (mockStarted && mockQuestionIndex < mockQuestions.length) {
+          scoreSub.textContent = 'Question ' + (mockQuestionIndex + 1) + ' of ' + mockQuestions.length + ' · ' + current.hint;
+        }
+      }
+
+      function renderMockProgress() {
+        var currentPart = mockStarted && mockQuestionIndex < mockQuestions.length ? mockQuestions[mockQuestionIndex].part : 0;
+        var completedPart = mockQuestionIndex >= mockQuestions.length ? 3 : (mockQuestionIndex >= 4 ? 2 : mockQuestionIndex >= 3 ? 1 : 0);
+        feedbackEl.innerHTML = '';
+        var wrap = document.createElement('div');
+        wrap.className = 'mock-progress';
+        var note = document.createElement('p');
+        note.className = 'mock-note bn';
+        note.textContent = mockStarted
+          ? 'টেস্ট চলাকালে সংশোধন দেখানো হবে না। শেষ প্রশ্নের পর আনুমানিক ব্যান্ড ও বিস্তারিত ফিডব্যাক পাবেন।'
+          : 'এটি একটি অনুশীলনমূলক IELTS Speaking simulation—অফিশিয়াল স্কোর নয়। প্রস্তুত হলে “Start mock test” চাপুন।';
+        wrap.appendChild(note);
+        [
+          { n: 1, title: 'Part 1', sub: '3 personal questions' },
+          { n: 2, title: 'Part 2', sub: '1 long turn' },
+          { n: 3, title: 'Part 3', sub: '3 discussion questions' }
+        ].forEach(function (part) {
+          var row = document.createElement('div');
+          row.className = 'part-row' + (part.n === currentPart ? ' active' : '') + (part.n <= completedPart ? ' done' : '');
+          var state = part.n <= completedPart ? 'Done' : part.n === currentPart ? 'Now' : 'Next';
+          row.innerHTML = '<div class="part-num">' + part.n + '</div><div><strong>' + part.title + '</strong><span>' + part.sub + '</span></div><span class="part-state">' + state + '</span>';
+          wrap.appendChild(row);
+        });
+        feedbackEl.appendChild(wrap);
+      }
+
+      function addMessage(role, text, typing) {
+        var row = document.createElement('div');
+        row.className = 'message ' + role;
+        var avatar = document.createElement('div');
+        avatar.className = 'avatar';
+        avatar.textContent = role === 'user' ? 'YOU' : 'AI';
+        var bubble = document.createElement('div');
+        bubble.className = 'bubble';
+        if (typing) {
+          bubble.innerHTML = '<span class="typing" aria-label="AI is thinking"><i></i><i></i><i></i></span>';
+          row.id = 'typingMessage';
+        } else {
+          bubble.textContent = text;
+        }
+        row.appendChild(avatar);
+        row.appendChild(bubble);
+        messagesEl.appendChild(row);
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+        return row;
+      }
+
+      function removeTyping() {
+        var t = document.getElementById('typingMessage');
+        if (t) t.remove();
+      }
+
+      function speak(text) {
+        if (!voiceOn || !('speechSynthesis' in window)) return;
+        window.speechSynthesis.cancel();
+        var utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-GB';
+        utterance.rate = 0.9;
+        var voices = window.speechSynthesis.getVoices();
+        var preferred = voices.find(function (v) { return /en-GB/i.test(v.lang); }) || voices.find(function (v) { return /^en/i.test(v.lang); });
+        if (preferred) utterance.voice = preferred;
+        window.speechSynthesis.speak(utterance);
+      }
+
+      function renderFeedback(result) {
+        var score = result.score || (result.corrections.length ? Math.max(55, 90 - result.corrections.length * 10) : 94);
+        scoreRing.style.setProperty('--score', (score * 3.6) + 'deg');
+        scoreValue.textContent = score;
+        scoreLabel.textContent = score >= 85 ? 'Clear answer' : score >= 70 ? 'Good progress' : 'Keep practising';
+        scoreSub.textContent = result.corrections.length ? result.corrections.length + ' point' + (result.corrections.length > 1 ? 's' : '') + ' to improve' : 'No important grammar issue';
+        feedbackEl.innerHTML = '';
+
+        if (!result.corrections.length) {
+          var success = document.createElement('div');
+          success.className = 'celebrate bn';
+          success.textContent = result.encouragement || 'দারুণ! এই উত্তরে গুরুত্বপূর্ণ কোনো ভুল পাওয়া যায়নি। এবার আরেকটু বিস্তারিত বলার চেষ্টা করুন।';
+          feedbackEl.appendChild(success);
+          return;
+        }
+
+        var title = document.createElement('h3');
+        title.className = 'feedback-title';
+        title.textContent = 'YOUR CORRECTIONS';
+        feedbackEl.appendChild(title);
+        result.corrections.forEach(function (item, index) {
+          var card = document.createElement('article');
+          card.className = 'correction';
+          var num = document.createElement('div');
+          num.className = 'correction-index';
+          num.textContent = index + 1;
+          var wrong = document.createElement('p');
+          wrong.className = 'wrong';
+          wrong.textContent = item.original || '—';
+          var right = document.createElement('p');
+          right.className = 'right';
+          right.textContent = item.corrected || '—';
+          var explain = document.createElement('p');
+          explain.className = 'explain bn';
+          explain.textContent = item.explanation_bn || 'আরও স্বাভাবিক ও সঠিক ইংরেজির জন্য এই গঠনটি ব্যবহার করুন।';
+          card.appendChild(num);
+          card.appendChild(wrong);
+          card.appendChild(right);
+          card.appendChild(explain);
+          feedbackEl.appendChild(card);
+        });
+      }
+
+      function renderMockResult(data) {
+        var overall = Math.max(0, Math.min(9, Number(data.overall_band) || 0));
+        scoreRing.style.setProperty('--score', (overall / 9 * 360) + 'deg');
+        scoreValue.textContent = overall ? overall.toFixed(1) : '—';
+        scoreLabel.textContent = 'Estimated overall band';
+        scoreSub.textContent = 'Practice estimate · not official';
+        feedbackEl.innerHTML = '';
+        var title = document.createElement('h3');
+        title.className = 'feedback-title';
+        title.textContent = 'MOCK TEST RESULT';
+        feedbackEl.appendChild(title);
+        var grid = document.createElement('div');
+        grid.className = 'result-grid';
+        [
+          ['Fluency & coherence', data.fluency],
+          ['Lexical resource', data.lexical],
+          ['Grammar', data.grammar],
+          ['Pronunciation*', data.pronunciation]
+        ].forEach(function (item) {
+          var card = document.createElement('div');
+          card.className = 'band-card';
+          var label = document.createElement('span');
+          label.textContent = item[0];
+          var value = document.createElement('strong');
+          value.textContent = Number(item[1]) ? Number(item[1]).toFixed(1) : '—';
+          card.appendChild(label);
+          card.appendChild(value);
+          grid.appendChild(card);
+        });
+        feedbackEl.appendChild(grid);
+        var caveat = document.createElement('p');
+        caveat.className = 'mock-note bn';
+        caveat.textContent = '* শুধু transcript থেকে উচ্চারণ মাপা যায় না, তাই Pronunciation score দেখানো হয়নি।';
+        feedbackEl.appendChild(caveat);
+        [
+          ['যা ভালো হয়েছে', data.strengths_bn],
+          ['পরের অনুশীলন', data.next_steps_bn]
+        ].forEach(function (item) {
+          var box = document.createElement('div');
+          box.className = 'test-summary bn';
+          var heading = document.createElement('strong');
+          heading.textContent = item[0];
+          var body = document.createElement('p');
+          body.textContent = item[1] || 'আরও সম্পূর্ণ বাক্যে উদাহরণসহ উত্তর দেওয়ার অনুশীলন করুন।';
+          box.appendChild(heading);
+          box.appendChild(body);
+          feedbackEl.appendChild(box);
+        });
+      }
+
+      async function submitMockAnswer(text) {
+        if (!mockStarted) {
+          showToast('আগে “Start mock test” চাপুন।');
+          return;
+        }
+        if (isListening && recognition) recognition.stop();
+        input.value = '';
+        isBusy = true;
+        sendBtn.disabled = true;
+        micBtn.disabled = true;
+        addMessage('user', text, false);
+        transcript.push({ role: 'user', text: text });
+        turns += 1;
+        mockQuestionIndex += 1;
+
+        if (mockQuestionIndex < mockQuestions.length) {
+          var next = mockQuestions[mockQuestionIndex];
+          var previousPart = mockQuestions[mockQuestionIndex - 1].part;
+          var transition = next.part !== previousPart ? 'Part ' + next.part + '. ' : '';
+          setTimeout(function () {
+            addMessage('assistant', transition + next.text, false);
+            transcript.push({ role: 'assistant', text: next.text });
+            renderMockProgress();
+            updateMockHeader();
+            speak(transition + next.text);
+            isBusy = false;
+            sendBtn.disabled = false;
+            micBtn.disabled = false;
+            input.focus();
+          }, 350);
+          return;
+        }
+
+        stopMockTimer();
+        updateMockHeader();
+        setStatus('AI is preparing your result…', true);
+        addMessage('assistant', '', true);
+        try {
+          var result = await getMockFeedback();
+          removeTyping();
+          addMessage('assistant', 'That is the end of the speaking test. Your AI assessment is ready.', false);
+          renderMockResult(result);
+          scoreLabel.textContent = 'Estimated overall band';
+          setStatus('Mock test complete', false);
+          newSessionBtn.textContent = 'Try another test';
+          speak('That is the end of the speaking test. Your practice result is ready.');
+        } catch (error) {
+          removeTyping();
+          addMessage('assistant', 'I could not reach the AI examiner, so no score was created. Please restart the test when your connection is available.', false);
+          setStatus('AI result unavailable', true);
+          scoreLabel.textContent = 'Result not created';
+          scoreSub.textContent = 'AI connection unavailable';
+          showToast('AI সংযোগ পাওয়া যায়নি—কোনো অনুমানভিত্তিক স্কোর দেখানো হয়নি।');
+          newSessionBtn.textContent = 'Restart test';
+        }
+        mockStarted = false;
+        isBusy = false;
+        sendBtn.disabled = true;
+        micBtn.disabled = true;
+      }
+
+      async function submitMessage() {
+        var text = input.value.trim();
+        if (!text || isBusy) return;
+        if (appMode === 'mock') {
+          submitMockAnswer(text);
+          return;
+        }
+        if (isListening && recognition) recognition.stop();
+        input.value = '';
+        isBusy = true;
+        sendBtn.disabled = true;
+        micBtn.disabled = true;
+        addMessage('user', text, false);
+        transcript.push({ role: 'user', text: text });
+        turns += 1;
+        turnCount.textContent = turns + (turns === 1 ? ' turn' : ' turns');
+        setStatus('AI coach is checking…', true);
+        addMessage('assistant', '', true);
+
+        try {
+          var result = await getPracticeFeedback(text);
+          removeTyping();
+          addMessage('assistant', result.reply, false);
+          transcript.push({ role: 'assistant', text: result.reply });
+          renderFeedback(result);
+          speak(result.reply);
+          setStatus('AI coach · ready', false);
+        } catch (error) {
+          removeTyping();
+          addMessage('assistant', 'I could not reach the AI coach just now. Please send your answer again.', false);
+          setStatus('AI connection unavailable', true);
+          showToast('AI সংযোগ পাওয়া যায়নি। ইন্টারনেট দেখে আবার পাঠান।');
+        } finally {
+          isBusy = false;
+          sendBtn.disabled = false;
+          micBtn.disabled = !recognition;
+          input.focus();
+        }
+      }
+
+      var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        recognition = new SpeechRecognition();
+        recognition.lang = 'en-GB';
+        recognition.interimResults = true;
+        recognition.continuous = false;
+
+        recognition.onstart = function () {
+          isListening = true;
+          micBtn.classList.add('listening');
+          micBtn.setAttribute('aria-label', 'Stop listening');
+          micHint.textContent = 'শুনছি… ইংরেজিতে বলুন';
+          setStatus('Listening to you…', true);
+        };
+        recognition.onresult = function (event) {
+          var text = '';
+          var finalText = '';
+          for (var i = event.resultIndex; i < event.results.length; i++) {
+            text += event.results[i][0].transcript;
+            if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
+          }
+          input.value = text;
+          if (finalText.trim()) input.dataset.finalSpeech = 'true';
+        };
+        recognition.onend = function () {
+          isListening = false;
+          micBtn.classList.remove('listening');
+          micBtn.setAttribute('aria-label', 'Start speaking');
+          micHint.textContent = 'মাইকে চাপ দিয়ে ইংরেজিতে বলুন';
+          if (appMode === 'mock') updateMockHeader();
+          else setStatus('Ready to practise', false);
+          if (input.dataset.finalSpeech === 'true' && input.value.trim()) {
+            delete input.dataset.finalSpeech;
+            submitMessage();
+          }
+        };
+        recognition.onerror = function (event) {
+          delete input.dataset.finalSpeech;
+          if (event.error !== 'aborted') showToast('মাইক্রোফোন শোনা যায়নি। অনুমতি দিন অথবা লিখে পাঠান।');
+        };
+      } else {
+        micBtn.disabled = true;
+        micHint.textContent = 'এই ব্রাউজারে ভয়েস ইনপুট নেই—লিখে অনুশীলন করুন';
+      }
+
+      micBtn.addEventListener('click', function () {
+        if (!recognition || isBusy) return;
+        if (isListening) recognition.stop();
+        else {
+          input.value = '';
+          delete input.dataset.finalSpeech;
+          try { recognition.start(); } catch (e) { showToast('মাইক্রোফোন আবার চালু করতে একটু অপেক্ষা করুন।'); }
+        }
+      });
+      sendBtn.addEventListener('click', submitMessage);
+      input.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') { event.preventDefault(); submitMessage(); }
+      });
+
+      document.getElementById('topics').addEventListener('click', function (event) {
+        var button = event.target.closest('.chip');
+        if (!button) return;
+        document.querySelectorAll('.chip').forEach(function (chip) { chip.setAttribute('aria-pressed', 'false'); });
+        button.setAttribute('aria-pressed', 'true');
+        selectedTopic = button.dataset.topic;
+        showToast('Topic changed to ' + selectedTopic + '.');
+      });
+
+      voiceToggle.addEventListener('click', function () {
+        voiceOn = !voiceOn;
+        voiceToggle.setAttribute('aria-pressed', String(voiceOn));
+        voiceToggle.textContent = 'Voice reply · ' + (voiceOn ? 'On' : 'Off');
+        if (!voiceOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+      });
+
+      function resetScore() {
+        scoreRing.style.setProperty('--score', '0deg');
+        scoreValue.textContent = '—';
+      }
+
+      function startPracticeSession() {
+        stopMockTimer();
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        messagesEl.innerHTML = '';
+        var greeting = selectedTopic === 'IELTS Part 1'
+          ? 'Let’s begin with an IELTS Part 1 question. Do you work or are you a student?'
+          : 'Great, let’s start fresh. Tell me something about ' + selectedTopic.toLowerCase() + '.';
+        addMessage('assistant', greeting, false);
+        transcript = [{ role: 'assistant', text: greeting }];
+        turns = 0;
+        turnCount.textContent = '0 turns';
+        resetScore();
+        scoreLabel.textContent = 'Waiting for your answer';
+        scoreSub.textContent = 'Grammar & clarity';
+        feedbackEl.innerHTML = '<div class="empty-feedback"><div><div class="empty-mark">✓</div><strong>Fresh session, fresh start.</strong><br><span class="bn">উত্তর দিন—তারপর কোচের নোট এখানে দেখাবে।</span></div></div>';
+        setStatus('Ready to practise', false);
+        input.disabled = false;
+        sendBtn.disabled = false;
+        micBtn.disabled = !recognition;
+      }
+
+      function prepareMockTest() {
+        stopMockTimer();
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        mockStarted = false;
+        mockQuestionIndex = 0;
+        mockStartedAt = 0;
+        turns = 0;
+        transcript = [];
+        messagesEl.innerHTML = '';
+        addMessage('assistant', 'This mock has three parts and seven questions. Your corrections and estimated band will appear only after the final answer.', false);
+        resetScore();
+        scoreLabel.textContent = 'Mock test not started';
+        scoreSub.textContent = '3 parts · 7 questions';
+        newSessionBtn.textContent = 'Start mock test';
+        input.value = '';
+        input.disabled = true;
+        sendBtn.disabled = true;
+        micBtn.disabled = true;
+        updateMockHeader();
+        renderMockProgress();
+      }
+
+      function startMockTest() {
+        stopMockTimer();
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        mockStarted = true;
+        mockQuestionIndex = 0;
+        mockStartedAt = Date.now();
+        turns = 0;
+        transcript = [];
+        messagesEl.innerHTML = '';
+        resetScore();
+        scoreLabel.textContent = 'Test in progress';
+        scoreSub.textContent = 'Feedback hidden until the end';
+        input.disabled = false;
+        sendBtn.disabled = false;
+        micBtn.disabled = !recognition;
+        newSessionBtn.textContent = 'Restart test';
+        var question = mockQuestions[0];
+        addMessage('assistant', 'Part 1. ' + question.text, false);
+        transcript.push({ role: 'assistant', text: question.text });
+        renderMockProgress();
+        updateMockHeader();
+        mockTimer = setInterval(updateMockHeader, 1000);
+        speak('Part 1. ' + question.text);
+        input.focus();
+      }
+
+      function switchMode(mode) {
+        if (isBusy || mode === appMode) return;
+        appMode = mode;
+        document.querySelectorAll('.mode-btn').forEach(function (button) {
+          button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
+        });
+        document.querySelector('.coach-top h2').textContent = mode === 'mock' ? 'Test progress' : 'Coach notes';
+        document.querySelector('.coach-top p').textContent = mode === 'mock' ? '৩ অংশের IELTS Speaking simulation' : 'সর্বশেষ উত্তরের ভুল ও উন্নতির জায়গা';
+        levelSelect.disabled = mode === 'mock';
+        if (mode === 'mock') levelSelect.value = 'IELTS speaking';
+        topicLabel.textContent = mode === 'mock' ? 'TEST TOPIC · GENERAL' : 'CONVERSATION TOPIC';
+        topicField.style.opacity = mode === 'mock' ? '.58' : '1';
+        document.querySelectorAll('.chip').forEach(function (chip) { chip.disabled = mode === 'mock'; });
+        if (mode === 'mock') prepareMockTest();
+        else {
+          newSessionBtn.textContent = 'New session';
+          startPracticeSession();
+        }
+      }
+
+      document.getElementById('modeSwitch').addEventListener('click', function (event) {
+        var button = event.target.closest('.mode-btn');
+        if (button) switchMode(button.dataset.mode);
+      });
+
+      newSessionBtn.addEventListener('click', function () {
+        if (appMode === 'mock') startMockTest();
+        else startPracticeSession();
+      });
+    })();
+  </script>
+</body>
+</html>
