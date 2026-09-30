@@ -793,7 +793,7 @@
         <button class="small-action" id="testElevenBtn" type="button" style="width:100%;margin-top:8px">🔊 ভয়েস পরীক্ষা</button>
         <div class="key-status bn" id="elevenStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.11</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.12</div>
       </div>
     </section>
 
@@ -1653,8 +1653,11 @@
           if (piperDownloading) { resolve(false); return; }
           piperDownloading = true;
           var statusEl = document.getElementById('piperStatus');
-          function setStatus(t) { if (statusEl) statusEl.textContent = t; showToast(t); }
+          function setStatus(t) { if (statusEl) statusEl.textContent = t; }
+          function setBtn(btn, t) { if (btn) btn.textContent = t; }
+          var activeBtn = document.getElementById(voiceId === PIPER_FEMALE ? 'piperFemaleBtn' : 'piperMaleBtn');
           setStatus('🧠 Neural ভয়েস ডাউনলোড হচ্ছে… (WiFi ব্যবহার করো)');
+          setBtn(activeBtn, '⏳ 0%');
           var modPromise = piperModule
             ? Promise.resolve(piperModule)
             : import('https://esm.sh/@mintplex-labs/piper-tts-web@1.0.5');
@@ -1663,16 +1666,20 @@
             return mod.download(voiceId, function (progress) {
               var pct = progress && progress.total
                 ? Math.round(progress.loaded * 100 / progress.total) : 0;
-              setStatus('🧠 ডাউনলোড হচ্ছে… ' + pct + '% — অপেক্ষা করো');
+              setStatus('🧠 ডাউনলোড হচ্ছে… ' + pct + '% — অপেক্ষা করো, বন্ধ করো না');
+              setBtn(activeBtn, '⏳ ' + pct + '%');
             });
           }).then(function () {
             piperReadyVoice = voiceId;
             piperDownloading = false;
-            setStatus('✅ Neural ভয়েস রেডি! এখন থেকে এই গলায় কথা বলবে।');
+            setStatus('✅ ডাউনলোড সম্পূর্ণ! এখন থেকে এই সুন্দর গলায় কথা বলবে।');
+            showToast('✅ Neural ভয়েস রেডি!');
+            updatePiperUI();
             resolve(true);
           }).catch(function () {
             piperDownloading = false;
-            setStatus('❌ ডাউনলোড ব্যর্থ — WiFi-তে আবার চেষ্টা করো।');
+            setStatus('❌ ডাউনলোড ব্যর্থ — WiFi-তে আবার Select চাপ দাও।');
+            setBtn(activeBtn, '🔄 আবার চেষ্টা');
             resolve(false);
           });
         });
@@ -2397,8 +2404,15 @@
       var piperMaleRow = document.getElementById('piperMaleRow');
       var piperOffRow = document.getElementById('piperOffRow');
       function updatePiperUI() {
-        if (piperFemaleBtn) piperFemaleBtn.textContent = (piperVoiceId === PIPER_FEMALE ? '✓ ' : '') + 'Select';
-        if (piperMaleBtn) piperMaleBtn.textContent = (piperVoiceId === PIPER_MALE ? '✓ ' : '') + 'Select';
+        var downloading = piperDownloading;
+        if (piperFemaleBtn) {
+          if (downloading && piperVoiceId === PIPER_FEMALE) { /* keep progress text */ }
+          else piperFemaleBtn.textContent = (piperVoiceId === PIPER_FEMALE ? (piperReadyVoice === PIPER_FEMALE ? '✅ ' : '✓ ') : '') + 'Select';
+        }
+        if (piperMaleBtn) {
+          if (downloading && piperVoiceId === PIPER_MALE) { /* keep progress text */ }
+          else piperMaleBtn.textContent = (piperVoiceId === PIPER_MALE ? (piperReadyVoice === PIPER_MALE ? '✅ ' : '✓ ') : '') + 'Select';
+        }
         if (piperOffBtn) piperOffBtn.textContent = (!piperVoiceId ? '✓ ' : '') + 'Select';
         if (piperRow) piperRow.classList.toggle('selected', !!piperVoiceId);
         if (piperFemaleRow) piperFemaleRow.classList.toggle('selected', piperVoiceId === PIPER_FEMALE);
