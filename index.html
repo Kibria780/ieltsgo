@@ -781,7 +781,7 @@
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.7</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.8</div>
       </div>
     </section>
 
@@ -840,6 +840,8 @@
             <span class="vname">🌐 Internet voice <span class="bn" style="opacity:.6">(কথোপকথনে ব্যবহার হবে)</span></span>
             <button class="small-action" id="netVoiceToggle" type="button">On</button>
           </div>
+          <div id="voiceListEl" class="voice-list"></div>
+          <!-- Neural voices temporarily hidden: 60MB model download is unreliable on mobile data.
           <div class="voice-item" id="piperRow">
             <span class="vname">🧠 Neural voice <span class="bn" style="opacity:.6">(সবচেয়ে সুন্দর · একবার ডাউনলোড)</span></span>
           </div>
@@ -855,7 +857,7 @@
             <span class="vname">🔇 Neural বন্ধ <span class="bn" style="opacity:.6">(ইন্টারনেট ভয়েস চলবে)</span></span>
             <button class="small-action" id="piperOffBtn" type="button">Select</button>
           </div>
-          <div id="voiceListEl" class="voice-list"></div>
+          -->
           <div class="voice-modal-actions">
             <button class="small-action" id="voiceReloadBtn" type="button">🔄 Reload</button>
             <button class="small-action" id="voiceModalClose" type="button">বন্ধ করো</button>
