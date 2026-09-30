@@ -780,8 +780,20 @@
         </div>
         <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
         <div class="key-status bn" id="keyStatus"></div>
+        <span class="field-label" style="margin-top:12px">ELEVENLABS KEY · সুন্দর ভয়েস 🎙</span>
+        <input type="password" id="elevenKeyInput" placeholder="ElevenLabs API key" autocomplete="off" spellcheck="false">
+        <div class="key-row">
+          <button class="small-action" id="saveElevenKeyBtn" type="button">Save</button>
+          <button class="small-action" id="clearElevenKeyBtn" type="button">Clear</button>
+        </div>
+        <div class="key-row" style="margin-top:8px">
+          <button class="small-action" id="elevenFemaleBtn" type="button">👧 মেয়ে</button>
+          <button class="small-action" id="elevenMaleBtn" type="button">👦 ছেলে</button>
+        </div>
+        <button class="small-action" id="testElevenBtn" type="button" style="width:100%;margin-top:8px">🔊 ভয়েস পরীক্ষা</button>
+        <div class="key-status bn" id="elevenStatus"></div>
         <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.9</div>
+        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.10</div>
       </div>
     </section>
 
@@ -1433,6 +1445,23 @@
       }
       function speak(text) {
         if (!voiceOn) return;
+        if (getElevenKey()) {
+          speakEleven(text, function (ok) {
+            if (ok) return;
+            if (piperVoiceId) {
+              speakPiper(text, piperVoiceId, function (ok2) {
+                if (ok2) return;
+                if (netVoiceOn) speakNetVoice(text, function (ok3) { if (!ok3) speakPhone(text); });
+                else speakPhone(text);
+              });
+            } else if (netVoiceOn) {
+              speakNetVoice(text, function (ok2) { if (!ok2) speakPhone(text); });
+            } else {
+              speakPhone(text);
+            }
+          });
+          return;
+        }
         if (piperVoiceId) {
           speakPiper(text, piperVoiceId, function (ok) {
             if (ok) return;
@@ -1507,6 +1536,18 @@
         });
       }
       function speakAndWait(text) {
+        return new Promise(function (resolve) {
+          if (getElevenKey()) {
+            speakEleven(text, function (ok) {
+              if (ok) { resolve(); return; }
+              speakAndWaitFallback(text).then(resolve);
+            });
+            return;
+          }
+          speakAndWaitFallback(text).then(resolve);
+        });
+      }
+      function speakAndWaitFallback(text) {
         return new Promise(function (resolve) {
           if (piperVoiceId) {
             speakPiper(text, piperVoiceId, function (ok) {
@@ -2683,6 +2724,99 @@
           testKeyBtn.disabled = false;
         }
       });
+      // ---------- ElevenLabs voice key (stored only in this browser) ----------
+      var ELEVEN_FEMALE = '21m00Tcm4TlvDq8ikWAM'; // Rachel - warm female
+      var ELEVEN_MALE = 'pNInz6obpgDQGcFmaJgB'; // Adam - deep male
+      var elevenKeyInput = document.getElementById('elevenKeyInput');
+      var saveElevenKeyBtn = document.getElementById('saveElevenKeyBtn');
+      var clearElevenKeyBtn = document.getElementById('clearElevenKeyBtn');
+      var elevenStatus = document.getElementById('elevenStatus');
+      var elevenFemaleBtn = document.getElementById('elevenFemaleBtn');
+      var elevenMaleBtn = document.getElementById('elevenMaleBtn');
+      var testElevenBtn = document.getElementById('testElevenBtn');
+      function getElevenKey() {
+        try { return (localStorage.getItem('ieltsgo_eleven_key') || '').trim(); } catch (e) { return ''; }
+      }
+      function getElevenVoice() {
+        try { return localStorage.getItem('ieltsgo_eleven_voice') || ELEVEN_FEMALE; } catch (e) { return ELEVEN_FEMALE; }
+      }
+      function refreshElevenUI() {
+        var has = !!getElevenKey();
+        var v = getElevenVoice();
+        if (elevenFemaleBtn) elevenFemaleBtn.textContent = (v === ELEVEN_FEMALE ? '✓ ' : '') + '👧 মেয়ে';
+        if (elevenMaleBtn) elevenMaleBtn.textContent = (v === ELEVEN_MALE ? '✓ ' : '') + '👦 ছেলে';
+        if (has && elevenStatus && !elevenStatus.textContent) elevenStatus.textContent = 'ElevenLabs key সেভ আছে — সুন্দর ভয়েস চালু।';
+      }
+      if (saveElevenKeyBtn) saveElevenKeyBtn.addEventListener('click', function () {
+        var key = elevenKeyInput.value.trim();
+        if (!key) { elevenStatus.textContent = 'Key টা লিখে Save চাপো।'; return; }
+        try { localStorage.setItem('ieltsgo_eleven_key', key); } catch (e) {}
+        elevenStatus.textContent = 'সেভ হয়েছে ✅ — নিচে 🔊 ভয়েস পরীক্ষা চাপ দিয়ে শুনে দেখো।';
+        refreshElevenUI();
+      });
+      if (clearElevenKeyBtn) clearElevenKeyBtn.addEventListener('click', function () {
+        try { localStorage.removeItem('ieltsgo_eleven_key'); } catch (e) {}
+        elevenKeyInput.value = '';
+        elevenStatus.textContent = 'Key মুছে ফেলা হয়েছে।';
+        refreshElevenUI();
+      });
+      if (elevenFemaleBtn) elevenFemaleBtn.addEventListener('click', function () {
+        try { localStorage.setItem('ieltsgo_eleven_voice', ELEVEN_FEMALE); } catch (e) {}
+        refreshElevenUI();
+      });
+      if (elevenMaleBtn) elevenMaleBtn.addEventListener('click', function () {
+        try { localStorage.setItem('ieltsgo_eleven_voice', ELEVEN_MALE); } catch (e) {}
+        refreshElevenUI();
+      });
+      function speakEleven(text, onDone) {
+        var key = getElevenKey();
+        if (!key) { onDone(false); return; }
+        var chunks = googleTTSChunks(text);
+        if (!chunks.length) { onDone(true); return; }
+        if ('speechSynthesis' in window) { try { window.speechSynthesis.cancel(); } catch (e) {} }
+        var voiceId = getElevenVoice();
+        var i = 0;
+        var failed = false;
+        function next() {
+          if (failed) return;
+          if (i >= chunks.length) { onDone(true); return; }
+          var chunk = chunks[i++];
+          fetch('https://api.elevenlabs.io/v1/text-to-speech/' + voiceId, {
+            method: 'POST',
+            headers: {
+              'xi-api-key': key,
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+              text: chunk,
+              model_id: 'eleven_multilingual_v2',
+              voice_settings: { stability: 0.5, similarity_boost: 0.75 }
+            })
+          }).then(function (res) {
+            if (!res.ok) throw new Error('elevenlabs ' + res.status);
+            return res.blob();
+          }).then(function (blob) {
+            if (failed) return;
+            try {
+              var audio = new Audio(URL.createObjectURL(blob));
+              audio.onended = next;
+              audio.onerror = function () { failed = true; onDone(false); };
+              var p = audio.play();
+              if (p && p.catch) p.catch(function () { failed = true; onDone(false); });
+            } catch (e) { failed = true; onDone(false); }
+          }).catch(function () { failed = true; onDone(false); });
+        }
+        next();
+      }
+      if (testElevenBtn) testElevenBtn.addEventListener('click', function () {
+        var key = getElevenKey();
+        if (!key) { elevenStatus.textContent = 'আগে key বসিয়ে Save চাপো।'; return; }
+        elevenStatus.textContent = 'ভয়েস পরীক্ষা চলছে…';
+        speakEleven("Hello! I'm your English mentor. Let's learn together.", function (ok) {
+          elevenStatus.textContent = ok ? '✅ ভয়েস কাজ করছে!' : '❌ সমস্যা — key ঠিক আছে কিনা দেখো।';
+        });
+      });
+      refreshElevenUI();
       refreshKeyUI();
     })();
   </script>
