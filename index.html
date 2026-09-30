@@ -839,8 +839,8 @@
 
       var AI_ENDPOINT = 'https://text.pollinations.ai/openai';
       var GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
-      var GROQ_MODEL = 'llama-3.3-70b-versatile';
-      var GROQ_FALLBACK_MODEL = 'llama-3.1-8b-instant';
+      var GROQ_MODEL = 'openai/gpt-oss-120b';
+      var GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b';
       var lastProvider = '';
       var lastAIError = '';
 
@@ -872,6 +872,8 @@
                 ],
                 temperature: 0.25,
                 max_tokens: 1500,
+                reasoning_format: 'hidden',
+                reasoning_effort: 'low',
                 response_format: { type: 'json_object' }
               }),
               signal: controller.signal
