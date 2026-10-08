@@ -684,18 +684,45 @@
       .topics { flex-wrap: wrap; overflow: visible; }
       .chip { min-height: 38px; padding: 0 12px; font-size: .82rem; }
       .small-action { align-self: end; padding: 0 12px; }
-      .conversation { min-height: 570px; border-radius: 24px 16px 16px 16px; }
-      .messages { height: 360px; padding: 18px 13px; }
+      html, body {
+        min-height: 100%;
+        overflow-y: auto;
+        overscroll-behavior-y: auto;
+      }
+      body {
+        -webkit-overflow-scrolling: touch;
+        touch-action: pan-y;
+      }
+      .conversation {
+        min-height: 0;
+        border-radius: 24px 16px 16px 16px;
+        overflow: visible;
+      }
+      .messages {
+        height: auto;
+        min-height: 190px;
+        overflow-y: visible;
+        padding: 18px 13px;
+      }
       .message { max-width: 94%; }
       .voice-row { grid-template-columns: auto minmax(0, 1fr); }
       .send { grid-column: 1 / -1; width: 100%; height: 46px; }
       .text-input, .mic { height: 50px; }
       .mic { width: 50px; }
-      .composer-foot { align-items: flex-start; }
-      .voice-controls { max-width: 58%; gap: 8px 12px; }
+      .composer-foot {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+      .voice-controls {
+        width: 100%;
+        max-width: none;
+        justify-content: space-between;
+        gap: 8px 12px;
+      }
       .voice-key-row { grid-template-columns: 1fr; }
       .voice-key-action { width: 100%; }
-      .coach { border-radius: 16px 24px 16px 16px; }
+      .coach { min-height: 0; border-radius: 16px 24px 16px 16px; }
+      .feedback { max-height: none; overflow-y: visible; }
       .hint-strip { align-items: start; }
     }
     @media (prefers-reduced-motion: reduce) {
