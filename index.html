@@ -707,7 +707,7 @@
   <main class="page">
     <section class="intro" aria-labelledby="main-title">
       <h1 id="main-title">Speak. Get corrected. <span>Try again.</span></h1>
-      <p class="intro-copy bn"><strong lang="en">IELTSgo</strong>-তে মাইকে ইংরেজিতে কথা বলুন। আপনার ভার্চুয়াল পার্টনার সঙ্গে সঙ্গে উত্তর দেবে, আর ভুল থাকলে সহজ বাংলায় পয়েন্ট আকারে বুঝিয়ে দেবে—কোনো অ্যাকাউন্ট বা সাইন-ইন ছাড়াই।</p>
+      <p class="intro-copy bn"><strong lang="en">IELTSgo</strong>-তে মাইকে ইংরেজিতে কথা বলুন। আপনার ভার্চুয়াল পার্টনার সঙ্গে সঙ্গে উত্তর দেবে, আর ভুল থাকলে সহজ বাংলায় পয়েন্ট আকারে বুঝিয়ে দেবে।</p>
     </section>
 
     <section class="setup" aria-label="Practice setup">
@@ -744,7 +744,7 @@
     <section class="workspace">
       <article class="conversation" aria-label="Live English conversation">
         <header class="panel-head">
-          <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Ready to practise</span></div>
+          <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Qwen 3.8 Max · Xkiro key needed</span></div>
           <span class="turn-count" id="turnCount">0 turns</span>
         </header>
 
@@ -769,9 +769,18 @@
           <div class="composer-foot">
             <span class="bn" id="micHint">মাইকে চাপ দিয়ে ইংরেজিতে বলুন</span>
             <div class="voice-controls">
+              <button class="voice-provider" id="aiProviderBtn" type="button" aria-expanded="false" aria-controls="aiKeyPanel">Connect Xkiro AI</button>
               <button class="voice-toggle" id="voiceToggle" type="button" aria-pressed="true">Voice reply · On</button>
               <button class="voice-provider" id="voiceProviderBtn" type="button" aria-expanded="false" aria-controls="voiceKeyPanel">Add Cartesia key</button>
             </div>
+          </div>
+          <div class="voice-key-panel" id="aiKeyPanel" hidden>
+            <label class="field-label" for="xkiroKey">XKIRO AI · QWEN 3.8 MAX FREE · THIS TAB ONLY</label>
+            <div class="voice-key-row">
+              <input class="voice-key-input" id="xkiroKey" type="password" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste your Xkiro API key" aria-describedby="aiKeyStatus" />
+              <button class="voice-key-action" id="aiConnect" type="button">Use Xkiro AI</button>
+            </div>
+            <p class="voice-key-status bn" id="aiKeyStatus">ইংরেজি বোঝা, উত্তর দেওয়া ও বাংলায় correction-এর জন্য Xkiro-এর free Qwen model ব্যবহার হবে। Key শুধু এই tab-এ থাকবে; reload করলে মুছে যাবে।</p>
           </div>
           <div class="voice-key-panel" id="voiceKeyPanel" hidden>
             <label class="field-label" for="cartesiaKey">CARTESIA VOICE · THIS TAB ONLY</label>
@@ -779,7 +788,7 @@
               <input class="voice-key-input" id="cartesiaKey" type="password" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste your Cartesia API key" aria-describedby="cartesiaStatus" />
               <button class="voice-key-action" id="cartesiaConnect" type="button">Use Cartesia</button>
             </div>
-            <p class="voice-key-status bn" id="cartesiaStatus">Keyটি এই tab বন্ধ বা reload করলে মুছে যাবে। AI-এর উত্তর Cartesia voice-এ শোনাতে সরাসরি Cartesia-তে পাঠানো হবে।</p>
+            <p class="voice-key-status bn" id="cartesiaStatus">এই key শুধু natural voice output-এর জন্য; AI connection-এর জন্য নয়। Keyটি tab বন্ধ বা reload করলে মুছে যাবে।</p>
           </div>
         </div>
       </article>
@@ -812,7 +821,7 @@
       <div class="key">TIP</div>
       <div>
         <strong>Use complete sentences—even when you are unsure.</strong>
-        <p class="bn">ফ্রি browser voice-এ কোনো key লাগে না। আরও স্বাভাবিক voice চাইলে “Add Cartesia key” থেকে key দিন; মাইক চালু করতে browser permission-এ “Allow” চাপুন।</p>
+        <p class="bn">“Connect Xkiro AI” থেকে Xkiro key দিন। Qwen ইংরেজি বুঝে উত্তর ও বাংলায় correction দেবে; Cartesia শুধু সেই উত্তরের natural voice তৈরি করবে।</p>
       </div>
     </section>
   </main>
@@ -840,6 +849,11 @@
       var newSessionBtn = document.getElementById('newSession');
       var topicLabel = document.getElementById('topicLabel');
       var topicField = document.querySelector('.topic-field');
+      var aiProviderBtn = document.getElementById('aiProviderBtn');
+      var aiKeyPanel = document.getElementById('aiKeyPanel');
+      var xkiroKeyInput = document.getElementById('xkiroKey');
+      var aiConnect = document.getElementById('aiConnect');
+      var aiKeyStatus = document.getElementById('aiKeyStatus');
       var voiceProviderBtn = document.getElementById('voiceProviderBtn');
       var voiceKeyPanel = document.getElementById('voiceKeyPanel');
       var cartesiaKeyInput = document.getElementById('cartesiaKey');
@@ -859,6 +873,7 @@
       var mockQuestionIndex = 0;
       var mockStartedAt = 0;
       var mockTimer = null;
+      var aiApiKey = '';
       var cartesiaApiKey = '';
       var cartesiaAudio = null;
       var cartesiaAudioUrl = '';
@@ -881,7 +896,8 @@
         toastTimer = setTimeout(function () { toast.classList.remove('show'); }, 4200);
       }
 
-      var AI_ENDPOINT = 'https://text.pollinations.ai/openai';
+      var AI_ENDPOINT = 'https://api.xkiro.com/v1/chat/completions';
+      var AI_MODEL = 'qwen/qwen3.8-max:free';
 
       function extractJsonObject(raw) {
         var text = String(raw || '').trim();
@@ -897,29 +913,34 @@
       }
 
       async function requestAI(systemPrompt, userPrompt) {
+        if (!aiApiKey) throw new Error('ai-key-required');
         var controller = new AbortController();
-        var timeout = setTimeout(function () { controller.abort(); }, 45000);
+        var timeout = setTimeout(function () { controller.abort(); }, 60000);
         try {
           var response = await fetch(AI_ENDPOINT, {
             method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
+            headers: {
+              'Authorization': 'Bearer ' + aiApiKey,
+              'Content-Type': 'application/json'
+            },
             body: JSON.stringify({
-              model: 'openai',
+              model: AI_MODEL,
               messages: [
                 { role: 'system', content: systemPrompt },
                 { role: 'user', content: userPrompt }
               ],
-              temperature: 0.25,
-              private: true
+              temperature: 0.25
             }),
             signal: controller.signal
           });
+          if (response.status === 401 || response.status === 403) throw new Error('ai-key-invalid');
+          if (response.status === 429) throw new Error('ai-rate-limit');
           if (!response.ok) throw new Error('AI service returned ' + response.status);
           var payload = await response.json();
           var content = payload && payload.choices && payload.choices[0] && payload.choices[0].message
             ? payload.choices[0].message.content
             : '';
-          if (!content) throw new Error('AI response was empty');
+          if (!content) throw new Error('Xkiro AI response was empty');
           return extractJsonObject(content);
         } finally {
           clearTimeout(timeout);
@@ -1292,6 +1313,16 @@
       async function submitMessage() {
         var text = input.value.trim();
         if (!text || isBusy) return;
+        if (!aiApiKey) {
+          aiKeyPanel.hidden = false;
+          voiceKeyPanel.hidden = true;
+          aiProviderBtn.setAttribute('aria-expanded', 'true');
+          voiceProviderBtn.setAttribute('aria-expanded', 'false');
+          xkiroKeyInput.focus();
+          setStatus('Qwen 3.8 Max · Xkiro key needed', true);
+          showToast('AI coaching-এর জন্য Xkiro key দিন—Cartesia key শুধু voice output-এর জন্য।');
+          return;
+        }
         if (appMode === 'mock') {
           submitMockAnswer(text);
           return;
@@ -1315,12 +1346,28 @@
           transcript.push({ role: 'assistant', text: result.reply });
           renderFeedback(result);
           speak(result.reply);
-          setStatus('AI coach · ready', false);
+          setStatus('Qwen 3.8 Max · ready', false);
         } catch (error) {
           removeTyping();
-          addMessage('assistant', 'I could not reach the AI coach just now. Please send your answer again.', false);
-          setStatus('AI connection unavailable', true);
-          showToast('AI সংযোগ পাওয়া যায়নি। ইন্টারনেট দেখে আবার পাঠান।');
+          var invalidKey = error && error.message === 'ai-key-invalid';
+          var rateLimited = error && error.message === 'ai-rate-limit';
+          addMessage('assistant', invalidKey
+            ? 'The Xkiro key was not accepted. Please reconnect the AI coach and send your answer again.'
+            : 'I could not reach the AI coach just now. Please send your answer again.', false);
+          if (invalidKey) {
+            aiApiKey = '';
+            aiProviderBtn.textContent = 'Connect Xkiro AI';
+            aiConnect.textContent = 'Use Xkiro AI';
+            aiKeyPanel.hidden = false;
+            aiProviderBtn.setAttribute('aria-expanded', 'true');
+            aiKeyStatus.textContent = 'Keyটি গ্রহণ করা হয়নি। Xkiro key আবার দিন।';
+          }
+          setStatus(invalidKey ? 'Qwen 3.8 Max · Xkiro key needed' : 'Xkiro AI unavailable', true);
+          showToast(invalidKey
+            ? 'Xkiro key কাজ করছে না—সঠিক key দিন।'
+            : rateLimited
+              ? 'Xkiro free model rate limit হয়েছে—একটু পরে আবার পাঠান।'
+              : 'Xkiro AI সংযোগ পাওয়া যায়নি—ইন্টারনেট দেখে আবার পাঠান।');
         } finally {
           isBusy = false;
           sendBtn.disabled = false;
@@ -1359,7 +1406,7 @@
           micBtn.setAttribute('aria-label', 'Start speaking');
           micHint.textContent = 'মাইকে চাপ দিয়ে ইংরেজিতে বলুন';
           if (appMode === 'mock') updateMockHeader();
-          else setStatus('Ready to practise', false);
+          else setStatus(aiApiKey ? 'Qwen 3.8 Max · ready' : 'Qwen 3.8 Max · Xkiro key needed', !aiApiKey);
           if (input.dataset.finalSpeech === 'true' && input.value.trim()) {
             delete input.dataset.finalSpeech;
             submitMessage();
@@ -1397,6 +1444,71 @@
         showToast('Topic changed to ' + selectedTopic + '.');
       });
 
+      aiProviderBtn.addEventListener('click', function () {
+        var willOpen = aiKeyPanel.hidden;
+        aiKeyPanel.hidden = !willOpen;
+        voiceKeyPanel.hidden = true;
+        aiProviderBtn.setAttribute('aria-expanded', String(willOpen));
+        voiceProviderBtn.setAttribute('aria-expanded', 'false');
+        if (willOpen) xkiroKeyInput.focus();
+      });
+
+      aiConnect.addEventListener('click', async function () {
+        var key = xkiroKeyInput.value.trim();
+        if (!key) {
+          if (aiApiKey) {
+            aiApiKey = '';
+            aiProviderBtn.textContent = 'Connect Xkiro AI';
+            aiConnect.textContent = 'Use Xkiro AI';
+            aiKeyStatus.textContent = 'Xkiro AI key সরানো হয়েছে। আবার কথা বলতে নতুন key দিন।';
+            setStatus('Qwen 3.8 Max · Xkiro key needed', true);
+            showToast('Xkiro AI key removed from this tab.');
+          } else {
+            showToast('Xkiro API key দিন।');
+          }
+          return;
+        }
+        if (key.length < 12) {
+          showToast('Xkiro keyটি সম্পূর্ণ লিখুন।');
+          return;
+        }
+
+        aiApiKey = key;
+        aiConnect.disabled = true;
+        aiConnect.textContent = 'Checking…';
+        aiKeyStatus.textContent = 'Xkiro free Qwen connection পরীক্ষা হচ্ছে…';
+        setStatus('Connecting Xkiro AI…', true);
+        try {
+          await requestAI('Return only valid JSON with one boolean key named ok.', 'Set ok to true.');
+          xkiroKeyInput.value = '';
+          aiProviderBtn.textContent = 'Xkiro AI · Connected';
+          aiConnect.textContent = 'Remove key';
+          aiKeyStatus.textContent = 'Qwen 3.8 Max connected · English conversation ও বাংলা correction ready। Key শুধু এই tab-এ আছে।';
+          aiKeyPanel.hidden = true;
+          aiProviderBtn.setAttribute('aria-expanded', 'false');
+          setStatus('Qwen 3.8 Max · ready', false);
+          showToast('Xkiro AI coach connected.');
+        } catch (error) {
+          aiApiKey = '';
+          aiProviderBtn.textContent = 'Connect Xkiro AI';
+          aiConnect.textContent = 'Use Xkiro AI';
+          aiKeyStatus.textContent = error && error.message === 'ai-rate-limit'
+            ? 'এই key-এর rate limit হয়েছে। একটু পরে আবার চেষ্টা করুন।'
+            : 'Xkiro AI connection হয়নি। Xkiro key ঠিক আছে কি না দেখে আবার দিন।';
+          setStatus('Xkiro AI · connection failed', true);
+          showToast('Xkiro AI connection হয়নি—key দেখে আবার চেষ্টা করুন।');
+        } finally {
+          aiConnect.disabled = false;
+        }
+      });
+
+      xkiroKeyInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          aiConnect.click();
+        }
+      });
+
       voiceToggle.addEventListener('click', function () {
         voiceOn = !voiceOn;
         voiceToggle.setAttribute('aria-pressed', String(voiceOn));
@@ -1407,7 +1519,9 @@
       voiceProviderBtn.addEventListener('click', function () {
         var willOpen = voiceKeyPanel.hidden;
         voiceKeyPanel.hidden = !willOpen;
+        aiKeyPanel.hidden = true;
         voiceProviderBtn.setAttribute('aria-expanded', String(willOpen));
+        aiProviderBtn.setAttribute('aria-expanded', 'false');
         if (willOpen) cartesiaKeyInput.focus();
       });
 
@@ -1467,7 +1581,7 @@
         scoreLabel.textContent = 'Waiting for your answer';
         scoreSub.textContent = 'Grammar & clarity';
         feedbackEl.innerHTML = '<div class="empty-feedback"><div><div class="empty-mark">✓</div><strong>Fresh session, fresh start.</strong><br><span class="bn">উত্তর দিন—তারপর কোচের নোট এখানে দেখাবে।</span></div></div>';
-        setStatus('Ready to practise', false);
+        setStatus(aiApiKey ? 'Qwen 3.8 Max · ready' : 'Qwen 3.8 Max · Xkiro key needed', !aiApiKey);
         input.disabled = false;
         sendBtn.disabled = false;
         micBtn.disabled = !recognition;
