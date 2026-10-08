@@ -211,30 +211,6 @@
       cursor: pointer;
       white-space: nowrap;
     }
-    .key-panel {
-      display: none;
-      margin-top: 10px;
-      padding: 12px;
-      border: 1px dashed var(--line);
-      border-radius: 12px;
-      background: var(--surface-3);
-    }
-    .key-panel.open { display: block; }
-    .key-panel input {
-      width: 100%;
-      box-sizing: border-box;
-      margin: 8px 0;
-      padding: 10px 12px;
-      border-radius: 10px;
-      border: 1px solid var(--line);
-      background: var(--surface);
-      color: var(--ink);
-      font-size: 14px;
-    }
-    .key-row { display: flex; gap: 8px; }
-    .key-row .small-action { flex: 1; min-height: 40px; }
-    .key-status { font-size: 13px; margin-top: 6px; min-height: 18px; }
-    .key-note { font-size: 12px; opacity: 0.75; margin: 8px 0 0; }
 
     .workspace {
       display: grid;
@@ -414,6 +390,13 @@
       color: var(--muted);
       font-size: .75rem;
     }
+    .voice-controls {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
     .voice-toggle {
       border: 0;
       background: transparent;
@@ -422,72 +405,55 @@
       cursor: pointer;
       font-weight: 600;
     }
-    .voice-toggle.active {
-      color: #fff;
-      background: var(--accent);
-      border-radius: 999px;
-      padding: 6px 14px;
+    .voice-provider {
+      border: 0;
+      border-bottom: 1px solid currentColor;
+      background: transparent;
+      padding: 3px 0;
+      color: var(--accent-strong);
+      cursor: pointer;
+      font-weight: 600;
     }
-    .voice-meter {
-      height: 6px;
-      background: var(--accent-soft);
-      border-radius: 999px;
-      overflow: hidden;
-      margin-top: 6px;
-      display: none;
-    }
-    .voice-meter-fill {
-      height: 100%;
-      width: 0%;
-      background: var(--accent);
-      border-radius: 999px;
-      transition: width 90ms linear;
-    }
-    .voice-select {
-      width: 100%;
-      margin-top: 8px;
-      padding: 9px 10px;
-      border-radius: 10px;
+    .voice-key-panel {
+      margin-top: 12px;
+      padding: 13px;
+      border-radius: 13px;
+      background: var(--surface-2);
       border: 1px solid var(--line);
+    }
+    .voice-key-panel[hidden] { display: none; }
+    .voice-key-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 9px;
+    }
+    .voice-key-input {
+      width: 100%;
+      min-width: 0;
+      height: 43px;
+      padding: 0 12px;
+      border: 1px solid var(--line);
+      border-radius: 11px;
       background: var(--surface);
       color: var(--ink);
-      font-size: 14px;
+      outline: none;
     }
-    .voice-modal {
-      display: none;
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.6);
-      z-index: 100;
-      align-items: center;
-      justify-content: center;
-      padding: 20px;
+    .voice-key-action {
+      min-height: 43px;
+      padding: 0 14px;
+      border: 0;
+      border-radius: 11px;
+      background: var(--green);
+      color: #fff;
+      cursor: pointer;
+      font-weight: 600;
     }
-    .voice-modal.open { display: flex; }
-    .voice-modal-box {
-      background: var(--surface);
-      border-radius: 16px;
-      padding: 20px;
-      max-width: 420px;
-      width: 100%;
-      max-height: 80vh;
-      overflow-y: auto;
+    .voice-key-status {
+      margin: 9px 0 0;
+      color: var(--muted);
+      font-size: .72rem;
+      line-height: 1.55;
     }
-    .voice-modal-box h3 { margin: 0 0 6px; }
-    .voice-list { margin: 12px 0; }
-    .voice-item {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      padding: 10px;
-      border: 1px solid var(--line);
-      border-radius: 10px;
-      margin-bottom: 8px;
-    }
-    .voice-item .vname { flex: 1; font-size: 14px; }
-    .voice-item.selected { border-color: var(--accent); background: var(--accent-soft); }
-    .voice-modal-actions { display: flex; gap: 8px; }
-    .voice-modal-actions .small-action { flex: 1; }
 
     .coach {
       border-radius: var(--radius-lg) var(--radius-xl) var(--radius-lg) var(--radius-lg);
@@ -726,6 +692,9 @@
       .text-input, .mic { height: 50px; }
       .mic { width: 50px; }
       .composer-foot { align-items: flex-start; }
+      .voice-controls { max-width: 58%; gap: 8px 12px; }
+      .voice-key-row { grid-template-columns: 1fr; }
+      .voice-key-action { width: 100%; }
       .coach { border-radius: 16px 24px 16px 16px; }
       .hint-strip { align-items: start; }
     }
@@ -770,31 +739,6 @@
         </div>
       </div>
       <button class="small-action" id="newSession" type="button">New session</button>
-      <button class="small-action" id="keyBtn" type="button" style="margin-top:8px">⚙ AI Key</button>
-      <div class="key-panel" id="keyPanel">
-        <span class="field-label">GROQ API KEY · দ্রুত AI</span>
-        <input type="password" id="groqKeyInput" placeholder="gsk_... key এখানে বসাও" autocomplete="off" spellcheck="false">
-        <div class="key-row">
-          <button class="small-action" id="saveKeyBtn" type="button">Save</button>
-          <button class="small-action" id="clearKeyBtn" type="button">Clear</button>
-        </div>
-        <button class="small-action" id="testKeyBtn" type="button" style="width:100%;margin-top:8px">🔍 AI পরীক্ষা</button>
-        <div class="key-status bn" id="keyStatus"></div>
-        <span class="field-label" style="margin-top:12px">ELEVENLABS KEY · সুন্দর ভয়েস 🎙</span>
-        <input type="password" id="elevenKeyInput" placeholder="ElevenLabs API key" autocomplete="off" spellcheck="false">
-        <div class="key-row">
-          <button class="small-action" id="saveElevenKeyBtn" type="button">Save</button>
-          <button class="small-action" id="clearElevenKeyBtn" type="button">Clear</button>
-        </div>
-        <div class="key-row" style="margin-top:8px">
-          <button class="small-action" id="elevenFemaleBtn" type="button">👧 মেয়ে</button>
-          <button class="small-action" id="elevenMaleBtn" type="button">👦 ছেলে</button>
-        </div>
-        <button class="small-action" id="testElevenBtn" type="button" style="width:100%;margin-top:8px">🔊 ভয়েস পরীক্ষা</button>
-        <div class="key-status bn" id="elevenStatus"></div>
-        <p class="key-note bn">Key শুধু তোমার এই ব্রাউজারে সেভ থাকবে, কোথাও পাঠানো হয় না। Key ছাড়া ফ্রি সার্ভার / অফলাইন মোড চলবে।</p>
-        <div class="key-note bn" style="opacity:.6" id="appVersion">v2.14</div>
-      </div>
     </section>
 
     <section class="workspace">
@@ -824,41 +768,21 @@
           </div>
           <div class="composer-foot">
             <span class="bn" id="micHint">মাইকে চাপ দিয়ে ইংরেজিতে বলুন</span>
-            <button class="voice-toggle" id="voiceChatBtn" type="button">🎙 Voice chat</button>
-            <button class="voice-toggle" id="voiceListBtn" type="button">🔊 Voice</button>
-            <button class="voice-toggle" id="voiceToggle" type="button" aria-pressed="true">Voice reply · On</button>
+            <div class="voice-controls">
+              <button class="voice-toggle" id="voiceToggle" type="button" aria-pressed="true">Voice reply · On</button>
+              <button class="voice-provider" id="voiceProviderBtn" type="button" aria-expanded="false" aria-controls="voiceKeyPanel">Add Cartesia key</button>
+            </div>
           </div>
-          <div class="voice-meter" id="voiceMeter" aria-hidden="true">
-            <div class="voice-meter-fill" id="voiceMeterFill"></div>
+          <div class="voice-key-panel" id="voiceKeyPanel" hidden>
+            <label class="field-label" for="cartesiaKey">CARTESIA VOICE · THIS TAB ONLY</label>
+            <div class="voice-key-row">
+              <input class="voice-key-input" id="cartesiaKey" type="password" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste your Cartesia API key" aria-describedby="cartesiaStatus" />
+              <button class="voice-key-action" id="cartesiaConnect" type="button">Use Cartesia</button>
+            </div>
+            <p class="voice-key-status bn" id="cartesiaStatus">Keyটি এই tab বন্ধ বা reload করলে মুছে যাবে। AI-এর উত্তর Cartesia voice-এ শোনাতে সরাসরি Cartesia-তে পাঠানো হবে।</p>
           </div>
         </div>
       </article>
-
-      <div class="voice-modal" id="voiceModal" aria-hidden="true">
-        <div class="voice-modal-box">
-          <h3>🔊 AI Voice বেছে নাও</h3>
-          <p class="bn">যেটা মেন্টরের মতো শোনাবে — 🔊 চাপ দিয়ে শুনে দেখো, তারপর Select করো।</p>
-          <div class="voice-item" id="mentorPackRow">
-            <span class="vname">🎙 Mentor voice pack <span class="bn" style="opacity:.6">(GitHub · warm human-like voice)</span></span>
-            <button class="small-action" id="mentorPackTest" type="button">🔊</button>
-            <button class="small-action" id="mentorPackToggle" type="button">On</button>
-          </div>
-          <div class="voice-item" id="packGenderRow">
-            <span class="vname">👧 মেয়ে / 👦 ছেলে ভয়েস</span>
-            <button class="small-action" id="packFemaleBtn" type="button">👧 মেয়ে</button>
-            <button class="small-action" id="packMaleBtn" type="button">👦 ছেলে</button>
-          </div>
-          <div class="voice-item" id="netVoiceRow">
-            <span class="vname">🌐 Internet voice <span class="bn" style="opacity:.6">(কথোপকথনে ব্যবহার হবে)</span></span>
-            <button class="small-action" id="netVoiceToggle" type="button">On</button>
-          </div>
-          <div id="voiceListEl" class="voice-list"></div>
-          <div class="voice-modal-actions">
-            <button class="small-action" id="voiceReloadBtn" type="button">🔄 Reload</button>
-            <button class="small-action" id="voiceModalClose" type="button">বন্ধ করো</button>
-          </div>
-        </div>
-      </div>
 
       <aside class="coach" aria-label="Language coach feedback">
         <div class="coach-top">
@@ -888,7 +812,7 @@
       <div class="key">TIP</div>
       <div>
         <strong>Use complete sentences—even when you are unsure.</strong>
-        <p class="bn">কোনো অ্যাকাউন্ট বা API key লাগবে না। মাইক চালু করতে ব্রাউজারের permission-এ “Allow” দিন; মাইক কাজ না করলে লিখে পাঠান।</p>
+        <p class="bn">ফ্রি browser voice-এ কোনো key লাগে না। আরও স্বাভাবিক voice চাইলে “Add Cartesia key” থেকে key দিন; মাইক চালু করতে browser permission-এ “Allow” চাপুন।</p>
       </div>
     </section>
   </main>
@@ -916,6 +840,11 @@
       var newSessionBtn = document.getElementById('newSession');
       var topicLabel = document.getElementById('topicLabel');
       var topicField = document.querySelector('.topic-field');
+      var voiceProviderBtn = document.getElementById('voiceProviderBtn');
+      var voiceKeyPanel = document.getElementById('voiceKeyPanel');
+      var cartesiaKeyInput = document.getElementById('cartesiaKey');
+      var cartesiaConnect = document.getElementById('cartesiaConnect');
+      var cartesiaStatus = document.getElementById('cartesiaStatus');
 
       var selectedTopic = 'Daily life';
       var appMode = 'practice';
@@ -930,6 +859,11 @@
       var mockQuestionIndex = 0;
       var mockStartedAt = 0;
       var mockTimer = null;
+      var cartesiaApiKey = '';
+      var cartesiaAudio = null;
+      var cartesiaAudioUrl = '';
+      var CARTESIA_ENDPOINT = 'https://api.cartesia.ai/tts/bytes';
+      var CARTESIA_VOICE_ID = '694f9389-aac1-45b6-b726-9d9369183238';
       var mockQuestions = [
         { part: 1, text: 'Let’s talk about your home. What kind of place do you live in?', hint: 'Short personal questions' },
         { part: 1, text: 'What do you like most about the area where you live?', hint: 'Short personal questions' },
@@ -948,68 +882,6 @@
       }
 
       var AI_ENDPOINT = 'https://text.pollinations.ai/openai';
-      var GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
-      var GROQ_MODEL = 'openai/gpt-oss-120b';
-      var GROQ_FALLBACK_MODEL = 'openai/gpt-oss-20b';
-      var lastProvider = '';
-      var lastAIError = '';
-
-      function errMsg(e) { return (e && e.message) ? e.message : String(e); }
-
-      function getGroqKey() {
-        try { return (localStorage.getItem('ieltsgo_groq_key') || '').trim(); }
-        catch (e) { return ''; }
-      }
-
-      async function requestGroq(systemPrompt, userPrompt, key) {
-        var models = [GROQ_MODEL, GROQ_FALLBACK_MODEL, 'qwen/qwen3.8-27b'];
-        var lastErr = null;
-        for (var mi = 0; mi < models.length; mi++) {
-          var controller = new AbortController();
-          var timeout = setTimeout(function () { controller.abort(); }, 25000);
-          try {
-            var response = await fetch(GROQ_ENDPOINT, {
-              method: 'POST',
-              headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + key
-              },
-              body: JSON.stringify({
-                model: models[mi],
-                messages: [
-                  { role: 'system', content: systemPrompt },
-                  { role: 'user', content: userPrompt }
-                ],
-                temperature: 0.25,
-                max_tokens: 1500,
-                reasoning_format: 'hidden',
-                reasoning_effort: 'low',
-                response_format: { type: 'json_object' }
-              }),
-              signal: controller.signal
-            });
-            var bodyText = '';
-            try { bodyText = await response.text(); } catch (re) { bodyText = ''; }
-            if (!response.ok) {
-              lastErr = new Error('Groq ' + response.status + (bodyText ? ' · ' + bodyText.slice(0, 200) : ''));
-              if ((response.status === 400 || response.status === 404) && mi < models.length - 1) continue;
-              throw lastErr;
-            }
-            var payload;
-            try { payload = JSON.parse(bodyText); } catch (pe) { throw new Error('Groq: bad JSON'); }
-            var content = payload && payload.choices && payload.choices[0] && payload.choices[0].message
-              ? payload.choices[0].message.content
-              : '';
-            if (!content) throw new Error('Groq response was empty');
-            return extractJsonObject(content);
-          } catch (err) {
-            lastErr = err;
-          } finally {
-            clearTimeout(timeout);
-          }
-        }
-        throw lastErr;
-      }
 
       function extractJsonObject(raw) {
         var text = String(raw || '').trim();
@@ -1025,40 +897,33 @@
       }
 
       async function requestAI(systemPrompt, userPrompt) {
-        var lastError = null;
-        for (var attempt = 1; attempt <= 2; attempt++) {
-          var controller = new AbortController();
-          var timeout = setTimeout(function () { controller.abort(); }, 30000);
-          try {
-            var response = await fetch(AI_ENDPOINT, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                model: 'openai',
-                messages: [
-                  { role: 'system', content: systemPrompt },
-                  { role: 'user', content: userPrompt }
-                ],
-                temperature: 0.25,
-                private: true
-              }),
-              signal: controller.signal
-            });
-            if (!response.ok) throw new Error('AI service returned ' + response.status);
-            var payload = await response.json();
-            var content = payload && payload.choices && payload.choices[0] && payload.choices[0].message
-              ? payload.choices[0].message.content
-              : '';
-            if (!content) throw new Error('AI response was empty');
-            return extractJsonObject(content);
-          } catch (err) {
-            lastError = err;
-            if (attempt === 1) await new Promise(function (r) { setTimeout(r, 2000); });
-          } finally {
-            clearTimeout(timeout);
-          }
+        var controller = new AbortController();
+        var timeout = setTimeout(function () { controller.abort(); }, 45000);
+        try {
+          var response = await fetch(AI_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              model: 'openai',
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+              ],
+              temperature: 0.25,
+              private: true
+            }),
+            signal: controller.signal
+          });
+          if (!response.ok) throw new Error('AI service returned ' + response.status);
+          var payload = await response.json();
+          var content = payload && payload.choices && payload.choices[0] && payload.choices[0].message
+            ? payload.choices[0].message.content
+            : '';
+          if (!content) throw new Error('AI response was empty');
+          return extractJsonObject(content);
+        } finally {
+          clearTimeout(timeout);
         }
-        throw lastError;
       }
 
       function normalizeCoachResult(data) {
@@ -1077,200 +942,19 @@
         };
       }
 
-      // ---------- Offline fallback coach (used when the free AI service is unreachable) ----------
-      var lastResultOffline = false;
-
-      var BASE_VERB = {
-        goes: 'go', eats: 'eat', drinks: 'drink', plays: 'play', reads: 'read',
-        writes: 'write', speaks: 'speak', takes: 'take', makes: 'make', comes: 'come',
-        runs: 'run', sleeps: 'sleep', works: 'work', studies: 'study', learns: 'learn',
-        teaches: 'teach', buys: 'buy', does: 'do', has: 'have', says: 'say',
-        tries: 'try', carries: 'carry', flies: 'fly'
-      };
-
-      function baseFormFix(match) {
-        var parts = match.split(/\s+/);
-        var last = parts[parts.length - 1];
-        var lower = last.toLowerCase();
-        parts[parts.length - 1] = BASE_VERB[lower] || lower.replace(/(es|ies)$/, '').replace(/s$/, '') || last;
-        return parts.join(' ');
-      }
-
-      var GRAMMAR_RULES = [
-        { re: /\b(he|she|it)\s+go\b/gi, fix: function (m) { return m.replace(/go$/i, 'goes'); }, bn: 'he/she/it-এর পরে মূল verb-এর শেষে s যোগ হয়। যেমন: He goes (He go নয়)।' },
-        { re: /\b(he|she|it)\s+have\b/gi, fix: function (m) { return m.replace(/have$/i, 'has'); }, bn: 'he/she/it-এর পরে have না হয়ে has হয়। যেমন: She has a pen।' },
-        { re: /\b(he|she|it)\s+do\s+not\b/gi, fix: function (m) { return m.replace(/do\s+not$/i, 'does not'); }, bn: 'he/she/it-এর পরে do not না হয়ে does not হয়।' },
-        { re: /\b(he|she|it)\s+don't\b/gi, fix: function (m) { return m.replace(/don't$/i, "doesn't"); }, bn: "he/she/it-এর পরে don't না হয়ে doesn't হয়।" },
-        { re: /\b(i|you|we|they)\s+goes\b/gi, fix: function (m) { return m.replace(/goes$/i, 'go'); }, bn: 'I/you/we/they-এর পরে verb-এর সাথে s যোগ হয় না। যেমন: They go।' },
-        { re: /\b(i|you|we|they)\s+has\b/gi, fix: function (m) { return m.replace(/has$/i, 'have'); }, bn: 'I/you/we/they-এর পরে has না হয়ে have হয়। যেমন: They have।' },
-        { re: /\b(i|you|we|they)\s+does\b/gi, fix: function (m) { return m.replace(/does$/i, 'do'); }, bn: 'I/you/we/they-এর পরে does না হয়ে do হয়।' },
-        { re: /\b(you|they|we)\s+was\b/gi, fix: function (m) { return m.replace(/was$/i, 'were'); }, bn: 'you/they/we-এর পরে was না হয়ে were হয়।' },
-        { re: /\bi\s+were\b/gi, fix: function () { return 'I was'; }, bn: 'I-এর পরে were না হয়ে was হয়।' },
-        { re: /\bdidn't\s+went\b/gi, fix: function () { return "didn't go"; }, bn: "did/didn't-এর পরে সবসময় verb-এর base form বসে। যেমন: didn't go।" },
-        { re: /\bdid\s+went\b/gi, fix: function () { return 'did go'; }, bn: 'did-এর পরে verb-এর base form বসে: did go।' },
-        { re: /\b(will|can|could|shall|should|may|might|must)\s+(goes|eats|drinks|plays|reads|writes|speaks|takes|makes|comes|runs|sleeps|works|studies|learns|teaches|buys|does|has|says|tries|carries|flies)\b/gi, fix: baseFormFix, bn: 'will/can/must ইত্যাদি modal verb-এর পরে মূল verb-এর base form বসে, s যোগ হয় না। যেমন: will go।' },
-        { re: /\bto\s+(goes|eats|drinks|plays|reads|writes|speaks|takes|makes|comes|runs|sleeps|works|studies|learns|teaches|buys)\b/gi, fix: baseFormFix, bn: 'to-এর পরে verb-এর base form বসে (infinitive)। যেমন: to go, to eat।' },
-        { re: /\ba\s+([aeiou][a-z]*)/gi, fix: function (m) { return m.replace(/^a(\s+)/i, 'an$1'); }, bn: 'vowel (a, e, i, o, u) দিয়ে শুরু হওয়া শব্দের আগে a না হয়ে an বসে। যেমন: an apple।' },
-        { re: /\binformations\b/gi, fix: function () { return 'information'; }, bn: 'information অগণনাযোগ্য (uncountable noun), এর plural হয় না।' },
-        { re: /\bchilds\b/gi, fix: function () { return 'children'; }, bn: 'child-এর plural children, childs নয়।' },
-        { re: /\badvices\b/gi, fix: function () { return 'advice'; }, bn: 'advice অগণনাযোগ্য, এর plural হয় না।' },
-        { re: /\bfurnitures\b/gi, fix: function () { return 'furniture'; }, bn: 'furniture অগণনাযোগ্য, এর plural হয় না।' },
-        { re: /\bluggages\b/gi, fix: function () { return 'luggage'; }, bn: 'luggage অগণনাযোগ্য, এর plural হয় না।' },
-        { re: /\bmore\s+better\b/gi, fix: function () { return 'better'; }, bn: 'better নিজেই comparative form, এর আগে more বসে না।' },
-        { re: /\bthere\s+is\s+many\b/gi, fix: function () { return 'there are many'; }, bn: 'plural noun-এর আগে there is না হয়ে there are হয়।' },
-        { re: /\bmarried\s+with\b/gi, fix: function () { return 'married to'; }, bn: 'married-এর পরে with না হয়ে to বসে: married to।' },
-        { re: /\bdiscuss\s+about\b/gi, fix: function () { return 'discuss'; }, bn: 'discuss-এর পরে about বসে না, সরাসরি object বসে।' },
-        { re: /\benter\s+into\b/gi, fix: function () { return 'enter'; }, bn: 'enter-এর পরে into বসে না: enter the room।' },
-        { re: /\baccording\s+to\s+me\b/gi, fix: function () { return 'in my opinion'; }, bn: "নিজের মতামত দিতে 'according to me' না বলে 'in my opinion' বলুন।" },
-        { re: /\bdo\s+a\s+mistake\b/gi, fix: function () { return 'make a mistake'; }, bn: 'mistake-এর সাথে do না হয়ে make বসে: make a mistake।' },
-        { re: /\bi\s+am\s+agree\b/gi, fix: function () { return 'I agree'; }, bn: "'agree' নিজেই verb, এর আগে am বসে না: I agree।" },
-        { re: /\bhave\s+went\b/gi, fix: function () { return 'have gone'; }, bn: 'have/has-এর পরে verb-এর past participle বসে: have gone।' },
-        { re: /\bhas\s+went\b/gi, fix: function () { return 'has gone'; }, bn: 'have/has-এর পরে verb-এর past participle বসে: has gone।' },
-        { re: /\bwas\s+went\b/gi, fix: function () { return 'went'; }, bn: 'went-এর আগে was বসে না, শুধু went-ই যথেষ্ট।' },
-        { re: /\bis\s+is\b/gi, fix: function () { return 'is'; }, bn: 'একই helping verb দুবার বসে গেছে, একবারই যথেষ্ট।' }
-      ];
-
-      function checkGrammar(text) {
-        var found = [];
-        var str = String(text || '');
-        for (var i = 0; i < GRAMMAR_RULES.length && found.length < 6; i++) {
-          var rule = GRAMMAR_RULES[i];
-          var matches = str.match(rule.re);
-          if (!matches) continue;
-          for (var j = 0; j < matches.length && found.length < 6; j++) {
-            var original = matches[j];
-            var corrected = '';
-            try { corrected = rule.fix(original); } catch (e) { corrected = ''; }
-            if (corrected && corrected.toLowerCase() !== original.toLowerCase()) {
-              found.push({ original: original, corrected: corrected, explanation_bn: rule.bn });
-            }
-          }
-        }
-        return found;
-      }
-
-      function localReply(text, corrections) {
-        var raw = String(text).replace(/\s+/g, ' ').trim();
-        var t = raw.toLowerCase();
-        var topics = [
-          { re: /^(hi|hello|hey|assalam|salam|good morning|good evening)\b/, say: '', q: 'Hello! How are you today? What would you like to talk about?' },
-          { re: /family|mother|father|brother|sister|parents/, say: 'Family is a wonderful topic.', q: 'How many members are there in your family?' },
-          { re: /school|college|university|study|teacher|exam|subject|student/, say: 'Study life keeps us learning.', q: 'What is your favourite subject and why?' },
-          { re: /food|\beat\b|eating|lunch|dinner|breakfast|restaurant|biryani/, say: 'Food talk is always delicious!', q: 'What kind of food do you like most?' },
-          { re: /football|cricket|game|sport|match/, say: 'Sports bring so much excitement.', q: 'Do you play it yourself, or do you love watching matches?' },
-          { re: /hobby|music|song|movie|book|reading|sing|dance/, say: 'Hobbies say a lot about a person.', q: 'How often do you enjoy that in your free time?' },
-          { re: /travel|visit|journey|tour|village|city|country/, say: 'Places have such beautiful stories.', q: 'Which place would you like to visit one day?' },
-          { re: /work|job|office|business|shop/, say: 'Work keeps life moving.', q: 'What do you do for work?' },
-          { re: /friend/, say: 'Friends make everything better.', q: 'What do you usually do together with your friends?' },
-          { re: /morning|evening|daily|every day|routine/, say: 'Routines are great for practice.', q: 'What do you usually do in the evening?' },
-          { re: /dream|future|want to be|will be/, say: 'Dreams give us direction.', q: 'What would you like to do in the future?' }
-        ];
-        var openersFix = [
-          'Good try! Every mistake is a step forward — let us fix them together.',
-          'Nice effort! I can see you are improving. A few small corrections will make it even better.'
-        ];
-        var openersGood = ['Well said!', 'Excellent!', 'Wonderful! I can see your progress.', 'Good, very clear! Keep it up!'];
-        var opener = corrections.length
-          ? openersFix[Math.floor(Math.random() * openersFix.length)]
-          : openersGood[Math.floor(Math.random() * openersGood.length)];
-        for (var i = 0; i < topics.length; i++) {
-          if (topics[i].re.test(t)) {
-            var mid = topics[i].say ? ' ' + topics[i].say : '';
-            return opener + mid + ' ' + topics[i].q;
-          }
-        }
-        var snippet = raw.length > 60 ? raw.slice(0, 60).trim() + '…' : raw;
-        return opener + ' You said "' + snippet + '" — interesting! Could you tell me a little more about that?';
-      }
-
-      function localPracticeResult(text) {
-        var corrections = checkGrammar(text);
-        var encouragement = corrections.length
-          ? 'ভুলগুলো দেখে বাক্যটি আরেকবার সঠিকভাবে বলার চেষ্টা করুন — আপনি পারবেন!'
-          : 'দারুণ! এই উত্তরে গুরুত্বপূর্ণ কোনো ভুল পাওয়া যায়নি। এভাবেই এগিয়ে যান!';
-        return {
-          reply: localReply(text, corrections),
-          corrections: corrections,
-          score: Math.max(40, 96 - corrections.length * 9),
-          encouragement: encouragement,
-          encouragement_bn: encouragement
-        };
-      }
-
-      function localMockResult() {
-        var answers = transcript.filter(function (item) { return item.role === 'user'; }).map(function (a) { return a.text; });
-        var words = [];
-        answers.forEach(function (a) {
-          var w = String(a).toLowerCase().match(/[a-z']+/g);
-          if (w) words = words.concat(w);
-        });
-        var totalWords = words.length;
-        var avgLen = answers.length ? totalWords / answers.length : 0;
-        var totalErrors = 0;
-        answers.forEach(function (a) { totalErrors += checkGrammar(a).length; });
-        var errPer100 = totalWords ? (totalErrors / totalWords) * 100 : 0;
-        var uniqueRatio = totalWords ? new Set(words).size / totalWords : 0;
-        function band(v) { return Math.max(4.0, Math.min(7.0, Math.round(v * 2) / 2)); }
-        var fluency = band(avgLen >= 40 ? 6.5 : avgLen >= 25 ? 6.0 : avgLen >= 15 ? 5.5 : avgLen >= 8 ? 5.0 : 4.5);
-        var grammar = band(errPer100 <= 3 ? 6.5 : errPer100 <= 6 ? 6.0 : errPer100 <= 10 ? 5.5 : 5.0);
-        var lexical = band(uniqueRatio > 0.6 ? 6.5 : uniqueRatio > 0.45 ? 6.0 : 5.5);
-        var overall = Math.round(((fluency + grammar + lexical) / 3) * 2) / 2;
-        var strengths = [];
-        if (avgLen >= 20) strengths.push('আপনি প্রতিটি প্রশ্নে ভালো দৈর্ঘ্যের উত্তর দিয়েছেন');
-        if (errPer100 <= 6) strengths.push('ব্যাকরণের ভুল তুলনামূলক কম ছিল');
-        if (!strengths.length) strengths.push('আপনি সবগুলো প্রশ্নের উত্তর দেওয়ার চেষ্টা করেছেন');
-        var next = [
-          '1. প্রতিটি উত্তরে অন্তত ২-৩টি সম্পূর্ণ বাক্য বলার অভ্যাস করুন।',
-          '2. he/she/it-এর পরে verb-এর সাথে s/es যোগ করতে ভুলবেন না।',
-          '3. did/will/can-এর পরে সবসময় verb-এর base form ব্যবহার করুন।'
-        ];
-        return {
-          overall_band: overall,
-          fluency: fluency,
-          lexical: lexical,
-          grammar: grammar,
-          pronunciation: null,
-          strengths_bn: strengths.join('। ') + '।',
-          next_steps_bn: next.join('\n')
-        };
-      }
-
       async function getPracticeFeedback(text) {
         var recent = transcript.slice(-8).map(function (item) {
           return (item.role === 'user' ? 'Learner: ' : 'Coach: ') + item.text;
         }).join('\n');
         var systemPrompt = [
-          'You are IELTSgo, a warm and responsible English mentor for Bengali learners — like a caring teacher guiding their own student.',
+          'You are IELTSgo, a real-time English speaking coach for Bengali learners.',
           'The learner level is ' + levelSelect.value + ' and the topic is ' + selectedTopic + '.',
           'Analyse the learner’s latest English text carefully, including grammar, tense, articles, prepositions, word choice, word order and naturalness.',
-          'Identify every meaningful error you can find, up to six. Never invent an error.',
-          'Speak like a mentor: praise genuine effort warmly, be patient with mistakes, explain simply, and guide step by step. Keep the English reply friendly and concise (1-2 sentences), and continue the conversation with one natural follow-up question.',
+          'Identify every meaningful error you can find, up to six. Never invent an error. Keep the English reply friendly, concise, and continue the conversation with one natural follow-up question.',
           'Return ONLY valid JSON with exactly these keys: reply (English string), corrections (array of objects with original, corrected, explanation_bn), score (integer 0-100 for grammar and clarity), encouragement_bn (Bengali string).',
           'Each original must quote the learner’s exact problematic words. Each corrected must show the improved wording. Each explanation_bn must clearly explain the rule in Bengali. If there is no meaningful error, return an empty corrections array.'
         ].join(' ');
-        try {
-          lastResultOffline = false;
-          lastAIError = '';
-          var groqKey = getGroqKey();
-          if (groqKey) {
-            try {
-              var g = await requestGroq(systemPrompt, 'Conversation context:\n' + recent + '\n\nLatest learner answer to analyse:\n' + text, groqKey);
-              lastProvider = 'groq';
-              return normalizeCoachResult(g);
-            } catch (ge) { lastProvider = ''; lastAIError = 'Groq ✗ ' + errMsg(ge); }
-          }
-          lastProvider = 'pollinations';
-          try {
-            return normalizeCoachResult(await requestAI(systemPrompt, 'Conversation context:\n' + recent + '\n\nLatest learner answer to analyse:\n' + text));
-          } catch (pe) {
-            if (!lastAIError) lastAIError = 'Free AI ✗ ' + errMsg(pe);
-            throw pe;
-          }
-        } catch (e) {
-          lastResultOffline = true;
-          lastProvider = 'offline';
-          return localPracticeResult(text);
-        }
+        return normalizeCoachResult(await requestAI(systemPrompt, 'Conversation context:\n' + recent + '\n\nLatest learner answer to analyse:\n' + text));
       }
 
       async function getMockFeedback() {
@@ -1287,28 +971,7 @@
           'Return ONLY valid JSON with exactly these keys: overall_band, fluency, lexical, grammar, pronunciation, strengths_bn, next_steps_bn.',
           'overall_band must average only the three assessable criteria. strengths_bn and next_steps_bn must be specific Bengali feedback grounded in these answers; format next_steps_bn as numbered points in one string.'
         ].join(' ');
-        try {
-          lastResultOffline = false;
-          lastAIError = '';
-          var groqKey = getGroqKey();
-          if (groqKey) {
-            try {
-              lastProvider = 'groq';
-              return await requestGroq(systemPrompt, testText, groqKey);
-            } catch (ge) { lastProvider = ''; lastAIError = 'Groq ✗ ' + errMsg(ge); }
-          }
-          lastProvider = 'pollinations';
-          try {
-            return await requestAI(systemPrompt, testText);
-          } catch (pe) {
-            if (!lastAIError) lastAIError = 'Free AI ✗ ' + errMsg(pe);
-            throw pe;
-          }
-        } catch (e) {
-          lastResultOffline = true;
-          lastProvider = 'offline';
-          return localMockResult();
-        }
+        return requestAI(systemPrompt, testText);
       }
 
       function setStatus(text, active) {
@@ -1391,492 +1054,86 @@
         if (t) t.remove();
       }
 
-      function pickMentorVoice(voices) {
-        var list = voices || [];
-        var prefs = [
-          function (v) { return /google/i.test(v.name) && /en[-_]GB/i.test(v.lang); },
-          function (v) { return /en[-_]GB/i.test(v.lang); },
-          function (v) { return /google/i.test(v.name) && /^en/i.test(v.lang); },
-          function (v) { return /^en/i.test(v.lang); }
-        ];
-        for (var i = 0; i < prefs.length; i++) {
-          var found = list.find(prefs[i]);
-          if (found) return found;
+      function stopVoicePlayback() {
+        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        if (cartesiaAudio) {
+          cartesiaAudio.pause();
+          cartesiaAudio = null;
         }
-        return null;
+        if (cartesiaAudioUrl) {
+          URL.revokeObjectURL(cartesiaAudioUrl);
+          cartesiaAudioUrl = '';
+        }
       }
-      function speakPhone(text) {
+
+      function speakWithBrowser(text) {
         if (!voiceOn || !('speechSynthesis' in window)) return;
-        var synth = window.speechSynthesis;
-        try { synth.cancel(); } catch (e) {}
-        var clean = String(text).replace(/\s+/g, ' ').trim();
-        if (!clean) return;
-        var chunks = clean.match(/[^.!?।]+[.!?।]+|[^.!?।]+$/g) || [clean];
-        var voices = [];
-        try { voices = synth.getVoices() || []; } catch (e) {}
-        var preferred = getActiveVoice(voices);
-        chunks.forEach(function (part) {
-          var c = part.trim();
-          if (!c) return;
-          var utterance = new SpeechSynthesisUtterance(c);
-          utterance.lang = 'en-GB';
-          utterance.rate = 0.88;
-          utterance.pitch = 1.0;
-          if (preferred) utterance.voice = preferred;
-          try { synth.speak(utterance); } catch (e) {}
-        });
+        var utterance = new SpeechSynthesisUtterance(text);
+        utterance.lang = 'en-GB';
+        utterance.rate = 0.9;
+        var voices = window.speechSynthesis.getVoices();
+        var preferred = voices.find(function (v) { return /en-GB/i.test(v.lang); }) || voices.find(function (v) { return /^en/i.test(v.lang); });
+        if (preferred) utterance.voice = preferred;
+        window.speechSynthesis.speak(utterance);
       }
-      function speak(text) {
+
+      async function speak(text) {
         if (!voiceOn) return;
-        if (getElevenKey()) {
-          speakEleven(text, function (ok) {
-            if (ok) return;
-            if (piperVoiceId) {
-              speakPiper(text, piperVoiceId, function (ok2) {
-                if (ok2) return;
-                if (netVoiceOn) speakNetVoice(text, function (ok3) { if (!ok3) speakPhone(text); });
-                else speakPhone(text);
-              });
-            } else if (netVoiceOn) {
-              speakNetVoice(text, function (ok2) { if (!ok2) speakPhone(text); });
-            } else {
-              speakPhone(text);
-            }
-          });
+        stopVoicePlayback();
+        if (!cartesiaApiKey) {
+          speakWithBrowser(text);
           return;
         }
-        if (piperVoiceId) {
-          speakPiper(text, piperVoiceId, function (ok) {
-            if (ok) return;
-            if (netVoiceOn) {
-              speakNetVoice(text, function (ok2) { if (!ok2) speakPhone(text); });
-            } else {
-              speakPhone(text);
-            }
-          });
-        } else if (netVoiceOn) {
-          speakNetVoice(text, function (ok) { if (!ok) speakPhone(text); });
-        } else {
-          speakPhone(text);
-        }
-      }
-      if ('speechSynthesis' in window) {
+
+        cartesiaStatus.textContent = 'Cartesia voice তৈরি হচ্ছে…';
         try {
-          window.speechSynthesis.getVoices();
-          window.speechSynthesis.onvoiceschanged = function () {
-            try { window.speechSynthesis.getVoices(); } catch (e) {}
+          var response = await fetch(CARTESIA_ENDPOINT, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Cartesia-Version': '2025-04-16',
+              'X-API-Key': cartesiaApiKey
+            },
+            body: JSON.stringify({
+              model_id: 'sonic-2',
+              transcript: text,
+              voice: { mode: 'id', id: CARTESIA_VOICE_ID },
+              language: 'en',
+              output_format: { container: 'mp3', bit_rate: 128000, sample_rate: 44100 }
+            })
+          });
+          if (!response.ok) {
+            if (response.status === 401 || response.status === 403) throw new Error('invalid-key');
+            if (response.status === 429) throw new Error('rate-limit');
+            throw new Error('cartesia-' + response.status);
+          }
+          var audioBlob = await response.blob();
+          if (!audioBlob.size) throw new Error('empty-audio');
+          cartesiaAudioUrl = URL.createObjectURL(audioBlob);
+          cartesiaAudio = new Audio(cartesiaAudioUrl);
+          cartesiaAudio.onended = function () {
+            if (cartesiaAudioUrl) URL.revokeObjectURL(cartesiaAudioUrl);
+            cartesiaAudioUrl = '';
+            cartesiaAudio = null;
           };
-        } catch (e) {}
-      }
-
-      var voiceChatBtn = document.getElementById('voiceChatBtn');
-      var voiceChatActive = false;
-
-      function updateVoiceChatUI() {
-        if (voiceChatActive) {
-          voiceChatBtn.textContent = '⏹ Stop';
-          voiceChatBtn.classList.add('active');
-          micBtn.disabled = true;
-          sendBtn.disabled = true;
-          input.disabled = true;
-        } else {
-          voiceChatBtn.textContent = '🎙 Voice chat';
-          voiceChatBtn.classList.remove('active');
-          sendBtn.disabled = false;
-          input.disabled = false;
-          refreshMicButton();
+          await cartesiaAudio.play();
+          cartesiaStatus.textContent = 'Cartesia voice active · keyটি শুধু এই tab-এ আছে।';
+        } catch (error) {
+          var invalid = error && error.message === 'invalid-key';
+          var limited = error && error.message === 'rate-limit';
+          cartesiaStatus.textContent = invalid
+            ? 'Keyটি গ্রহণ করা হয়নি। Cartesia key আবার দিন।'
+            : limited
+              ? 'Cartesia rate limit হয়েছে · browser voice চলছে।'
+              : 'Cartesia voice পাওয়া যায়নি · browser voice চলছে।';
+          if (invalid) {
+            cartesiaApiKey = '';
+            voiceProviderBtn.textContent = 'Add Cartesia key';
+          }
+          showToast(invalid ? 'Cartesia key কাজ করছে না—আবার key দিন।' : 'Cartesia voice unavailable—browser voice ব্যবহার করা হচ্ছে।');
+          speakWithBrowser(text);
         }
       }
-
-      function speakAndWaitPhone(text) {
-        return new Promise(function (resolve) {
-          if (!voiceChatActive) { resolve(); return; }
-          if (!voiceOn || !('speechSynthesis' in window)) { resolve(); return; }
-          var synth = window.speechSynthesis;
-          try { synth.cancel(); } catch (e) {}
-          var clean = String(text).replace(/\s+/g, ' ').trim();
-          if (!clean) { resolve(); return; }
-          var chunks = clean.match(/[^.!?।]+[.!?।]+|[^.!?।]+$/g) || [clean];
-          var voices = [];
-          try { voices = synth.getVoices() || []; } catch (e) {}
-          var preferred = getActiveVoice(voices);
-          var i = 0;
-          function next() {
-            if (!voiceChatActive) { try { synth.cancel(); } catch (e) {} resolve(); return; }
-            if (i >= chunks.length) { resolve(); return; }
-            var c = chunks[i++].trim();
-            if (!c) { next(); return; }
-            var u = new SpeechSynthesisUtterance(c);
-            u.lang = 'en-GB';
-            u.rate = 0.88;
-            u.pitch = 1.0;
-            if (preferred) u.voice = preferred;
-            u.onend = next;
-            u.onerror = next;
-            try { synth.speak(u); } catch (e) { next(); }
-          }
-          next();
-        });
-      }
-      function speakAndWait(text) {
-        return new Promise(function (resolve) {
-          if (getElevenKey()) {
-            speakEleven(text, function (ok) {
-              if (ok) { resolve(); return; }
-              speakAndWaitFallback(text).then(resolve);
-            });
-            return;
-          }
-          speakAndWaitFallback(text).then(resolve);
-        });
-      }
-      function speakAndWaitFallback(text) {
-        return new Promise(function (resolve) {
-          if (piperVoiceId) {
-            speakPiper(text, piperVoiceId, function (ok) {
-              if (ok) { resolve(); return; }
-              if (!netVoiceOn) { speakAndWaitPhone(text).then(resolve); return; }
-              speakNetVoice(text, function (ok2) {
-                if (ok2) { resolve(); return; }
-                speakAndWaitPhone(text).then(resolve);
-              });
-            });
-            return;
-          }
-          if (!netVoiceOn) { speakAndWaitPhone(text).then(resolve); return; }
-          speakNetVoice(text, function (ok) {
-            if (ok) { resolve(); return; }
-            speakAndWaitPhone(text).then(resolve);
-          });
-        });
-      }
-
-      var mentorPackOn = true;
-      try { mentorPackOn = localStorage.getItem('ieltsgo_mentor_pack') !== 'off'; } catch (e) {}
-      var packGender = 'female';
-      try { packGender = localStorage.getItem('ieltsgo_pack_gender') || 'female'; } catch (e) {}
-      if (packGender !== 'male' && packGender !== 'female') packGender = 'female';
-      var netVoiceOn = true;
-      try { netVoiceOn = localStorage.getItem('ieltsgo_net_voice') !== 'off'; } catch (e) {}
-      function playPackAudio(name) {
-        return new Promise(function (resolve) {
-          if (!voiceOn || !mentorPackOn) { resolve(false); return; }
-          try {
-            if ('speechSynthesis' in window) { try { window.speechSynthesis.cancel(); } catch (e) {} }
-            var audio = new Audio('voices/' + packGender + '/' + name + '.mp3');
-            var done = false;
-            function finish(ok) { if (!done) { done = true; resolve(ok); } }
-            audio.onended = function () { finish(true); };
-            audio.onerror = function () { finish(false); };
-            var p = null;
-            try { p = audio.play(); } catch (e) { finish(false); return; }
-            if (p && typeof p.catch === 'function') { p.catch(function () { finish(false); }); }
-            setTimeout(function () { finish(false); }, 60000);
-          } catch (e) { resolve(false); }
-        });
-      }
-      function speakPack(packName, fallbackText) {
-        playPackAudio(packName).then(function (ok) { if (!ok) speak(fallbackText); });
-      }
-      async function speakPackWait(packName, fallbackText) {
-        var ok = await playPackAudio(packName);
-        if (!ok) await speakAndWait(fallbackText);
-      }
-      function googleTTSChunks(text) {
-        var clean = String(text).replace(/\s+/g, ' ').trim();
-        var chunks = [];
-        var sentences = clean.match(/[^.!?।]+[.!?।]+|[^.!?।]+$/g) || [clean];
-        var current = '';
-        sentences.forEach(function (s) {
-          s = s.trim();
-          if (!s) return;
-          if ((current + ' ' + s).length > 180) {
-            if (current) chunks.push(current.trim());
-            current = s;
-          } else {
-            current = (current ? current + ' ' : '') + s;
-          }
-        });
-        if (current.trim()) chunks.push(current.trim());
-        return chunks;
-      }
-      function speakNetVoice(text, onDone) {
-        var chunks = googleTTSChunks(text);
-        if (!chunks.length) { onDone(true); return; }
-        if ('speechSynthesis' in window) { try { window.speechSynthesis.cancel(); } catch (e) {} }
-        var i = 0;
-        var failed = false;
-        function playNext() {
-          if (failed) return;
-          if (i >= chunks.length) { onDone(true); return; }
-          var url = 'https://translate.google.com/translate_tts?client=tw-ob&q=' +
-            encodeURIComponent(chunks[i]) + '&tl=en';
-          i += 1;
-          try {
-            var audio = new Audio(url);
-            audio.onended = playNext;
-            audio.onerror = function () { failed = true; onDone(false); };
-            var p = null;
-            try { p = audio.play(); } catch (e) { failed = true; onDone(false); return; }
-            if (p && typeof p.catch === 'function') { p.catch(function () { failed = true; onDone(false); }); }
-          } catch (e) { failed = true; onDone(false); }
-        }
-        playNext();
-      }
-      var PIPER_FEMALE = 'en_GB-alba-medium';
-      var PIPER_MALE = 'en_GB-alan-medium';
-      var piperVoiceId = null;
-      try { localStorage.removeItem('ieltsgo_piper_voice'); } catch (e) {}
-      // Piper neural voice removed per user request — only key-based voices now.
-      var piperModule = null;
-      var piperReadyVoice = null;
-      var piperDownloading = false;
-      function ensurePiper(voiceId) {
-        return new Promise(function (resolve) {
-          if (piperReadyVoice === voiceId && piperModule) { resolve(true); return; }
-          if (window.piperTTS && !piperModule) { piperModule = window.piperTTS; }
-          if (piperDownloading) { resolve(false); return; }
-          piperDownloading = true;
-          var statusEl = document.getElementById('piperStatus');
-          function setStatus(t) { if (statusEl) statusEl.textContent = t; }
-          function setBtn(btn, t) { if (btn) btn.textContent = t; }
-          var activeBtn = document.getElementById(voiceId === PIPER_FEMALE ? 'piperFemaleBtn' : 'piperMaleBtn');
-          setStatus('🧠 Neural ভয়েস ডাউনলোড হচ্ছে… (WiFi ব্যবহার করো)');
-          setBtn(activeBtn, '⏳ 0%');
-          var modPromise = piperModule
-            ? Promise.resolve(piperModule)
-            : (window.piperTTS
-              ? Promise.resolve(window.piperTTS)
-              : import('https://cdn.jsdelivr.net/npm/@mintplex-labs/piper-tts-web@1.0.5/+esm'));
-          modPromise.then(function (mod) {
-            piperModule = mod;
-            window.piperTTS = mod;
-            return mod.download(voiceId, function (progress) {
-              var pct = progress && progress.total
-                ? Math.round(progress.loaded * 100 / progress.total) : 0;
-              setStatus('🧠 ডাউনলোড হচ্ছে… ' + pct + '% — অপেক্ষা করো, বন্ধ করো না');
-              setBtn(activeBtn, '⏳ ' + pct + '%');
-            });
-          }).then(function () {
-            piperReadyVoice = voiceId;
-            piperDownloading = false;
-            setStatus('✅ ডাউনলোড সম্পূর্ণ! এখন থেকে এই সুন্দর গলায় কথা বলবে।');
-            showToast('✅ Neural ভয়েস রেডি!');
-            updatePiperUI();
-            resolve(true);
-            resolve(true);
-          }).catch(function () {
-            piperDownloading = false;
-            setStatus('❌ ডাউনলোড ব্যর্থ — WiFi-তে আবার Select চাপ দাও।');
-            setBtn(activeBtn, '🔄 আবার চেষ্টা');
-            resolve(false);
-          });
-        });
-      }
-      function speakPiper(text, voiceId, onDone) {
-        ensurePiper(voiceId).then(function (ok) {
-          if (!ok || !piperModule) { onDone(false); return; }
-          var chunks = googleTTSChunks(text);
-          if (!chunks.length) { onDone(true); return; }
-          if ('speechSynthesis' in window) { try { window.speechSynthesis.cancel(); } catch (e) {} }
-          var i = 0;
-          var failed = false;
-          function next() {
-            if (failed) return;
-            if (i >= chunks.length) { onDone(true); return; }
-            var chunk = chunks[i++];
-            try {
-              piperModule.predict({ text: chunk, voiceId: voiceId }).then(function (wav) {
-                if (failed) return;
-                try {
-                  var audio = new Audio(URL.createObjectURL(wav));
-                  audio.onended = next;
-                  audio.onerror = function () { failed = true; onDone(false); };
-                  var p = null;
-                  try { p = audio.play(); } catch (e) { failed = true; onDone(false); return; }
-                  if (p && typeof p.catch === 'function') { p.catch(function () { failed = true; onDone(false); }); }
-                } catch (e) { failed = true; onDone(false); }
-              }).catch(function () { failed = true; onDone(false); });
-            } catch (e) { failed = true; onDone(false); }
-          }
-          next();
-        });
-      }
-
-      function listenWithSilenceDetection() {
-        return new Promise(function (resolve) {
-          var stopped = false;
-          function finish(blob) {
-            if (stopped) return;
-            stopped = true;
-            resolve(blob);
-          }
-          if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-            showToast('এই ব্রাউজারে মাইক চলবে না।');
-            finish(null);
-            return;
-          }
-          navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-          }).then(function (stream) {
-            var audioCtx = null;
-            try { audioCtx = new (window.AudioContext || window.webkitAudioContext)(); }
-            catch (e) { audioCtx = null; }
-            var chunks = [];
-            var recorder = null;
-            try { recorder = new MediaRecorder(stream); }
-            catch (e) {
-              try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e2) {}
-              finish(null);
-              return;
-            }
-            function cleanup() {
-              try { stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
-              try { if (audioCtx) audioCtx.close(); } catch (e) {}
-            }
-            recorder.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
-            recorder.onstop = function () {
-              cleanup();
-              if (!chunks.length) finish(null);
-              else finish(new Blob(chunks, { type: 'audio/webm' }));
-            };
-            function stopRec() {
-              try { recorder.stop(); } catch (e) { cleanup(); finish(null); }
-            }
-            var startTime = Date.now();
-            if (!audioCtx) {
-              try { recorder.start(); } catch (e) { finish(null); return; }
-              setTimeout(stopRec, 10000);
-              return;
-            }
-            var source = audioCtx.createMediaStreamSource(stream);
-            var analyser = audioCtx.createAnalyser();
-            analyser.fftSize = 512;
-            source.connect(analyser);
-            var dataArray = new Uint8Array(analyser.frequencyBinCount);
-            var speaking = false;
-            var silenceStart = 0;
-            var rafId = 0;
-            function check() {
-              if (!voiceChatActive) { try { cancelAnimationFrame(rafId); } catch (e) {} stopRec(); return; }
-              analyser.getByteFrequencyData(dataArray);
-              var sum = 0;
-              for (var i = 0; i < dataArray.length; i++) sum += dataArray[i];
-              var avg = sum / dataArray.length;
-              var elapsed = Date.now() - startTime;
-              if (avg > 14) {
-                speaking = true;
-                silenceStart = 0;
-              } else if (speaking) {
-                if (!silenceStart) silenceStart = Date.now();
-                if (Date.now() - silenceStart > 1600) {
-                  try { cancelAnimationFrame(rafId); } catch (e) {}
-                  stopRec();
-                  return;
-                }
-              } else if (elapsed > 12000) {
-                try { cancelAnimationFrame(rafId); } catch (e) {}
-                stopRec();
-                return;
-              }
-              if (elapsed > 45000) {
-                try { cancelAnimationFrame(rafId); } catch (e) {}
-                stopRec();
-                return;
-              }
-              rafId = requestAnimationFrame(check);
-            }
-            try { recorder.start(); } catch (e) { finish(null); return; }
-            check();
-          }).catch(function () {
-            showToast('মাইকের অনুমতি দিন।');
-            finish(null);
-          });
-        });
-      }
-
-      async function voiceChatLoop() {
-        while (voiceChatActive) {
-          setStatus('Listening… speak in English', true);
-          micHint.textContent = '🎙 শুনছি… থামলেই উত্তর আসবে';
-          var blob = await listenWithSilenceDetection();
-          if (!voiceChatActive) break;
-          if (!blob) continue;
-          setStatus('Understanding…', true);
-          micHint.textContent = 'বুঝছি…';
-          var text = '';
-          try {
-            text = await transcribeWithWhisper(blob);
-          } catch (e) {
-            if (!voiceChatActive) break;
-            showToast('বুঝতে পারিনি। আবার বলুন।');
-            continue;
-          }
-          if (!voiceChatActive) break;
-          text = String(text).trim();
-          if (!text) continue;
-          addMessage('user', text, false);
-          transcript.push({ role: 'user', text: text });
-          turns += 1;
-          turnCount.textContent = turns + (turns === 1 ? ' turn' : ' turns');
-          setStatus('AI coach is checking…', true);
-          micHint.textContent = 'AI ভাবছে…';
-          addMessage('assistant', '', true);
-          try {
-            var result = await getPracticeFeedback(text);
-            if (!voiceChatActive) break;
-            removeTyping();
-            addMessage('assistant', result.reply, false);
-            transcript.push({ role: 'assistant', text: result.reply });
-            renderFeedback(result);
-            setStatus('Speaking…', true);
-            micHint.textContent = '🔊 AI বলছে…';
-            await speakAndWait(result.reply);
-          } catch (e) {
-            if (!voiceChatActive) break;
-            removeTyping();
-            addMessage('assistant', 'Sorry, I had a little trouble. Please say that again.', false);
-          }
-        }
-      }
-
-      async function startVoiceChat() {
-        if (voiceChatActive) return;
-        if (appMode === 'mock') {
-          showToast('ভয়েস চ্যাট প্র্যাকটিস মোডে চলে।');
-          return;
-        }
-        if (!getGroqKey()) {
-          showToast('ভয়েস চ্যাটের জন্য ⚙ AI Key-তে Groq key সেভ করুন।');
-          return;
-        }
-        if (!hasMediaRecorder) {
-          showToast('এই ব্রাউজারে ভয়েস চ্যাট চলবে না।');
-          return;
-        }
-        if (isListening && recognition) { try { recognition.stop(); } catch (e) {} }
-        if (whisperRecording) { whisperRecording = false; }
-        voiceChatActive = true;
-        updateVoiceChatUI();
-        setStatus('Voice chat starting…', true);
-        addMessage('assistant', "Hi! Let's practise English together. Speak, and I'll reply — just keep talking!", false);
-        await speakPackWait('voice-hello', "Hi! Let's practise English together. Speak, and I'll reply.");
-        if (!voiceChatActive) return;
-        voiceChatLoop();
-      }
-
-      function stopVoiceChat() {
-        voiceChatActive = false;
-        try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) {}
-        updateVoiceChatUI();
-        setStatus('Ready to practise', false);
-        micHint.textContent = 'মাইকে চাপ দিয়ে ইংরেজিতে বলুন';
-      }
-
-      voiceChatBtn.addEventListener('click', function () {
-        if (voiceChatActive) stopVoiceChat();
-        else startVoiceChat();
-      });
 
       function renderFeedback(result) {
         var score = result.score || (result.corrections.length ? Math.max(55, 90 - result.corrections.length * 10) : 94);
@@ -1995,7 +1252,7 @@
             transcript.push({ role: 'assistant', text: next.text });
             renderMockProgress();
             updateMockHeader();
-            speakPack('mock-q' + (mockQuestionIndex + 1), transition + next.text);
+            speak(transition + next.text);
             isBusy = false;
             sendBtn.disabled = false;
             micBtn.disabled = false;
@@ -2015,9 +1272,8 @@
           renderMockResult(result);
           scoreLabel.textContent = 'Estimated overall band';
           setStatus('Mock test complete', false);
-          if (lastResultOffline) showToast('AI সার্ভার ব্যস্ত — অফলাইন অনুমানভিত্তিক স্কোর দেখানো হচ্ছে।');
           newSessionBtn.textContent = 'Try another test';
-          speakPack('mock-end', 'That is the end of the speaking test. Your practice result is ready.');
+          speak('That is the end of the speaking test. Your practice result is ready.');
         } catch (error) {
           removeTyping();
           addMessage('assistant', 'I could not reach the AI examiner, so no score was created. Please restart the test when your connection is available.', false);
@@ -2059,16 +1315,7 @@
           transcript.push({ role: 'assistant', text: result.reply });
           renderFeedback(result);
           speak(result.reply);
-          if (lastResultOffline) {
-            setStatus('AI সমস্যা' + (lastAIError ? ' · ' + lastAIError : ''), true);
-            showToast('AI সার্ভারে সমস্যা' + (lastAIError ? ' (' + lastAIError + ')' : '') + ' — অফলাইন মোডে মৌলিক সংশোধন দেখানো হচ্ছে।');
-            var ks = document.getElementById('keyStatus');
-            if (ks && getGroqKey()) ks.textContent = 'Key সেভ আছে। শেষ ত্রুটি: ' + (lastAIError || 'অজানা');
-          } else if (lastProvider === 'groq') {
-            setStatus('Groq AI · ready', false);
-          } else {
-            setStatus('AI coach · ready', false);
-          }
+          setStatus('AI coach · ready', false);
         } catch (error) {
           removeTyping();
           addMessage('assistant', 'I could not reach the AI coach just now. Please send your answer again.', false);
@@ -2077,191 +1324,15 @@
         } finally {
           isBusy = false;
           sendBtn.disabled = false;
-          refreshMicButton();
+          micBtn.disabled = !recognition;
           input.focus();
         }
       }
 
       var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-      var hasMediaRecorder = !!(window.MediaRecorder && navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
-      var whisperRecording = false;
-      var preferWhisper = false;
-      var mediaRecorder = null;
-      var mediaStream = null;
-      var audioChunks = [];
-
-      function canUseVoiceInput() {
-        return !!recognition || (hasMediaRecorder && !!getGroqKey());
-      }
-      function refreshMicButton() {
-        micBtn.disabled = !canUseVoiceInput();
-      }
-      function cleanupMediaStream() {
-        if (mediaStream) {
-          try { mediaStream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
-          mediaStream = null;
-        }
-        mediaRecorder = null;
-      }
-      async function transcribeWithWhisper(blob) {
-        var key = getGroqKey();
-        var form = new FormData();
-        form.append('file', blob, 'speech.webm');
-        form.append('model', 'whisper-large-v3-turbo');
-        form.append('language', 'en');
-        form.append('response_format', 'json');
-        var controller = new AbortController();
-        var timeout = setTimeout(function () { controller.abort(); }, 45000);
-        try {
-          var res = await fetch('https://api.groq.com/openai/v1/audio/transcriptions', {
-            method: 'POST',
-            headers: { 'Authorization': 'Bearer ' + key },
-            body: form,
-            signal: controller.signal
-          });
-          if (!res.ok) throw new Error('HTTP ' + res.status);
-          var data = await res.json();
-          return data.text || '';
-        } finally {
-          clearTimeout(timeout);
-        }
-      }
-      async function handleWhisperStop() {
-        try { if (whisperStopTimer) clearTimeout(whisperStopTimer); } catch (e) {}
-        whisperStopTimer = null;
-        stopWhisperMeter();
-        cleanupMediaStream();
-        whisperRecording = false;
-        isListening = false;
-        micBtn.classList.remove('listening');
-        micBtn.setAttribute('aria-label', 'Start speaking');
-        micHint.textContent = 'মাইকে চাপ দিয়ে ইংরেজিতে বলুন';
-        if (appMode === 'mock') updateMockHeader();
-        else setStatus('Ready to practise', false);
-        if (!audioChunks.length) { showToast('কিছু শোনা যায়নি। আবার চেষ্টা করুন।'); return; }
-        var blob = new Blob(audioChunks, { type: 'audio/webm' });
-        audioChunks = [];
-        setStatus('Transcribing…', true);
-        try {
-          var text = await transcribeWithWhisper(blob);
-          if (text.trim()) {
-            input.value = text.trim();
-            submitMessage();
-          } else {
-            showToast('বুঝতে পারিনি। আবার বলুন।');
-            setStatus('Ready to practise', false);
-          }
-        } catch (e) {
-          showToast('ভয়েস বোঝা যায়নি। লিখে পাঠান।');
-          setStatus('Ready to practise', false);
-        }
-      }
-      var whisperStopTimer = null;
-      var whisperAudioCtx = null;
-      var whisperMeterRaf = 0;
-      var voiceMeterEl = document.getElementById('voiceMeter');
-      var voiceMeterFill = document.getElementById('voiceMeterFill');
-      function stopWhisperMeter() {
-        try { cancelAnimationFrame(whisperMeterRaf); } catch (e) {}
-        whisperMeterRaf = 0;
-        if (voiceMeterEl) voiceMeterEl.style.display = 'none';
-        if (voiceMeterFill) voiceMeterFill.style.width = '0%';
-        if (whisperAudioCtx) {
-          try { whisperAudioCtx.close(); } catch (e) {}
-          whisperAudioCtx = null;
-        }
-      }
-      async function toggleWhisperRecording() {
-        if (whisperRecording) {
-          try { if (whisperStopTimer) clearTimeout(whisperStopTimer); } catch (e) {}
-          whisperStopTimer = null;
-          try { if (mediaRecorder && mediaRecorder.state !== 'inactive') mediaRecorder.stop(); }
-          catch (e) { handleWhisperStop(); }
-          return;
-        }
-        try {
-          mediaStream = await navigator.mediaDevices.getUserMedia({
-            audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
-          });
-        } catch (e) {
-          try {
-            mediaStream = await navigator.mediaDevices.getUserMedia({ audio: true });
-          } catch (e2) {
-            showToast('মাইকের অনুমতি দিন।');
-            return;
-          }
-        }
-        audioChunks = [];
-        try {
-          mediaRecorder = new MediaRecorder(mediaStream);
-        } catch (e) {
-          cleanupMediaStream();
-          showToast('এই ব্রাউজারে রেকর্ডিং হচ্ছে না।');
-          return;
-        }
-        mediaRecorder.ondataavailable = function (e) { if (e.data && e.data.size) audioChunks.push(e.data); };
-        mediaRecorder.onstop = handleWhisperStop;
-        var analyser = null;
-        var dataArray = null;
-        try {
-          whisperAudioCtx = new (window.AudioContext || window.webkitAudioContext)();
-          var src = whisperAudioCtx.createMediaStreamSource(mediaStream);
-          analyser = whisperAudioCtx.createAnalyser();
-          analyser.fftSize = 256;
-          src.connect(analyser);
-          dataArray = new Uint8Array(analyser.frequencyBinCount);
-        } catch (e) {
-          analyser = null;
-        }
-        mediaRecorder.start();
-        whisperRecording = true;
-        isListening = true;
-        micBtn.classList.add('listening');
-        micBtn.setAttribute('aria-label', 'Stop listening');
-        micHint.textContent = '🔴 রেকর্ড হচ্ছে… বলুন, থামলে নিজেই নেবে';
-        setStatus('Recording…', true);
-        if (voiceMeterEl) voiceMeterEl.style.display = 'block';
-        var recStart = Date.now();
-        var speaking = false;
-        var silenceStart = 0;
-        function meterLoop() {
-          if (!whisperRecording) { stopWhisperMeter(); return; }
-          var avg = 0;
-          if (analyser) {
-            analyser.getByteFrequencyData(dataArray);
-            var sum = 0;
-            for (var i = 0; i < dataArray.length; i++) sum += dataArray[i];
-            avg = sum / dataArray.length;
-          }
-          if (voiceMeterFill) voiceMeterFill.style.width = Math.min(100, (avg / 70) * 100) + '%';
-          var elapsed = Date.now() - recStart;
-          if (avg > 14) {
-            speaking = true;
-            silenceStart = 0;
-          } else if (speaking) {
-            if (!silenceStart) silenceStart = Date.now();
-            if (Date.now() - silenceStart > 1800) {
-              toggleWhisperRecording();
-              return;
-            }
-          }
-          if (elapsed > 30000) {
-            toggleWhisperRecording();
-            return;
-          }
-          whisperMeterRaf = requestAnimationFrame(meterLoop);
-        }
-        if (analyser) whisperMeterRaf = requestAnimationFrame(meterLoop);
-        else {
-          try { if (whisperStopTimer) clearTimeout(whisperStopTimer); } catch (e) {}
-          whisperStopTimer = setTimeout(function () {
-            if (whisperRecording) toggleWhisperRecording();
-          }, 30000);
-        }
-      }
       if (SpeechRecognition) {
         recognition = new SpeechRecognition();
-        recognition.lang = 'en-US';
+        recognition.lang = 'en-GB';
         recognition.interimResults = true;
         recognition.continuous = false;
 
@@ -2296,43 +1367,20 @@
         };
         recognition.onerror = function (event) {
           delete input.dataset.finalSpeech;
-          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
-            showToast('মাইকের অনুমতি বন্ধ আছে। অ্যাড্রেস বারের 🔒 → Microphone → Allow করুন।');
-          } else if (event.error === 'network' || event.error === 'audio-capture') {
-            if (hasMediaRecorder && getGroqKey() && !preferWhisper) {
-              preferWhisper = true;
-              showToast('ব্রাউজার ভয়েসে সমস্যা — Whisper ভয়েস চালু হলো। আবার মাইকে চাপ দিন।');
-            } else {
-              showToast('মাইক্রোফোন শোনা যায়নি। আবার চেষ্টা করুন অথবা লিখে পাঠান।');
-            }
-          } else if (event.error === 'no-speech') {
-            showToast('কিছু শোনা যায়নি — মাইকে চাপ দিয়ে জোরে ইংরেজিতে বলুন।');
-          } else if (event.error !== 'aborted') {
-            showToast('মাইক্রোফোন শোনা যায়নি। আবার চেষ্টা করুন অথবা লিখে পাঠান।');
-          }
+          if (event.error !== 'aborted') showToast('মাইক্রোফোন শোনা যায়নি। অনুমতি দিন অথবা লিখে পাঠান।');
         };
-      } else if (hasMediaRecorder && getGroqKey()) {
-        micHint.textContent = 'মাইকে চাপ দিয়ে ইংরেজিতে বলুন';
-      } else if (hasMediaRecorder) {
-        micHint.textContent = 'ভয়েসের জন্য ⚙ AI Key-তে Groq key সেভ করুন';
       } else {
+        micBtn.disabled = true;
         micHint.textContent = 'এই ব্রাউজারে ভয়েস ইনপুট নেই—লিখে অনুশীলন করুন';
       }
-      refreshMicButton();
 
       micBtn.addEventListener('click', function () {
-        if (isBusy || voiceChatActive) return;
-        if (getGroqKey() && hasMediaRecorder) {
-          toggleWhisperRecording();
-        } else if (recognition) {
-          if (isListening) recognition.stop();
-          else {
-            input.value = '';
-            delete input.dataset.finalSpeech;
-            try { recognition.start(); } catch (e) { showToast('মাইক্রোফোন আবার চালু করতে একটু অপেক্ষা করুন।'); }
-          }
-        } else {
-          showToast('ভয়েসের জন্য ⚙ AI Key-তে Groq key সেভ করুন।');
+        if (!recognition || isBusy) return;
+        if (isListening) recognition.stop();
+        else {
+          input.value = '';
+          delete input.dataset.finalSpeech;
+          try { recognition.start(); } catch (e) { showToast('মাইক্রোফোন আবার চালু করতে একটু অপেক্ষা করুন।'); }
         }
       });
       sendBtn.addEventListener('click', submitMessage);
@@ -2353,211 +1401,51 @@
         voiceOn = !voiceOn;
         voiceToggle.setAttribute('aria-pressed', String(voiceOn));
         voiceToggle.textContent = 'Voice reply · ' + (voiceOn ? 'On' : 'Off');
-        if (!voiceOn && 'speechSynthesis' in window) window.speechSynthesis.cancel();
+        if (!voiceOn) stopVoicePlayback();
       });
 
-      var voiceModal = document.getElementById('voiceModal');
-      var voiceListEl = document.getElementById('voiceListEl');
-      var voiceListBtn = document.getElementById('voiceListBtn');
-      var voiceReloadBtn = document.getElementById('voiceReloadBtn');
-      var voiceModalClose = document.getElementById('voiceModalClose');
-      var mentorPackToggle = document.getElementById('mentorPackToggle');
-      var mentorPackTest = document.getElementById('mentorPackTest');
-      var mentorPackRow = document.getElementById('mentorPackRow');
-      var netVoiceToggle = document.getElementById('netVoiceToggle');
-      var netVoiceRow = document.getElementById('netVoiceRow');
-      var packFemaleBtn = document.getElementById('packFemaleBtn');
-      var packMaleBtn = document.getElementById('packMaleBtn');
-      var packGenderRow = document.getElementById('packGenderRow');
-      function updateMentorPackUI() {
-        if (mentorPackToggle) mentorPackToggle.textContent = mentorPackOn ? 'On' : 'Off';
-        if (mentorPackRow) mentorPackRow.classList.toggle('selected', !!mentorPackOn);
-        if (netVoiceToggle) netVoiceToggle.textContent = netVoiceOn ? 'On' : 'Off';
-        if (netVoiceRow) netVoiceRow.classList.toggle('selected', !!netVoiceOn);
-        if (packFemaleBtn) packFemaleBtn.textContent = (packGender === 'female' ? '✓ ' : '') + '👧 মেয়ে';
-        if (packMaleBtn) packMaleBtn.textContent = (packGender === 'male' ? '✓ ' : '') + '👦 ছেলে';
-        if (packGenderRow) packGenderRow.classList.toggle('selected', !!mentorPackOn);
-      }
-      function setPackGender(g) {
-        packGender = g;
-        try { localStorage.setItem('ieltsgo_pack_gender', g); } catch (e) {}
-        updateMentorPackUI();
-      }
-      if (packFemaleBtn) packFemaleBtn.addEventListener('click', function () { setPackGender('female'); });
-      if (packMaleBtn) packMaleBtn.addEventListener('click', function () { setPackGender('male'); });
-      var piperFemaleBtn = document.getElementById('piperFemaleBtn');
-      var piperMaleBtn = document.getElementById('piperMaleBtn');
-      var piperOffBtn = document.getElementById('piperOffBtn');
-      var piperRow = document.getElementById('piperRow');
-      var piperFemaleRow = document.getElementById('piperFemaleRow');
-      var piperMaleRow = document.getElementById('piperMaleRow');
-      var piperOffRow = document.getElementById('piperOffRow');
-      function updatePiperUI() {
-        var downloading = piperDownloading;
-        if (piperFemaleBtn) {
-          if (downloading && piperVoiceId === PIPER_FEMALE) { /* keep progress text */ }
-          else piperFemaleBtn.textContent = (piperVoiceId === PIPER_FEMALE ? (piperReadyVoice === PIPER_FEMALE ? '✅ ' : '✓ ') : '') + 'Select';
-        }
-        if (piperMaleBtn) {
-          if (downloading && piperVoiceId === PIPER_MALE) { /* keep progress text */ }
-          else piperMaleBtn.textContent = (piperVoiceId === PIPER_MALE ? (piperReadyVoice === PIPER_MALE ? '✅ ' : '✓ ') : '') + 'Select';
-        }
-        if (piperOffBtn) piperOffBtn.textContent = (!piperVoiceId ? '✓ ' : '') + 'Select';
-        if (piperRow) piperRow.classList.toggle('selected', !!piperVoiceId);
-        if (piperFemaleRow) piperFemaleRow.classList.toggle('selected', piperVoiceId === PIPER_FEMALE);
-        if (piperMaleRow) piperMaleRow.classList.toggle('selected', piperVoiceId === PIPER_MALE);
-        if (piperOffRow) piperOffRow.classList.toggle('selected', !piperVoiceId);
-      }
-      function setPiperVoice(id) {
-        piperVoiceId = id;
-        try {
-          if (id) localStorage.setItem('ieltsgo_piper_voice', id);
-          else localStorage.removeItem('ieltsgo_piper_voice');
-        } catch (e) {}
-        updatePiperUI();
-        if (id) {
-          ensurePiper(id).then(function (ok) {
-            if (!ok) showToast('ডাউনলোড ব্যর্থ — ইন্টারনেট ভয়েস চলবে।');
-          });
-        }
-      }
-      if (piperFemaleBtn) piperFemaleBtn.addEventListener('click', function () { setPiperVoice(PIPER_FEMALE); });
-      if (piperMaleBtn) piperMaleBtn.addEventListener('click', function () { setPiperVoice(PIPER_MALE); });
-      if (piperOffBtn) piperOffBtn.addEventListener('click', function () { setPiperVoice(null); });
-      updatePiperUI();
-      if (mentorPackToggle) {
-        mentorPackToggle.addEventListener('click', function () {
-          mentorPackOn = !mentorPackOn;
-          try { localStorage.setItem('ieltsgo_mentor_pack', mentorPackOn ? 'on' : 'off'); } catch (e) {}
-          updateMentorPackUI();
-        });
-      }
-      if (mentorPackTest) {
-        mentorPackTest.addEventListener('click', function () {
-          var wasOn = mentorPackOn;
-          mentorPackOn = true;
-          playPackAudio('voice-hello').then(function (ok) {
-            if (!ok) showToast('ভয়েস ফাইল লোড হয়নি।');
-            mentorPackOn = wasOn;
-          });
-        });
-      }
-      if (netVoiceToggle) {
-        netVoiceToggle.addEventListener('click', function () {
-          netVoiceOn = !netVoiceOn;
-          try { localStorage.setItem('ieltsgo_net_voice', netVoiceOn ? 'on' : 'off'); } catch (e) {}
-          updateMentorPackUI();
-          if (netVoiceOn) showToast('ইন্টারনেট ভয়েস চালু ✅');
-        });
-      }
-      updateMentorPackUI();
-      var selectedVoiceURI = null;
-      try { selectedVoiceURI = localStorage.getItem('ieltsgo_voice_uri'); } catch (e) {}
-      function getActiveVoice(voices) {
-        var list = voices || [];
-        if (selectedVoiceURI) {
-          var saved = list.find(function (v) { return v.voiceURI === selectedVoiceURI; });
-          if (saved) return saved;
-        }
-        return pickMentorVoice(list);
-      }
-      function testVoiceURI(uri) {
-        if (!('speechSynthesis' in window)) { showToast('এই ব্রাউজারে ভয়েস নেই।'); return; }
-        var synth = window.speechSynthesis;
-        try { synth.cancel(); } catch (e) {}
-        var u = new SpeechSynthesisUtterance("Hello! I'm your English mentor. Let's learn together, step by step.");
-        u.lang = 'en-GB';
-        u.rate = 0.88;
-        u.pitch = 1.0;
-        var voices = [];
-        try { voices = synth.getVoices() || []; } catch (e) {}
-        var v = voices.find(function (x) { return x.voiceURI === uri; });
-        if (v) u.voice = v;
-        try { synth.speak(u); } catch (e) {}
-      }
-      function renderVoiceList() {
-        if (!voiceListEl) return;
-        if (!('speechSynthesis' in window)) {
-          voiceListEl.innerHTML = '<p class="bn">এই ব্রাউজারে ভয়েস নেই।</p>';
-          return;
-        }
-        var voices = [];
-        try { voices = window.speechSynthesis.getVoices() || []; } catch (e) {}
-        var en = voices.filter(function (v) { return /^en/i.test(v.lang); });
-        var others = voices.filter(function (v) { return !/^en/i.test(v.lang); });
-        var sorted = en.concat(others);
-        voiceListEl.innerHTML = '';
-        if (!sorted.length) {
-          var p = document.createElement('p');
-          p.className = 'bn';
-          p.textContent = 'ভয়েস লোড হয়নি। নিচে 🔄 Reload চাপ দাও।';
-          voiceListEl.appendChild(p);
-          return;
-        }
-        sorted.forEach(function (v) {
-          var row = document.createElement('div');
-          row.className = 'voice-item' + (v.voiceURI === selectedVoiceURI ? ' selected' : '');
-          var name = document.createElement('span');
-          name.className = 'vname';
-          name.textContent = v.name + ' (' + v.lang + ')';
-          var testB = document.createElement('button');
-          testB.className = 'small-action';
-          testB.type = 'button';
-          testB.textContent = '🔊';
-          testB.addEventListener('click', function () { testVoiceURI(v.voiceURI); });
-          var selB = document.createElement('button');
-          selB.className = 'small-action';
-          selB.type = 'button';
-          selB.textContent = v.voiceURI === selectedVoiceURI ? '✓' : 'Select';
-          selB.addEventListener('click', function () {
-            selectedVoiceURI = v.voiceURI;
-            try { localStorage.setItem('ieltsgo_voice_uri', selectedVoiceURI); } catch (e) {}
-            renderVoiceList();
-            showToast('ভয়েস সিলেক্ট হয়েছে ✅');
-          });
-          row.appendChild(name);
-          row.appendChild(testB);
-          row.appendChild(selB);
-          voiceListEl.appendChild(row);
-        });
-      }
-      function closeVoiceModal() {
-        if (!voiceModal) return;
-        voiceModal.classList.remove('open');
-        voiceModal.setAttribute('aria-hidden', 'true');
-        try { if ('speechSynthesis' in window) window.speechSynthesis.cancel(); } catch (e) {}
-      }
-      if (voiceListBtn) {
-        voiceListBtn.addEventListener('click', function () {
-          try { if ('speechSynthesis' in window) window.speechSynthesis.getVoices(); } catch (e) {}
-          renderVoiceList();
-          if (voiceModal) {
-            voiceModal.classList.add('open');
-            voiceModal.setAttribute('aria-hidden', 'false');
+      voiceProviderBtn.addEventListener('click', function () {
+        var willOpen = voiceKeyPanel.hidden;
+        voiceKeyPanel.hidden = !willOpen;
+        voiceProviderBtn.setAttribute('aria-expanded', String(willOpen));
+        if (willOpen) cartesiaKeyInput.focus();
+      });
+
+      cartesiaConnect.addEventListener('click', function () {
+        var key = cartesiaKeyInput.value.trim();
+        if (!key) {
+          if (cartesiaApiKey) {
+            cartesiaApiKey = '';
+            stopVoicePlayback();
+            voiceProviderBtn.textContent = 'Add Cartesia key';
+            cartesiaConnect.textContent = 'Use Cartesia';
+            cartesiaStatus.textContent = 'Cartesia key সরানো হয়েছে · browser voice active।';
+            showToast('Cartesia key removed from this tab.');
+          } else {
+            showToast('Cartesia API key দিন।');
           }
-        });
-      }
-      if (voiceModalClose) voiceModalClose.addEventListener('click', closeVoiceModal);
-      if (voiceReloadBtn) {
-        voiceReloadBtn.addEventListener('click', function () {
-          try { if ('speechSynthesis' in window) window.speechSynthesis.getVoices(); } catch (e) {}
-          showToast('ভয়েস লোড হচ্ছে…');
-          setTimeout(renderVoiceList, 800);
-        });
-      }
-      if (voiceModal) {
-        voiceModal.addEventListener('click', function (e) {
-          if (e.target === voiceModal) closeVoiceModal();
-        });
-      }
-      if ('speechSynthesis' in window) {
-        try { window.speechSynthesis.getVoices(); } catch (e) {}
-        var prevVoicesChanged = window.speechSynthesis.onvoiceschanged;
-        window.speechSynthesis.onvoiceschanged = function () {
-          try { window.speechSynthesis.getVoices(); } catch (e) {}
-          if (typeof prevVoicesChanged === 'function') { try { prevVoicesChanged(); } catch (e) {} }
-        };
-      }
+          return;
+        }
+        if (key.length < 12) {
+          showToast('Cartesia keyটি সম্পূর্ণ লিখুন।');
+          return;
+        }
+        cartesiaApiKey = key;
+        cartesiaKeyInput.value = '';
+        voiceProviderBtn.textContent = 'Cartesia · Ready';
+        cartesiaConnect.textContent = 'Remove key';
+        cartesiaStatus.textContent = 'Cartesia voice ready · keyটি শুধু এই tab-এ থাকবে। পরের AI reply-তে ব্যবহার হবে।';
+        voiceKeyPanel.hidden = true;
+        voiceProviderBtn.setAttribute('aria-expanded', 'false');
+        showToast('Cartesia voice ready for this tab.');
+      });
+
+      cartesiaKeyInput.addEventListener('keydown', function (event) {
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          cartesiaConnect.click();
+        }
+      });
 
       function resetScore() {
         scoreRing.style.setProperty('--score', '0deg');
@@ -2566,7 +1454,7 @@
 
       function startPracticeSession() {
         stopMockTimer();
-        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        stopVoicePlayback();
         messagesEl.innerHTML = '';
         var greeting = selectedTopic === 'IELTS Part 1'
           ? 'Let’s begin with an IELTS Part 1 question. Do you work or are you a student?'
@@ -2587,7 +1475,7 @@
 
       function prepareMockTest() {
         stopMockTimer();
-        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        stopVoicePlayback();
         mockStarted = false;
         mockQuestionIndex = 0;
         mockStartedAt = 0;
@@ -2609,7 +1497,7 @@
 
       function startMockTest() {
         stopMockTimer();
-        if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        stopVoicePlayback();
         mockStarted = true;
         mockQuestionIndex = 0;
         mockStartedAt = Date.now();
@@ -2629,7 +1517,7 @@
         renderMockProgress();
         updateMockHeader();
         mockTimer = setInterval(updateMockHeader, 1000);
-        speakPack('mock-q1', 'Part 1. ' + question.text);
+        speak('Part 1. ' + question.text);
         input.focus();
       }
 
@@ -2662,164 +1550,6 @@
         if (appMode === 'mock') startMockTest();
         else startPracticeSession();
       });
-
-      // ---------- Groq API key settings (stored only in this browser) ----------
-      var keyBtn = document.getElementById('keyBtn');
-      var keyPanel = document.getElementById('keyPanel');
-      var groqKeyInput = document.getElementById('groqKeyInput');
-      var saveKeyBtn = document.getElementById('saveKeyBtn');
-      var clearKeyBtn = document.getElementById('clearKeyBtn');
-      var keyStatus = document.getElementById('keyStatus');
-      function refreshKeyUI() {
-        var has = !!getGroqKey();
-        keyBtn.textContent = has ? '⚙ AI Key · চালু ✅' : '⚙ AI Key';
-        if (has && !keyStatus.textContent) keyStatus.textContent = 'Groq key সেভ আছে — দ্রুত AI চালু।';
-      }
-      keyBtn.addEventListener('click', function () {
-        keyPanel.classList.toggle('open');
-        if (keyPanel.classList.contains('open')) {
-          groqKeyInput.value = getGroqKey();
-          groqKeyInput.focus();
-        }
-      });
-      saveKeyBtn.addEventListener('click', async function () {
-        var key = groqKeyInput.value.trim();
-        if (!key) { keyStatus.textContent = 'Key টা লিখে Save চাপো।'; return; }
-        keyStatus.textContent = 'যাচাই করা হচ্ছে…';
-        saveKeyBtn.disabled = true;
-        try {
-          var check = await fetch('https://api.groq.com/openai/v1/models', {
-            headers: { 'Authorization': 'Bearer ' + key }
-          });
-          if (!check.ok) throw new Error('bad key');
-          try { localStorage.setItem('ieltsgo_groq_key', key); } catch (e) {}
-          keyStatus.textContent = 'সংযুক্ত হয়েছে ✅ — এখন থেকে দ্রুত AI উত্তর দেবে।';
-          showToast('Groq AI সংযুক্ত হয়েছে।');
-        } catch (e) {
-          keyStatus.textContent = 'Key টা ঠিক মনে হচ্ছে না — আবার চেক করে বসাও।';
-        } finally {
-          saveKeyBtn.disabled = false;
-          refreshKeyUI();
-        }
-      });
-      clearKeyBtn.addEventListener('click', function () {
-        try { localStorage.removeItem('ieltsgo_groq_key'); } catch (e) {}
-        groqKeyInput.value = '';
-        keyStatus.textContent = 'Key মুছে ফেলা হয়েছে।';
-        refreshKeyUI();
-      });
-      var testKeyBtn = document.getElementById('testKeyBtn');
-      testKeyBtn.addEventListener('click', async function () {
-        var key = getGroqKey();
-        if (!key) { keyStatus.textContent = 'আগে key বসিয়ে Save চাপো।'; return; }
-        keyStatus.textContent = 'পরীক্ষা চলছে…';
-        testKeyBtn.disabled = true;
-        var t0 = Date.now();
-        try {
-          var r = await requestGroq('Reply with ONLY this JSON: {"reply":"OK","corrections":[],"score":100,"encouragement_bn":"ঠিক আছে"}', 'test', key);
-          var secs = ((Date.now() - t0) / 1000).toFixed(1);
-          keyStatus.textContent = '✅ Groq কাজ করছে! (' + secs + 's)';
-          showToast('Groq ঠিক আছে ✅');
-        } catch (e) {
-          keyStatus.textContent = '❌ সমস্যা: ' + errMsg(e) + ' — এই লেখাটা হুবহু আমাকে জানাও।';
-        } finally {
-          testKeyBtn.disabled = false;
-        }
-      });
-      // ---------- ElevenLabs voice key (stored only in this browser) ----------
-      var ELEVEN_FEMALE = '21m00Tcm4TlvDq8ikWAM'; // Rachel - warm female
-      var ELEVEN_MALE = 'pNInz6obpgDQGcFmaJgB'; // Adam - deep male
-      var elevenKeyInput = document.getElementById('elevenKeyInput');
-      var saveElevenKeyBtn = document.getElementById('saveElevenKeyBtn');
-      var clearElevenKeyBtn = document.getElementById('clearElevenKeyBtn');
-      var elevenStatus = document.getElementById('elevenStatus');
-      var elevenFemaleBtn = document.getElementById('elevenFemaleBtn');
-      var elevenMaleBtn = document.getElementById('elevenMaleBtn');
-      var testElevenBtn = document.getElementById('testElevenBtn');
-      function getElevenKey() {
-        try { return (localStorage.getItem('ieltsgo_eleven_key') || '').trim(); } catch (e) { return ''; }
-      }
-      function getElevenVoice() {
-        try { return localStorage.getItem('ieltsgo_eleven_voice') || ELEVEN_FEMALE; } catch (e) { return ELEVEN_FEMALE; }
-      }
-      function refreshElevenUI() {
-        var has = !!getElevenKey();
-        var v = getElevenVoice();
-        if (elevenFemaleBtn) elevenFemaleBtn.textContent = (v === ELEVEN_FEMALE ? '✓ ' : '') + '👧 মেয়ে';
-        if (elevenMaleBtn) elevenMaleBtn.textContent = (v === ELEVEN_MALE ? '✓ ' : '') + '👦 ছেলে';
-        if (has && elevenStatus && !elevenStatus.textContent) elevenStatus.textContent = 'ElevenLabs key সেভ আছে — সুন্দর ভয়েস চালু।';
-      }
-      if (saveElevenKeyBtn) saveElevenKeyBtn.addEventListener('click', function () {
-        var key = elevenKeyInput.value.trim();
-        if (!key) { elevenStatus.textContent = 'Key টা লিখে Save চাপো।'; return; }
-        try { localStorage.setItem('ieltsgo_eleven_key', key); } catch (e) {}
-        elevenStatus.textContent = 'সেভ হয়েছে ✅ — নিচে 🔊 ভয়েস পরীক্ষা চাপ দিয়ে শুনে দেখো।';
-        refreshElevenUI();
-      });
-      if (clearElevenKeyBtn) clearElevenKeyBtn.addEventListener('click', function () {
-        try { localStorage.removeItem('ieltsgo_eleven_key'); } catch (e) {}
-        elevenKeyInput.value = '';
-        elevenStatus.textContent = 'Key মুছে ফেলা হয়েছে।';
-        refreshElevenUI();
-      });
-      if (elevenFemaleBtn) elevenFemaleBtn.addEventListener('click', function () {
-        try { localStorage.setItem('ieltsgo_eleven_voice', ELEVEN_FEMALE); } catch (e) {}
-        refreshElevenUI();
-      });
-      if (elevenMaleBtn) elevenMaleBtn.addEventListener('click', function () {
-        try { localStorage.setItem('ieltsgo_eleven_voice', ELEVEN_MALE); } catch (e) {}
-        refreshElevenUI();
-      });
-      function speakEleven(text, onDone) {
-        var key = getElevenKey();
-        if (!key) { onDone(false); return; }
-        var chunks = googleTTSChunks(text);
-        if (!chunks.length) { onDone(true); return; }
-        if ('speechSynthesis' in window) { try { window.speechSynthesis.cancel(); } catch (e) {} }
-        var voiceId = getElevenVoice();
-        var i = 0;
-        var failed = false;
-        function next() {
-          if (failed) return;
-          if (i >= chunks.length) { onDone(true); return; }
-          var chunk = chunks[i++];
-          fetch('https://api.elevenlabs.io/v1/text-to-speech/' + voiceId, {
-            method: 'POST',
-            headers: {
-              'xi-api-key': key,
-              'Content-Type': 'application/json'
-            },
-            body: JSON.stringify({
-              text: chunk,
-              model_id: 'eleven_multilingual_v2',
-              voice_settings: { stability: 0.5, similarity_boost: 0.75 }
-            })
-          }).then(function (res) {
-            if (!res.ok) throw new Error('elevenlabs ' + res.status);
-            return res.blob();
-          }).then(function (blob) {
-            if (failed) return;
-            try {
-              var audio = new Audio(URL.createObjectURL(blob));
-              audio.onended = next;
-              audio.onerror = function () { failed = true; onDone(false); };
-              var p = audio.play();
-              if (p && p.catch) p.catch(function () { failed = true; onDone(false); });
-            } catch (e) { failed = true; onDone(false); }
-          }).catch(function () { failed = true; onDone(false); });
-        }
-        next();
-      }
-      if (testElevenBtn) testElevenBtn.addEventListener('click', function () {
-        var key = getElevenKey();
-        if (!key) { elevenStatus.textContent = 'আগে key বসিয়ে Save চাপো।'; return; }
-        elevenStatus.textContent = 'ভয়েস পরীক্ষা চলছে…';
-        speakEleven("Hello! I'm your English mentor. Let's learn together.", function (ok) {
-          elevenStatus.textContent = ok ? '✅ ভয়েস কাজ করছে!' : '❌ সমস্যা — key ঠিক আছে কিনা দেখো।';
-        });
-      });
-      refreshElevenUI();
-      refreshKeyUI();
     })();
   </script>
 </body>
