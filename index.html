@@ -8,6 +8,8 @@
   <title>IELTSgo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link rel="preconnect" href="https://ieltsgo-proxy.vercel.app" crossorigin />
+  <link rel="preconnect" href="https://api.cartesia.ai" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     :root {
@@ -922,6 +924,8 @@
       var transcript = [{ role: 'assistant', text: 'Hi! Let’s practise everyday English. What did you do this morning?' }];
       var recognition = null;
       var isListening = false;
+      var speechFinalText = '';
+      var speechStopTimer = null;
       var toastTimer = null;
       var mockStarted = false;
       var mockQuestionIndex = 0;
@@ -1134,9 +1138,20 @@
         if (!voiceOn || !('speechSynthesis' in window)) return;
         var utterance = new SpeechSynthesisUtterance(text);
         utterance.lang = 'en-GB';
-        utterance.rate = 0.9;
+        utterance.rate = 1.04;
+        utterance.pitch = 1;
         var voices = window.speechSynthesis.getVoices();
-        var preferred = voices.find(function (v) { return /en-GB/i.test(v.lang); }) || voices.find(function (v) { return /^en/i.test(v.lang); });
+        var preferred = voices.find(function (voice) {
+          return /en-GB/i.test(voice.lang) && /Sonia|Libby|Google UK|Daniel|Serena|Kate/i.test(voice.name);
+        }) || voices.find(function (voice) {
+          return /en-GB/i.test(voice.lang) && voice.localService;
+        }) || voices.find(function (voice) {
+          return /en-GB/i.test(voice.lang);
+        }) || voices.find(function (voice) {
+          return /^en/i.test(voice.lang) && voice.localService;
+        }) || voices.find(function (voice) {
+          return /^en/i.test(voice.lang);
+        });
         if (preferred) utterance.voice = preferred;
         window.speechSynthesis.speak(utterance);
       }
@@ -1150,6 +1165,8 @@
         }
 
         cartesiaStatus.textContent = 'Cartesia voice তৈরি হচ্ছে…';
+        var voiceController = new AbortController();
+        var voiceTimeout = setTimeout(function () { voiceController.abort(); }, 9000);
         try {
           var response = await fetch(CARTESIA_ENDPOINT, {
             method: 'POST',
@@ -1163,8 +1180,9 @@
               transcript: text,
               voice: { mode: 'id', id: CARTESIA_VOICE_ID },
               language: 'en',
-              output_format: { container: 'mp3', bit_rate: 128000, sample_rate: 44100 }
-            })
+              output_format: { container: 'mp3', bit_rate: 64000, sample_rate: 44100 }
+            }),
+            signal: voiceController.signal
           });
           if (!response.ok) {
             if (response.status === 401 || response.status === 403) throw new Error('invalid-key');
@@ -1196,6 +1214,8 @@
           }
           showToast(invalid ? 'Cartesia key কাজ করছে না—আবার key দিন।' : 'Cartesia voice unavailable—browser voice ব্যবহার করা হচ্ছে।');
           speakWithBrowser(text);
+        } finally {
+          clearTimeout(voiceTimeout);
         }
       }
 
@@ -1402,39 +1422,63 @@
         recognition.lang = 'en-GB';
         recognition.interimResults = true;
         recognition.continuous = false;
+        recognition.maxAlternatives = 3;
+
+        function bestSpeechAlternative(result) {
+          var best = result[0];
+          for (var i = 1; i < result.length; i++) {
+            if (result[i].confidence > best.confidence) best = result[i];
+          }
+          return best ? best.transcript.trim() : '';
+        }
 
         recognition.onstart = function () {
           isListening = true;
+          speechFinalText = '';
+          clearTimeout(speechStopTimer);
           micBtn.classList.add('listening');
           micBtn.setAttribute('aria-label', 'Stop listening');
           micHint.textContent = 'শুনছি… ইংরেজিতে বলুন';
           setStatus('Listening to you…', true);
         };
         recognition.onresult = function (event) {
-          var text = '';
-          var finalText = '';
-          for (var i = event.resultIndex; i < event.results.length; i++) {
-            text += event.results[i][0].transcript;
-            if (event.results[i].isFinal) finalText += event.results[i][0].transcript;
+          var finalParts = [];
+          var interimParts = [];
+          for (var i = 0; i < event.results.length; i++) {
+            var phrase = bestSpeechAlternative(event.results[i]);
+            if (!phrase) continue;
+            if (event.results[i].isFinal) finalParts.push(phrase);
+            else interimParts.push(phrase);
           }
-          input.value = text;
-          if (finalText.trim()) input.dataset.finalSpeech = 'true';
+          speechFinalText = finalParts.join(' ').trim();
+          input.value = [speechFinalText, interimParts.join(' ')].filter(Boolean).join(' ').trim();
+          if (speechFinalText) input.dataset.finalSpeech = 'true';
+        };
+        recognition.onspeechend = function () {
+          micHint.textContent = 'কথা ধরা হয়েছে… পাঠানো হচ্ছে';
+          clearTimeout(speechStopTimer);
+          speechStopTimer = setTimeout(function () {
+            if (isListening) recognition.stop();
+          }, 180);
         };
         recognition.onend = function () {
+          clearTimeout(speechStopTimer);
           isListening = false;
           micBtn.classList.remove('listening');
           micBtn.setAttribute('aria-label', 'Start speaking');
           micHint.textContent = 'মাইকে চাপ দিয়ে ইংরেজিতে বলুন';
           if (appMode === 'mock') updateMockHeader();
           else setStatus('Qwen 3.8 Max · ready', false);
-          if (input.dataset.finalSpeech === 'true' && input.value.trim()) {
+          if (input.value.trim()) {
             delete input.dataset.finalSpeech;
             submitMessage();
           }
         };
         recognition.onerror = function (event) {
+          clearTimeout(speechStopTimer);
           delete input.dataset.finalSpeech;
-          if (event.error !== 'aborted') showToast('মাইক্রোফোন শোনা যায়নি। অনুমতি দিন অথবা লিখে পাঠান।');
+          if (event.error !== 'aborted' && event.error !== 'no-speech') showToast('মাইক্রোফোন শোনা যায়নি। অনুমতি দিন অথবা লিখে পাঠান।');
+          if (event.error === 'no-speech') showToast('কথা শোনা যায়নি—মাইকের একটু কাছে থেকে আবার বলুন।');
         };
       } else {
         micBtn.disabled = true;
@@ -1446,6 +1490,7 @@
         if (isListening) recognition.stop();
         else {
           input.value = '';
+          speechFinalText = '';
           delete input.dataset.finalSpeech;
           try { recognition.start(); } catch (e) { showToast('মাইক্রোফোন আবার চালু করতে একটু অপেক্ষা করুন।'); }
         }
