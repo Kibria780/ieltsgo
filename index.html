@@ -1704,7 +1704,15 @@
         addMessage('assistant', '', true);
 
         try {
-          var result = await getPracticeFeedback(text);
+          var result;
+          try {
+            result = await getPracticeFeedback(text);
+          } catch (firstError) {
+            // Auto-retry once after a short pause (transient network/AI hiccup).
+            setStatus('আবার চেষ্টা করছি…', true);
+            await new Promise(function (r) { setTimeout(r, 2000); });
+            result = await getPracticeFeedback(text);
+          }
           removeTyping();
           addMessage('assistant', result.reply, false);
           transcript.push({ role: 'assistant', text: result.reply });
