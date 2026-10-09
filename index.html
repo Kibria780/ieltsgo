@@ -72,7 +72,11 @@
       -webkit-font-smoothing: antialiased;
     }
     button, input, select { font: inherit; }
-    button { color: inherit; }
+    button {
+      color: inherit;
+      touch-action: manipulation;
+      -webkit-tap-highlight-color: transparent;
+    }
     .bn { font-family: "Noto Sans Bengali", "Lexend", sans-serif; }
 
     .page {
@@ -380,6 +384,9 @@
       color: var(--surface);
       font-weight: 600;
       cursor: pointer;
+      -webkit-appearance: none;
+      appearance: none;
+      visibility: visible;
     }
     .send:disabled, .mic:disabled { opacity: .45; cursor: not-allowed; }
     .composer-foot {
@@ -397,6 +404,31 @@
       justify-content: flex-end;
       gap: 12px;
       flex-wrap: wrap;
+    }
+    .gender-switch {
+      display: inline-grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px;
+      padding: 3px;
+      border: 1px solid var(--line);
+      border-radius: 9px;
+      background: var(--surface-2);
+    }
+    .gender-btn {
+      min-height: 28px;
+      padding: 0 9px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--muted);
+      cursor: pointer;
+      font-size: .72rem;
+      font-weight: 600;
+    }
+    .gender-btn[aria-pressed="true"] {
+      background: var(--navy);
+      color: #fff;
+      box-shadow: var(--shadow-small);
     }
     .voice-toggle {
       border: 0;
@@ -1016,32 +1048,48 @@
     }
 
     @media (max-width: 640px) {
-      .page { gap: 13px; padding: 14px 10px calc(30px + env(safe-area-inset-bottom)); }
-      .intro { gap: 10px; margin: 1px 3px 3px; }
+      .page { gap: 12px; padding: 10px 9px calc(24px + env(safe-area-inset-bottom)); }
+      .intro { gap: 7px; margin: 0 3px 2px; }
       .intro h1 {
         max-width: 390px;
-        font-size: clamp(2.35rem, 12vw, 3.05rem);
-        line-height: .96;
+        font-size: clamp(1.9rem, 9vw, 2.35rem);
+        line-height: .97;
       }
       .intro-copy {
         padding: 0;
         border-left: 0;
-        font-size: .82rem;
-        line-height: 1.52;
+        font-size: .78rem;
+        line-height: 1.42;
       }
-      .conversation { border-radius: 16px; }
-      .panel-head { min-height: 52px; padding: 13px 15px; border-radius: 15px 15px 0 0; }
-      .messages { min-height: 160px; padding: 17px 12px; }
-      .message { max-width: 93%; }
-      .composer { padding: 11px; }
+      .conversation { min-height: 0; border-radius: 16px; overflow: hidden; }
+      .panel-head { min-height: 50px; padding: 12px 14px; border-radius: 15px 15px 0 0; }
+      .messages {
+        height: clamp(180px, 31svh, 245px);
+        min-height: 180px;
+        overflow-y: auto;
+        overscroll-behavior: contain;
+        padding: 15px 11px;
+      }
+      .message { max-width: 94%; }
+      .composer { padding: 9px; }
       .voice-row {
-        grid-template-columns: auto minmax(0, 1fr);
+        grid-template-columns: 42px minmax(0, 1fr) 70px;
+        width: 100%;
+        margin: 0;
         padding: 4px;
-        gap: 6px;
+        gap: 4px;
       }
-      .send { grid-column: 1 / -1; width: 100%; height: 43px; }
-      .text-input, .mic { height: 46px; }
-      .mic { width: 46px; }
+      .send {
+        display: block;
+        grid-column: auto;
+        width: 70px;
+        min-width: 70px;
+        height: 42px;
+        padding: 0 8px;
+        font-size: .86rem;
+      }
+      .text-input { min-width: 0; height: 42px; padding: 0 7px; font-size: 16px; }
+      .mic { width: 42px; height: 42px; }
       .setup { border-radius: 12px; gap: 12px; padding: 13px; }
       .coach { border-radius: 16px; }
       .topics { gap: 6px; }
@@ -1103,19 +1151,23 @@
         </div>
 
         <div class="composer">
-          <div class="voice-row">
+          <form class="voice-row" id="composerForm">
             <button class="mic" id="micBtn" type="button" aria-label="Start speaking">
               <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
                 <rect x="8" y="3" width="8" height="12" rx="4" stroke="currentColor" stroke-width="2"/>
                 <path d="M5 11a7 7 0 0 0 14 0M12 18v3M9 21h6" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
               </svg>
             </button>
-            <input class="text-input" id="textInput" type="text" autocomplete="off" placeholder="Speak, or type your answer in English…" aria-label="Your English answer" />
-            <button class="send" id="sendBtn" type="button">Send</button>
-          </div>
+            <input class="text-input" id="textInput" type="text" autocomplete="off" autocapitalize="sentences" enterkeyhint="send" spellcheck="true" placeholder="Speak, or type your answer in English…" aria-label="Your English answer" />
+            <button class="send" id="sendBtn" type="submit">Send</button>
+          </form>
           <div class="composer-foot">
             <span class="bn" id="micHint">মাইকে চাপ দিয়ে ইংরেজিতে বলুন</span>
             <div class="voice-controls">
+              <div class="gender-switch" id="genderSwitch" role="group" aria-label="Coach voice gender">
+                <button class="gender-btn" type="button" aria-pressed="true" data-gender="female">Female 👩</button>
+                <button class="gender-btn" type="button" aria-pressed="false" data-gender="male">Male 👨</button>
+              </div>
               <button class="voice-toggle" id="voiceToggle" type="button" aria-pressed="true">Voice reply · On</button>
             </div>
           </div>
@@ -1162,6 +1214,7 @@
       var messagesEl = document.getElementById('messages');
       var feedbackEl = document.getElementById('feedback');
       var input = document.getElementById('textInput');
+      var composerForm = document.getElementById('composerForm');
       var sendBtn = document.getElementById('sendBtn');
       var micBtn = document.getElementById('micBtn');
       var micHint = document.getElementById('micHint');
@@ -1170,6 +1223,7 @@
       var turnCount = document.getElementById('turnCount');
       var levelSelect = document.getElementById('level');
       var voiceToggle = document.getElementById('voiceToggle');
+      var genderSwitch = document.getElementById('genderSwitch');
       var toast = document.getElementById('toast');
       var scoreRing = document.getElementById('scoreRing');
       var scoreValue = document.getElementById('scoreValue');
@@ -1183,6 +1237,7 @@
       var appMode = 'practice';
       var isBusy = false;
       var voiceOn = true;
+      var selectedVoiceGender = 'female';
       var turns = 0;
       var transcript = [{ role: 'assistant', text: 'Hi! Let’s practise everyday English. What did you do this morning?' }];
       var recognition = null;
@@ -1307,6 +1362,14 @@
         statusText.textContent = text;
         statusDot.style.background = active ? 'var(--accent)' : 'var(--green)';
         statusDot.style.boxShadow = active ? '0 0 0 5px var(--accent-soft)' : '0 0 0 5px var(--green-soft)';
+      }
+
+      function setComposerBusy(active, label) {
+        composerForm.setAttribute('aria-busy', String(active));
+        sendBtn.disabled = active;
+        sendBtn.textContent = active ? (label || 'Sending…') : 'Send';
+        input.readOnly = active;
+        micBtn.disabled = active;
       }
 
       function formatTime(seconds) {
@@ -1443,7 +1506,7 @@
           var response = await fetch(TTS_ENDPOINT, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text }),
+            body: JSON.stringify({ text: text, voice_gender: selectedVoiceGender }),
             signal: voiceController.signal
           });
           if (!response.ok) throw new Error('tts-' + response.status);
@@ -1452,6 +1515,7 @@
           var audioBlob = new Blob([audioBytes], { type: 'audio/mpeg' });
           ttsAudioUrl = URL.createObjectURL(audioBlob);
           ttsAudio = new Audio(ttsAudioUrl);
+          ttsAudio.playbackRate = 1.15;
           ttsAudio.onended = function () {
             if (ttsAudioUrl) URL.revokeObjectURL(ttsAudioUrl);
             ttsAudioUrl = '';
@@ -1567,8 +1631,7 @@
         if (isListening && recognition) recognition.stop();
         input.value = '';
         isBusy = true;
-        sendBtn.disabled = true;
-        micBtn.disabled = true;
+        setComposerBusy(true, 'Sending…');
         addMessage('user', text, false);
         transcript.push({ role: 'user', text: text });
         turns += 1;
@@ -1585,8 +1648,7 @@
             updateMockHeader();
             speak(transition + next.text);
             isBusy = false;
-            sendBtn.disabled = false;
-            micBtn.disabled = false;
+            setComposerBusy(false);
             input.focus();
           }, 350);
           return;
@@ -1616,7 +1678,10 @@
         }
         mockStarted = false;
         isBusy = false;
+        composerForm.setAttribute('aria-busy', 'false');
+        input.readOnly = false;
         sendBtn.disabled = true;
+        sendBtn.textContent = 'Finished';
         micBtn.disabled = true;
       }
 
@@ -1630,8 +1695,7 @@
         if (isListening && recognition) recognition.stop();
         input.value = '';
         isBusy = true;
-        sendBtn.disabled = true;
-        micBtn.disabled = true;
+        setComposerBusy(true, 'Checking…');
         addMessage('user', text, false);
         transcript.push({ role: 'user', text: text });
         turns += 1;
@@ -1650,20 +1714,81 @@
         } catch (error) {
           removeTyping();
           var rateLimited = error && error.message === 'ai-rate-limit';
-          addMessage('assistant', 'I could not reach the AI coach just now. Please send your answer again.', false);
+          input.value = text;
+          addMessage('assistant', 'I could not reach the AI coach just now. Your answer is still here—tap Send to try again.', false);
           setStatus('AI coach unavailable', true);
           showToast(rateLimited
             ? 'AI coach rate limit হয়েছে—একটু পরে আবার পাঠান।'
-            : 'AI coach সংযোগ পাওয়া যায়নি—ইন্টারনেট দেখে আবার পাঠান।');
+            : 'AI coach সংযোগ পাওয়া যায়নি—আপনার লেখা রাখা হয়েছে, আবার Send চাপুন।');
         } finally {
           isBusy = false;
-          sendBtn.disabled = false;
-          micBtn.disabled = !recognition;
-          input.focus();
+          setComposerBusy(false);
+          input.focus({ preventScroll: true });
         }
       }
 
       var SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+      var isStartingRecognition = false;
+      var speechStartTimer = null;
+      var recognitionFailed = false;
+
+      function resetVoiceInputUi() {
+        clearTimeout(speechStartTimer);
+        clearTimeout(speechStopTimer);
+        isStartingRecognition = false;
+        isListening = false;
+        micBtn.classList.remove('listening');
+        micBtn.setAttribute('aria-label', 'Start speaking');
+        micHint.textContent = 'মাইকে চাপ দিয়ে ইংরেজিতে বলুন';
+        if (appMode === 'mock') updateMockHeader();
+        else setStatus('AI coach · ready', false);
+      }
+
+      function useKeyboardDictationFallback(message) {
+        resetVoiceInputUi();
+        micBtn.setAttribute('aria-label', 'Use keyboard voice typing');
+        micHint.textContent = 'কীবোর্ডের মাইক চেপে বলুন, তারপর Send চাপুন';
+        input.focus({ preventScroll: false });
+        showToast(message || 'এই ব্রাউজারে সরাসরি voice input নেই। কীবোর্ডের mic দিয়ে বলুন, তারপর Send চাপুন।');
+      }
+
+      async function requestMicrophoneAccess() {
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) return;
+        var stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        stream.getTracks().forEach(function (track) { track.stop(); });
+      }
+
+      async function startVoiceInput() {
+        if (!recognition || isStartingRecognition || isListening) return;
+        isStartingRecognition = true;
+        recognitionFailed = false;
+        input.value = '';
+        speechFinalText = '';
+        delete input.dataset.finalSpeech;
+        micBtn.classList.add('listening');
+        micBtn.setAttribute('aria-label', 'Starting microphone');
+        micHint.textContent = 'মাইক্রোফোন চালু হচ্ছে… অনুমতি চাইলে Allow চাপুন';
+        setStatus('Starting microphone…', true);
+
+        try {
+          if (!window.isSecureContext) throw new Error('insecure-context');
+          await requestMicrophoneAccess();
+          recognition.start();
+          speechStartTimer = setTimeout(function () {
+            if (!isListening) {
+              try { recognition.abort(); } catch (ignore) {}
+              useKeyboardDictationFallback('মাইক্রোফোন চালু হতে দেরি হচ্ছে। Chrome-এ microphone permission Allow করে আবার চেষ্টা করুন।');
+            }
+          }, 5000);
+        } catch (error) {
+          recognitionFailed = true;
+          var permissionDenied = error && (error.name === 'NotAllowedError' || error.name === 'SecurityError');
+          useKeyboardDictationFallback(permissionDenied
+            ? 'Microphone permission বন্ধ আছে। Browser settings থেকে Microphone Allow করে আবার mic চাপুন।'
+            : 'Voice input চালু হয়নি। Chrome-এ microphone permission Allow করে আবার চেষ্টা করুন।');
+        }
+      }
+
       if (SpeechRecognition) {
         recognition = new SpeechRecognition();
         recognition.lang = 'en-GB';
@@ -1680,6 +1805,8 @@
         }
 
         recognition.onstart = function () {
+          clearTimeout(speechStartTimer);
+          isStartingRecognition = false;
           isListening = true;
           speechFinalText = '';
           clearTimeout(speechStopTimer);
@@ -1709,42 +1836,62 @@
           }, 180);
         };
         recognition.onend = function () {
-          clearTimeout(speechStopTimer);
-          isListening = false;
-          micBtn.classList.remove('listening');
-          micBtn.setAttribute('aria-label', 'Start speaking');
-          micHint.textContent = 'মাইকে চাপ দিয়ে ইংরেজিতে বলুন';
-          if (appMode === 'mock') updateMockHeader();
-          else setStatus('AI coach · ready', false);
-          if (input.value.trim()) {
+          if (recognitionFailed) {
+            clearTimeout(speechStartTimer);
+            clearTimeout(speechStopTimer);
+            isStartingRecognition = false;
+            isListening = false;
+            micBtn.classList.remove('listening');
+            return;
+          }
+          var shouldSubmit = input.value.trim();
+          resetVoiceInputUi();
+          if (shouldSubmit) {
             delete input.dataset.finalSpeech;
             submitMessage();
           }
         };
         recognition.onerror = function (event) {
+          recognitionFailed = true;
+          clearTimeout(speechStartTimer);
           clearTimeout(speechStopTimer);
           delete input.dataset.finalSpeech;
-          if (event.error !== 'aborted' && event.error !== 'no-speech') showToast('মাইক্রোফোন শোনা যায়নি। অনুমতি দিন অথবা লিখে পাঠান।');
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed' || event.error === 'audio-capture') {
+            useKeyboardDictationFallback('Microphone permission বন্ধ আছে। Browser settings থেকে Microphone Allow করে আবার mic চাপুন।');
+            return;
+          }
+          resetVoiceInputUi();
           if (event.error === 'no-speech') showToast('কথা শোনা যায়নি—মাইকের একটু কাছে থেকে আবার বলুন।');
+          else if (event.error !== 'aborted') showToast('মাইক্রোফোন শোনা যায়নি। Internet connection দেখে আবার চেষ্টা করুন।');
         };
       } else {
-        micBtn.disabled = true;
-        micHint.textContent = 'এই ব্রাউজারে ভয়েস ইনপুট নেই—লিখে অনুশীলন করুন';
+        micBtn.disabled = false;
+        micBtn.setAttribute('aria-label', 'Use keyboard voice typing');
+        micHint.textContent = 'কীবোর্ডের মাইক চেপে বলুন, তারপর Send চাপুন';
       }
 
       micBtn.addEventListener('click', function () {
-        if (!recognition || isBusy) return;
-        if (isListening) recognition.stop();
-        else {
-          input.value = '';
-          speechFinalText = '';
-          delete input.dataset.finalSpeech;
-          try { recognition.start(); } catch (e) { showToast('মাইক্রোফোন আবার চালু করতে একটু অপেক্ষা করুন।'); }
+        if (isBusy) return;
+        if (!recognition) {
+          useKeyboardDictationFallback();
+          return;
         }
+        if (isListening) recognition.stop();
+        else startVoiceInput();
       });
-      sendBtn.addEventListener('click', submitMessage);
+      composerForm.addEventListener('submit', function (event) {
+        event.preventDefault();
+        submitMessage();
+      });
+      sendBtn.addEventListener('click', function (event) {
+        event.preventDefault();
+        submitMessage();
+      });
       input.addEventListener('keydown', function (event) {
-        if (event.key === 'Enter') { event.preventDefault(); submitMessage(); }
+        if (event.key === 'Enter' && !event.isComposing) {
+          event.preventDefault();
+          submitMessage();
+        }
       });
 
       document.getElementById('topics').addEventListener('click', function (event) {
@@ -1754,6 +1901,16 @@
         button.setAttribute('aria-pressed', 'true');
         selectedTopic = button.dataset.topic;
         showToast('Topic changed to ' + selectedTopic + '.');
+      });
+
+      genderSwitch.addEventListener('click', function (event) {
+        var button = event.target.closest('.gender-btn');
+        if (!button) return;
+        selectedVoiceGender = button.dataset.gender;
+        genderSwitch.querySelectorAll('.gender-btn').forEach(function (option) {
+          option.setAttribute('aria-pressed', String(option === button));
+        });
+        stopVoicePlayback();
       });
 
       voiceToggle.addEventListener('click', function () {
@@ -1785,8 +1942,11 @@
         feedbackEl.innerHTML = '<div class="empty-feedback"><div><div class="empty-mark">✓</div><strong>Fresh session, fresh start.</strong><br><span class="bn">উত্তর দিন—তারপর কোচের নোট এখানে দেখাবে।</span></div></div>';
         setStatus('AI coach · ready', false);
         input.disabled = false;
+        input.readOnly = false;
+        composerForm.setAttribute('aria-busy', 'false');
         sendBtn.disabled = false;
-        micBtn.disabled = !recognition;
+        sendBtn.textContent = 'Send';
+        micBtn.disabled = false;
       }
 
       function prepareMockTest() {
@@ -1805,7 +1965,10 @@
         newSessionBtn.textContent = 'Start mock test';
         input.value = '';
         input.disabled = true;
+        input.readOnly = false;
+        composerForm.setAttribute('aria-busy', 'false');
         sendBtn.disabled = true;
+        sendBtn.textContent = 'Send';
         micBtn.disabled = true;
         updateMockHeader();
         renderMockProgress();
@@ -1824,8 +1987,11 @@
         scoreLabel.textContent = 'Test in progress';
         scoreSub.textContent = 'Feedback hidden until the end';
         input.disabled = false;
+        input.readOnly = false;
+        composerForm.setAttribute('aria-busy', 'false');
         sendBtn.disabled = false;
-        micBtn.disabled = !recognition;
+        sendBtn.textContent = 'Send';
+        micBtn.disabled = false;
         newSessionBtn.textContent = 'Restart test';
         var question = mockQuestions[0];
         addMessage('assistant', 'Part 1. ' + question.text, false);
