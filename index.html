@@ -1795,7 +1795,7 @@
         recognition = new SpeechRecognition();
         recognition.lang = 'en-US';
         recognition.interimResults = true;
-        recognition.continuous = false;
+        recognition.continuous = true;
         recognition.maxAlternatives = 3;
 
         function bestSpeechAlternative(result) {
@@ -1814,10 +1814,12 @@
           clearTimeout(speechStopTimer);
           micBtn.classList.add('listening');
           micBtn.setAttribute('aria-label', 'Stop listening');
-          micHint.textContent = 'শুনছি… ইংরেজিতে বলুন';
+          micHint.textContent = 'শুনছি… যত খুশি বলুন, শেষ হলে mic-এ আবার চাপুন';
           setStatus('Listening to you…', true);
         };
         recognition.onresult = function (event) {
+          // Speech resumed — cancel any pending auto-stop.
+          clearTimeout(speechStopTimer);
           var finalParts = [];
           var interimParts = [];
           for (var i = 0; i < event.results.length; i++) {
@@ -1831,11 +1833,12 @@
           if (speechFinalText) input.dataset.finalSpeech = 'true';
         };
         recognition.onspeechend = function () {
-          micHint.textContent = 'কথা ধরা হয়েছে… পাঠানো হচ্ছে';
+          // Don't stop immediately — user may pause between sentences.
+          // Auto-stop only after 3s of complete silence; tapping mic stops sooner.
           clearTimeout(speechStopTimer);
           speechStopTimer = setTimeout(function () {
             if (isListening) recognition.stop();
-          }, 180);
+          }, 3000);
         };
         recognition.onend = function () {
           if (recognitionFailed) {
