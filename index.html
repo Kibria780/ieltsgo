@@ -10,7 +10,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://ieltsgo-proxy.vercel.app" crossorigin />
   <link rel="preconnect" href="https://api.cartesia.ai" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Lexend:wght@400;500;600;700&family=Noto+Sans+Bengali:wght@400;500;600&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Noto+Sans+Bengali:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     :root {
       color-scheme: light dark;
@@ -771,6 +771,284 @@
     @media (prefers-reduced-motion: reduce) {
       *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .001ms !important; animation-iteration-count: 1 !important; }
     }
+
+    /* Professional interface refinement */
+    :root {
+      --bg: #eef3f7;
+      --surface: #ffffff;
+      --surface-2: #f3f6f9;
+      --surface-3: #e7edf3;
+      --ink: #10243b;
+      --muted: #5b6b7b;
+      --line: #d6e0e8;
+      --accent: #d7193f;
+      --accent-strong: #a80f2d;
+      --accent-soft: #fde7ec;
+      --green: #087a61;
+      --green-soft: #dcf2eb;
+      --amber: #986312;
+      --amber-soft: #fff0cf;
+      --danger: #bb263e;
+      --danger-soft: #fde7ec;
+      --navy: #102f4f;
+      --blue: #176da5;
+      --shadow: 0 22px 55px rgba(22, 52, 79, .11);
+      --shadow-small: 0 7px 20px rgba(22, 52, 79, .075);
+      --radius-xl: 22px;
+      --radius-lg: 16px;
+      --radius-md: 12px;
+    }
+
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #0b1420;
+        --surface: #121f2c;
+        --surface-2: #192a3a;
+        --surface-3: #24384a;
+        --ink: #f1f6fa;
+        --muted: #a7b7c5;
+        --line: #2c4255;
+        --accent: #ff5473;
+        --accent-strong: #ff8499;
+        --accent-soft: #4b1c2a;
+        --green: #68d6b5;
+        --green-soft: #153c34;
+        --amber: #efbf69;
+        --amber-soft: #45361c;
+        --danger: #ff879a;
+        --danger-soft: #4b1c2a;
+        --navy: #0b1825;
+        --blue: #6cbce9;
+        --shadow: 0 22px 55px rgba(0, 0, 0, .34);
+        --shadow-small: 0 7px 20px rgba(0, 0, 0, .24);
+      }
+    }
+
+    body {
+      background: var(--bg);
+      font-family: "DM Sans", "Noto Sans Bengali", sans-serif;
+    }
+    .bn { font-family: "Noto Sans Bengali", "DM Sans", sans-serif; }
+    .page { width: min(1320px, 100%); padding-top: clamp(24px, 4.2vw, 58px); }
+
+    .intro {
+      grid-template-columns: minmax(0, 1.35fr) minmax(320px, .65fr);
+      align-items: center;
+      gap: 44px;
+      margin: 0 0 30px;
+      padding: 0 4px;
+    }
+    .intro h1 {
+      max-width: 790px;
+      font-family: "Newsreader", Georgia, serif;
+      font-size: clamp(3rem, 5.5vw, 5.05rem);
+      font-weight: 600;
+      line-height: .95;
+      letter-spacing: -.045em;
+    }
+    .intro h1 span { color: var(--accent); }
+    .intro-copy {
+      padding-left: 23px;
+      border-left: 3px solid var(--accent);
+      color: var(--muted);
+      font-size: clamp(.95rem, 1.15vw, 1.07rem);
+      line-height: 1.72;
+    }
+
+    .setup {
+      grid-template-columns: 1fr .9fr 1.8fr auto;
+      gap: 18px;
+      margin-bottom: 18px;
+      padding: 17px 18px;
+      border-color: color-mix(in srgb, var(--line) 88%, var(--navy));
+      border-radius: 14px;
+      box-shadow: var(--shadow-small);
+    }
+    .field-label {
+      margin-bottom: 7px;
+      color: color-mix(in srgb, var(--muted) 88%, var(--navy));
+      font-size: .7rem;
+      letter-spacing: .09em;
+    }
+    .mode-switch, select {
+      min-height: 46px;
+      border-radius: 9px;
+    }
+    .mode-btn { border-radius: 6px; font-size: .79rem; }
+    .mode-btn[aria-pressed="true"] { background: var(--navy); color: #fff; }
+    .topics { flex-wrap: wrap; overflow: visible; }
+    .chip {
+      min-height: 40px;
+      padding: 0 13px;
+      border-radius: 8px;
+      font-size: .79rem;
+      font-weight: 600;
+    }
+    .chip[aria-pressed="true"] { background: var(--blue); border-color: var(--blue); }
+    @media (prefers-color-scheme: dark) {
+      .chip[aria-pressed="true"] { color: #fff; }
+    }
+    .small-action {
+      min-height: 46px;
+      border-radius: 9px;
+      background: transparent;
+      border: 1px solid var(--line);
+      font-weight: 600;
+    }
+    .small-action:hover { background: var(--surface-2); }
+
+    .workspace {
+      grid-template-columns: minmax(0, 1fr) minmax(315px, 385px);
+      gap: 18px;
+    }
+    .conversation, .coach {
+      border-color: color-mix(in srgb, var(--line) 88%, var(--navy));
+      box-shadow: var(--shadow);
+    }
+    .conversation {
+      min-height: 665px;
+      border-radius: 19px;
+    }
+    .panel-head {
+      min-height: 58px;
+      padding: 16px 22px;
+      border-bottom: 0;
+      background: var(--navy);
+      color: #fff;
+    }
+    .panel-head .dot {
+      background: #63ddb6;
+      box-shadow: 0 0 0 4px rgba(99, 221, 182, .18);
+    }
+    .panel-head .turn-count { color: rgba(255,255,255,.68); }
+    .status { font-size: .82rem; letter-spacing: .01em; }
+    .messages {
+      height: 448px;
+      padding: 27px clamp(18px, 3vw, 33px);
+      gap: 20px;
+      background: color-mix(in srgb, var(--surface) 96%, var(--blue));
+    }
+    .message { grid-template-columns: 30px minmax(0, auto); gap: 11px; max-width: 82%; }
+    .message.user { grid-template-columns: minmax(0, auto) 30px; }
+    .avatar {
+      width: 30px;
+      height: 30px;
+      border-radius: 8px;
+      background: var(--green-soft);
+      font-size: .66rem;
+    }
+    .user .avatar { background: var(--accent-soft); }
+    .bubble {
+      padding: 13px 16px;
+      border-radius: 4px 15px 15px 15px;
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      font-size: .93rem;
+    }
+    .user .bubble {
+      border: 0;
+      border-radius: 15px 4px 15px 15px;
+      background: var(--navy);
+      color: #fff;
+    }
+    .composer { padding: 18px; background: var(--surface); }
+    .voice-row {
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      padding: 5px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface-2);
+    }
+    .mic {
+      width: 46px;
+      height: 46px;
+      border-radius: 10px;
+      box-shadow: none;
+    }
+    .mic svg { width: 21px; height: 21px; }
+    .text-input {
+      height: 46px;
+      padding: 0 11px;
+      border: 0;
+      border-radius: 0;
+      background: transparent;
+    }
+    .send {
+      min-width: 86px;
+      height: 46px;
+      border-radius: 9px;
+      background: var(--navy);
+    }
+    .composer-foot { margin-top: 11px; padding: 0 3px; }
+    .voice-provider { color: var(--accent); }
+    .voice-key-panel { border-radius: 10px; }
+
+    .coach {
+      min-height: 665px;
+      border-radius: 19px;
+    }
+    .coach-top {
+      padding: 23px 21px 19px;
+      background: color-mix(in srgb, var(--surface) 93%, var(--green-soft));
+    }
+    .coach-top h2 {
+      font-family: "Newsreader", Georgia, serif;
+      font-size: 1.55rem;
+      font-weight: 600;
+      letter-spacing: -.02em;
+    }
+    .score-ring { width: 62px; height: 62px; }
+    .feedback { padding: 18px; }
+    .empty-mark { border-radius: 10px; }
+    .correction { border-radius: 10px; border: 1px solid var(--line); }
+    .hint-strip {
+      margin-top: 18px;
+      border: 1px solid color-mix(in srgb, var(--amber) 18%, transparent);
+      border-radius: 12px;
+    }
+    .key { border-radius: 8px; }
+
+    @media (max-width: 900px) {
+      .intro { grid-template-columns: 1fr; gap: 18px; }
+      .intro-copy { margin: 0; max-width: 720px; }
+      .setup { grid-template-columns: 1fr 1fr; }
+      .conversation, .coach { min-height: auto; }
+      .conversation { min-height: 630px; }
+    }
+
+    @media (max-width: 640px) {
+      .page { gap: 13px; padding: 14px 10px calc(30px + env(safe-area-inset-bottom)); }
+      .intro { gap: 10px; margin: 1px 3px 3px; }
+      .intro h1 {
+        max-width: 390px;
+        font-size: clamp(2.35rem, 12vw, 3.05rem);
+        line-height: .96;
+      }
+      .intro-copy {
+        padding: 0;
+        border-left: 0;
+        font-size: .82rem;
+        line-height: 1.52;
+      }
+      .conversation { border-radius: 16px; }
+      .panel-head { min-height: 52px; padding: 13px 15px; border-radius: 15px 15px 0 0; }
+      .messages { min-height: 160px; padding: 17px 12px; }
+      .message { max-width: 93%; }
+      .composer { padding: 11px; }
+      .voice-row {
+        grid-template-columns: auto minmax(0, 1fr);
+        padding: 4px;
+        gap: 6px;
+      }
+      .send { grid-column: 1 / -1; width: 100%; height: 43px; }
+      .text-input, .mic { height: 46px; }
+      .mic { width: 46px; }
+      .setup { border-radius: 12px; gap: 12px; padding: 13px; }
+      .coach { border-radius: 16px; }
+      .topics { gap: 6px; }
+      .chip { min-height: 36px; padding: 0 10px; font-size: .76rem; }
+      .hint-strip { padding: 14px; }
+    }
   </style>
 </head>
 <body>
@@ -814,7 +1092,7 @@
     <section class="workspace">
       <article class="conversation" aria-label="Live English conversation">
         <header class="panel-head">
-          <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">Qwen 3.8 Max · ready</span></div>
+          <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">AI coach · ready</span></div>
           <span class="turn-count" id="turnCount">0 turns</span>
         </header>
 
@@ -882,7 +1160,7 @@
       <div class="key">TIP</div>
       <div>
         <strong>Use complete sentences—even when you are unsure.</strong>
-        <p class="bn">Qwen ইংরেজি বুঝে উত্তর ও বাংলায় correction দেবে; Cartesia key দিলে শুধু সেই উত্তরের natural voice তৈরি হবে।</p>
+        <p class="bn">AI coach ইংরেজি বুঝে উত্তর ও বাংলায় correction দেবে; Cartesia key দিলে শুধু সেই উত্তরের natural voice তৈরি হবে।</p>
       </div>
     </section>
   </main>
@@ -1399,7 +1677,7 @@
           transcript.push({ role: 'assistant', text: result.reply });
           renderFeedback(result);
           speak(result.reply);
-          setStatus('Qwen 3.8 Max · ready', false);
+          setStatus('AI coach · ready', false);
         } catch (error) {
           removeTyping();
           var rateLimited = error && error.message === 'ai-rate-limit';
@@ -1468,7 +1746,7 @@
           micBtn.setAttribute('aria-label', 'Start speaking');
           micHint.textContent = 'মাইকে চাপ দিয়ে ইংরেজিতে বলুন';
           if (appMode === 'mock') updateMockHeader();
-          else setStatus('Qwen 3.8 Max · ready', false);
+          else setStatus('AI coach · ready', false);
           if (input.value.trim()) {
             delete input.dataset.finalSpeech;
             submitMessage();
@@ -1579,7 +1857,7 @@
         scoreLabel.textContent = 'Waiting for your answer';
         scoreSub.textContent = 'Grammar & clarity';
         feedbackEl.innerHTML = '<div class="empty-feedback"><div><div class="empty-mark">✓</div><strong>Fresh session, fresh start.</strong><br><span class="bn">উত্তর দিন—তারপর কোচের নোট এখানে দেখাবে।</span></div></div>';
-        setStatus('Qwen 3.8 Max · ready', false);
+        setStatus('AI coach · ready', false);
         input.disabled = false;
         sendBtn.disabled = false;
         micBtn.disabled = !recognition;
