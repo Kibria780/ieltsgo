@@ -9,7 +9,6 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link rel="preconnect" href="https://ieltsgo-proxy.vercel.app" crossorigin />
-  <link rel="preconnect" href="https://api.cartesia.ai" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Newsreader:opsz,wght@6..72,500;6..72,600&family=Noto+Sans+Bengali:wght@400;500;600&display=swap" rel="stylesheet" />
   <style>
     :root {
@@ -1118,16 +1117,7 @@
             <span class="bn" id="micHint">মাইকে চাপ দিয়ে ইংরেজিতে বলুন</span>
             <div class="voice-controls">
               <button class="voice-toggle" id="voiceToggle" type="button" aria-pressed="true">Voice reply · On</button>
-              <button class="voice-provider" id="voiceProviderBtn" type="button" aria-expanded="false" aria-controls="voiceKeyPanel">Add Cartesia key</button>
             </div>
-          </div>
-          <div class="voice-key-panel" id="voiceKeyPanel" hidden>
-            <label class="field-label" for="cartesiaKey">CARTESIA VOICE · THIS TAB ONLY</label>
-            <div class="voice-key-row">
-              <input class="voice-key-input" id="cartesiaKey" type="password" inputmode="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Paste your Cartesia API key" aria-describedby="cartesiaStatus" />
-              <button class="voice-key-action" id="cartesiaConnect" type="button">Use Cartesia</button>
-            </div>
-            <p class="voice-key-status bn" id="cartesiaStatus">এই key শুধু natural voice output-এর জন্য; AI connection-এর জন্য নয়। Keyটি tab বন্ধ বা reload করলে মুছে যাবে।</p>
           </div>
         </div>
       </article>
@@ -1160,7 +1150,7 @@
       <div class="key">TIP</div>
       <div>
         <strong>Use complete sentences—even when you are unsure.</strong>
-        <p class="bn">AI coach ইংরেজি বুঝে উত্তর ও বাংলায় correction দেবে; Cartesia key দিলে শুধু সেই উত্তরের natural voice তৈরি হবে।</p>
+        <p class="bn">AI coach ইংরেজি বুঝে উত্তর ও বাংলায় correction দেবে; প্রতিটি উত্তর natural voice-এ শোনাবে।</p>
       </div>
     </section>
   </main>
@@ -1188,11 +1178,6 @@
       var newSessionBtn = document.getElementById('newSession');
       var topicLabel = document.getElementById('topicLabel');
       var topicField = document.querySelector('.topic-field');
-      var voiceProviderBtn = document.getElementById('voiceProviderBtn');
-      var voiceKeyPanel = document.getElementById('voiceKeyPanel');
-      var cartesiaKeyInput = document.getElementById('cartesiaKey');
-      var cartesiaConnect = document.getElementById('cartesiaConnect');
-      var cartesiaStatus = document.getElementById('cartesiaStatus');
 
       var selectedTopic = 'Daily life';
       var appMode = 'practice';
@@ -1209,11 +1194,9 @@
       var mockQuestionIndex = 0;
       var mockStartedAt = 0;
       var mockTimer = null;
-      var cartesiaApiKey = '';
-      var cartesiaAudio = null;
-      var cartesiaAudioUrl = '';
-      var CARTESIA_ENDPOINT = 'https://api.cartesia.ai/tts/bytes';
-      var CARTESIA_VOICE_ID = '694f9389-aac1-45b6-b726-9d9369183238';
+      var ttsAudio = null;
+      var ttsAudioUrl = '';
+      var TTS_ENDPOINT = 'https://ieltsgo-proxy.vercel.app/api/tts';
       var mockQuestions = [
         { part: 1, text: 'Let’s talk about your home. What kind of place do you live in?', hint: 'Short personal questions' },
         { part: 1, text: 'What do you like most about the area where you live?', hint: 'Short personal questions' },
@@ -1402,13 +1385,13 @@
 
       function stopVoicePlayback() {
         if ('speechSynthesis' in window) window.speechSynthesis.cancel();
-        if (cartesiaAudio) {
-          cartesiaAudio.pause();
-          cartesiaAudio = null;
+        if (ttsAudio) {
+          ttsAudio.pause();
+          ttsAudio = null;
         }
-        if (cartesiaAudioUrl) {
-          URL.revokeObjectURL(cartesiaAudioUrl);
-          cartesiaAudioUrl = '';
+        if (ttsAudioUrl) {
+          URL.revokeObjectURL(ttsAudioUrl);
+          ttsAudioUrl = '';
         }
       }
 
@@ -1437,61 +1420,47 @@
       async function speak(text) {
         if (!voiceOn) return;
         stopVoicePlayback();
-        if (!cartesiaApiKey) {
-          speakWithBrowser(text);
-          return;
-        }
 
-        cartesiaStatus.textContent = 'Cartesia voice তৈরি হচ্ছে…';
         var voiceController = new AbortController();
         var voiceTimeout = setTimeout(function () { voiceController.abort(); }, 9000);
+        var fallbackStarted = false;
+        function useBrowserFallback() {
+          if (fallbackStarted) return;
+          fallbackStarted = true;
+          if (ttsAudio) {
+            ttsAudio.pause();
+            ttsAudio = null;
+          }
+          if (ttsAudioUrl) {
+            URL.revokeObjectURL(ttsAudioUrl);
+            ttsAudioUrl = '';
+          }
+          showToast('Natural voice unavailable—browser voice ব্যবহার করা হচ্ছে।');
+          speakWithBrowser(text);
+        }
+
         try {
-          var response = await fetch(CARTESIA_ENDPOINT, {
+          var response = await fetch(TTS_ENDPOINT, {
             method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Cartesia-Version': '2025-04-16',
-              'X-API-Key': cartesiaApiKey
-            },
-            body: JSON.stringify({
-              model_id: 'sonic-2',
-              transcript: text,
-              voice: { mode: 'id', id: CARTESIA_VOICE_ID },
-              language: 'en',
-              output_format: { container: 'mp3', bit_rate: 64000, sample_rate: 44100 }
-            }),
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ text: text }),
             signal: voiceController.signal
           });
-          if (!response.ok) {
-            if (response.status === 401 || response.status === 403) throw new Error('invalid-key');
-            if (response.status === 429) throw new Error('rate-limit');
-            throw new Error('cartesia-' + response.status);
-          }
-          var audioBlob = await response.blob();
-          if (!audioBlob.size) throw new Error('empty-audio');
-          cartesiaAudioUrl = URL.createObjectURL(audioBlob);
-          cartesiaAudio = new Audio(cartesiaAudioUrl);
-          cartesiaAudio.onended = function () {
-            if (cartesiaAudioUrl) URL.revokeObjectURL(cartesiaAudioUrl);
-            cartesiaAudioUrl = '';
-            cartesiaAudio = null;
+          if (!response.ok) throw new Error('tts-' + response.status);
+          var audioBytes = await response.arrayBuffer();
+          if (!audioBytes.byteLength) throw new Error('empty-audio');
+          var audioBlob = new Blob([audioBytes], { type: 'audio/mpeg' });
+          ttsAudioUrl = URL.createObjectURL(audioBlob);
+          ttsAudio = new Audio(ttsAudioUrl);
+          ttsAudio.onended = function () {
+            if (ttsAudioUrl) URL.revokeObjectURL(ttsAudioUrl);
+            ttsAudioUrl = '';
+            ttsAudio = null;
           };
-          await cartesiaAudio.play();
-          cartesiaStatus.textContent = 'Cartesia voice active · keyটি শুধু এই tab-এ আছে।';
+          ttsAudio.onerror = useBrowserFallback;
+          await ttsAudio.play();
         } catch (error) {
-          var invalid = error && error.message === 'invalid-key';
-          var limited = error && error.message === 'rate-limit';
-          cartesiaStatus.textContent = invalid
-            ? 'Keyটি গ্রহণ করা হয়নি। Cartesia key আবার দিন।'
-            : limited
-              ? 'Cartesia rate limit হয়েছে · browser voice চলছে।'
-              : 'Cartesia voice পাওয়া যায়নি · browser voice চলছে।';
-          if (invalid) {
-            cartesiaApiKey = '';
-            voiceProviderBtn.textContent = 'Add Cartesia key';
-          }
-          showToast(invalid ? 'Cartesia key কাজ করছে না—আবার key দিন।' : 'Cartesia voice unavailable—browser voice ব্যবহার করা হচ্ছে।');
-          speakWithBrowser(text);
+          useBrowserFallback();
         } finally {
           clearTimeout(voiceTimeout);
         }
@@ -1792,49 +1761,6 @@
         voiceToggle.setAttribute('aria-pressed', String(voiceOn));
         voiceToggle.textContent = 'Voice reply · ' + (voiceOn ? 'On' : 'Off');
         if (!voiceOn) stopVoicePlayback();
-      });
-
-      voiceProviderBtn.addEventListener('click', function () {
-        var willOpen = voiceKeyPanel.hidden;
-        voiceKeyPanel.hidden = !willOpen;
-        voiceProviderBtn.setAttribute('aria-expanded', String(willOpen));
-        if (willOpen) cartesiaKeyInput.focus();
-      });
-
-      cartesiaConnect.addEventListener('click', function () {
-        var key = cartesiaKeyInput.value.trim();
-        if (!key) {
-          if (cartesiaApiKey) {
-            cartesiaApiKey = '';
-            stopVoicePlayback();
-            voiceProviderBtn.textContent = 'Add Cartesia key';
-            cartesiaConnect.textContent = 'Use Cartesia';
-            cartesiaStatus.textContent = 'Cartesia key সরানো হয়েছে · browser voice active।';
-            showToast('Cartesia key removed from this tab.');
-          } else {
-            showToast('Cartesia API key দিন।');
-          }
-          return;
-        }
-        if (key.length < 12) {
-          showToast('Cartesia keyটি সম্পূর্ণ লিখুন।');
-          return;
-        }
-        cartesiaApiKey = key;
-        cartesiaKeyInput.value = '';
-        voiceProviderBtn.textContent = 'Cartesia · Ready';
-        cartesiaConnect.textContent = 'Remove key';
-        cartesiaStatus.textContent = 'Cartesia voice ready · keyটি শুধু এই tab-এ থাকবে। পরের AI reply-তে ব্যবহার হবে।';
-        voiceKeyPanel.hidden = true;
-        voiceProviderBtn.setAttribute('aria-expanded', 'false');
-        showToast('Cartesia voice ready for this tab.');
-      });
-
-      cartesiaKeyInput.addEventListener('keydown', function (event) {
-        if (event.key === 'Enter') {
-          event.preventDefault();
-          cartesiaConnect.click();
-        }
       });
 
       function resetScore() {
