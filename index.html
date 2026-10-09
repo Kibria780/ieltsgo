@@ -1485,8 +1485,6 @@
         if (!voiceOn) return;
         stopVoicePlayback();
 
-        var voiceController = new AbortController();
-        var voiceTimeout = setTimeout(function () { voiceController.abort(); }, 9000);
         var fallbackStarted = false;
         function useBrowserFallback() {
           if (fallbackStarted) return;
@@ -1495,39 +1493,35 @@
             ttsAudio.pause();
             ttsAudio = null;
           }
-          if (ttsAudioUrl) {
-            URL.revokeObjectURL(ttsAudioUrl);
-            ttsAudioUrl = '';
-          }
           showToast('Natural voice unavailable—browser voice ব্যবহার করা হচ্ছে।');
           speakWithBrowser(text);
         }
 
         try {
-          var response = await fetch(TTS_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: text, voice_gender: selectedVoiceGender }),
-            signal: voiceController.signal
-          });
-          if (!response.ok) throw new Error('tts-' + response.status);
-          var audioBytes = await response.arrayBuffer();
-          if (!audioBytes.byteLength) throw new Error('empty-audio');
-          var audioBlob = new Blob([audioBytes], { type: 'audio/mpeg' });
-          ttsAudioUrl = URL.createObjectURL(audioBlob);
-          ttsAudio = new Audio(ttsAudioUrl);
+          // Stream directly via <audio src>: browser starts playing as soon as
+          // the first chunks arrive, instead of waiting for the full download.
+          var streamUrl = TTS_ENDPOINT + '?text=' + encodeURIComponent(text) +
+            '&voice_gender=' + encodeURIComponent(selectedVoiceGender) +
+            '&_=' + Date.now();
+          ttsAudio = new Audio();
           ttsAudio.playbackRate = 1.15;
-          ttsAudio.onended = function () {
-            if (ttsAudioUrl) URL.revokeObjectURL(ttsAudioUrl);
-            ttsAudioUrl = '';
-            ttsAudio = null;
-          };
+          ttsAudio.preload = 'auto';
+          var playStarted = false;
+          ttsAudio.onplaying = function () { playStarted = true; };
+          ttsAudio.onended = function () { ttsAudio = null; };
           ttsAudio.onerror = useBrowserFallback;
+          // If nothing plays within 12s, fall back to browser voice.
+          var streamTimer = setTimeout(function () {
+            if (!playStarted) useBrowserFallback();
+          }, 12000);
+          ttsAudio.onplaying = function () {
+            playStarted = true;
+            clearTimeout(streamTimer);
+          };
+          ttsAudio.src = streamUrl;
           await ttsAudio.play();
         } catch (error) {
           useBrowserFallback();
-        } finally {
-          clearTimeout(voiceTimeout);
         }
       }
 
