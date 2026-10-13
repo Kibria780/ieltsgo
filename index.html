@@ -1447,12 +1447,22 @@
         if (t) t.remove();
       }
 
+      // Chunked TTS session: bumped on every speak()/stop so stale
+      // chunk queues die when a new reply starts or playback stops.
+      var ttsSession = 0;
+      var ttsPrefetched = {};
+
       function stopVoicePlayback() {
+        ttsSession++;
         if ('speechSynthesis' in window) window.speechSynthesis.cancel();
         if (ttsAudio) {
           ttsAudio.pause();
           ttsAudio = null;
         }
+        Object.keys(ttsPrefetched).forEach(function (k) {
+          try { ttsPrefetched[k].pause(); } catch (e) {}
+        });
+        ttsPrefetched = {};
         if (ttsAudioUrl) {
           URL.revokeObjectURL(ttsAudioUrl);
           ttsAudioUrl = '';
@@ -1481,48 +1491,95 @@
         window.speechSynthesis.speak(utterance);
       }
 
+      // Split a long reply into short sentence chunks (~200 chars max).
+      // Each chunk gets its own fast TTS request, so the first chunk's
+      // audio arrives in ~1-2s instead of waiting for the whole reply.
+      function splitSpeechChunks(text) {
+        var sentences = String(text || '').match(/[^.!?]+[.!?]+["']?\s*/g) || [String(text || '')];
+        var chunks = [];
+        var current = '';
+        sentences.forEach(function (s) {
+          var piece = s.trim();
+          if (!piece) return;
+          if (!current) {
+            current = piece;
+          } else if ((current + ' ' + piece).length <= 200) {
+            current += ' ' + piece;
+          } else {
+            chunks.push(current);
+            current = piece;
+          }
+        });
+        if (current) chunks.push(current);
+        return chunks.filter(function (c) { return c.length > 0; });
+      }
+
+      function ttsUrlFor(chunkText) {
+        return TTS_ENDPOINT + '?text=' + encodeURIComponent(chunkText) +
+          '&voice_gender=' + encodeURIComponent(selectedVoiceGender) +
+          '&_=' + Date.now() + Math.floor(Math.random() * 1000);
+      }
+
       async function speak(text) {
         if (!voiceOn) return;
         stopVoicePlayback();
+        var session = ttsSession;
 
         var fallbackStarted = false;
         function useBrowserFallback() {
-          if (fallbackStarted) return;
+          if (fallbackStarted || session !== ttsSession) return;
           fallbackStarted = true;
-          if (ttsAudio) {
-            ttsAudio.pause();
-            ttsAudio = null;
-          }
+          stopVoicePlayback();
           showToast('Natural voice unavailable—browser voice ব্যবহার করা হচ্ছে।');
           speakWithBrowser(text);
         }
 
-        try {
-          // Stream directly via <audio src>: browser starts playing as soon as
-          // the first chunks arrive, instead of waiting for the full download.
-          var streamUrl = TTS_ENDPOINT + '?text=' + encodeURIComponent(text) +
-            '&voice_gender=' + encodeURIComponent(selectedVoiceGender) +
-            '&_=' + Date.now();
-          ttsAudio = new Audio();
-          ttsAudio.playbackRate = 1.15;
-          ttsAudio.preload = 'auto';
-          var playStarted = false;
-          ttsAudio.onplaying = function () { playStarted = true; };
-          ttsAudio.onended = function () { ttsAudio = null; };
-          ttsAudio.onerror = useBrowserFallback;
-          // If nothing plays within 12s, fall back to browser voice.
-          var streamTimer = setTimeout(function () {
-            if (!playStarted) useBrowserFallback();
-          }, 12000);
-          ttsAudio.onplaying = function () {
-            playStarted = true;
-            clearTimeout(streamTimer);
-          };
-          ttsAudio.src = streamUrl;
-          await ttsAudio.play();
-        } catch (error) {
-          useBrowserFallback();
+        var chunks = splitSpeechChunks(text);
+        if (!chunks.length) return;
+
+        // One Audio per chunk, created on demand. While chunk i plays,
+        // chunk i+1 is already downloading, so playback stays seamless.
+        function getChunkAudio(index) {
+          if (!ttsPrefetched[index]) {
+            var a = new Audio();
+            a.preload = 'auto';
+            a.playbackRate = 1.15;
+            a.src = ttsUrlFor(chunks[index]);
+            ttsPrefetched[index] = a;
+          }
+          return ttsPrefetched[index];
         }
+
+        var firstTimer = setTimeout(function () {
+          if (session === ttsSession) useBrowserFallback();
+        }, 8000);
+
+        function playChunk(index) {
+          if (session !== ttsSession) return;
+          if (index >= chunks.length) { ttsAudio = null; return; }
+          var audio = getChunkAudio(index);
+          ttsAudio = audio;
+          audio.onplaying = function () {
+            if (session !== ttsSession) return;
+            if (index === 0 && firstTimer) { clearTimeout(firstTimer); firstTimer = null; }
+            if (index + 1 < chunks.length) getChunkAudio(index + 1);
+          };
+          audio.onended = function () {
+            if (session !== ttsSession) return;
+            playChunk(index + 1);
+          };
+          audio.onerror = function () {
+            if (session !== ttsSession) return;
+            if (index === 0) useBrowserFallback();
+            else playChunk(index + 1);
+          };
+          audio.play().catch(function () {
+            if (session !== ttsSession) return;
+            if (index === 0) useBrowserFallback();
+          });
+        }
+
+        playChunk(0);
       }
 
       function renderFeedback(result) {
