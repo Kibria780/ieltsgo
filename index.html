@@ -125,7 +125,7 @@
     .mode-switch {
       min-height: 45px;
       display: grid;
-      grid-template-columns: 1fr 1fr;
+      grid-template-columns: 1fr 1fr 1fr;
       gap: 4px;
       padding: 4px;
       border-radius: 12px;
@@ -1097,6 +1097,85 @@
       .chip { min-height: 36px; padding: 0 10px; font-size: .76rem; }
       .hint-strip { padding: 14px; }
     }
+    /* ---- Exam section (British Council style) ---- */
+    .exam[hidden] { display: none; }
+    .exam {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      padding: 22px;
+      box-shadow: var(--shadow-small);
+    }
+    .exam-head h2 { margin: 0 0 4px; font-size: 1.25rem; }
+    .exam-head p { margin: 0 0 16px; color: var(--muted); font-size: .9rem; }
+    .exam-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .exam-card {
+      text-align: left;
+      padding: 16px;
+      border: 1px solid var(--line);
+      border-radius: 14px;
+      background: var(--surface-2);
+      cursor: pointer;
+    }
+    .exam-card h3 { margin: 0 0 6px; font-size: 1.05rem; }
+    .exam-card p { margin: 0 0 8px; color: var(--muted); font-size: .85rem; line-height: 1.5; }
+    .exam-meta { font-size: .78rem; font-weight: 600; color: var(--muted); }
+    .exam-back {
+      border: 1px solid var(--line);
+      background: var(--surface-2);
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-bottom: 14px;
+    }
+    .exam-part { font-size: .78rem; font-weight: 700; letter-spacing: .04em; color: var(--muted); text-transform: uppercase; }
+    .exam-timer { font-size: 1.1rem; font-weight: 800; }
+    .exam-play {
+      min-height: 46px; padding: 0 18px; border: 0; border-radius: 12px;
+      background: var(--ink); color: var(--surface); font-weight: 700; cursor: pointer; margin: 10px 0;
+    }
+    .exam-play:disabled { opacity: .55; cursor: default; }
+    .exam-q { margin: 16px 0; }
+    .exam-q p { margin: 0 0 8px; font-weight: 600; }
+    .exam-options label {
+      display: flex; gap: 8px; align-items: flex-start;
+      padding: 9px 10px; border: 1px solid var(--line); border-radius: 10px;
+      margin-bottom: 6px; cursor: pointer; font-size: .9rem;
+    }
+    .exam-options label:has(input:checked) { border-color: var(--ink); background: var(--surface-2); }
+    .exam-textarea {
+      width: 100%; min-height: 170px; padding: 12px; border: 1px solid var(--line);
+      border-radius: 12px; font: inherit; font-size: .95rem; line-height: 1.6; resize: vertical;
+    }
+    .exam-actions { display: flex; gap: 10px; flex-wrap: wrap; margin-top: 14px; }
+    .exam-primary {
+      min-height: 46px; padding: 0 20px; border: 0; border-radius: 12px;
+      background: var(--ink); color: var(--surface); font-weight: 700; cursor: pointer;
+    }
+    .exam-primary:disabled { opacity: .55; cursor: default; }
+    .exam-secondary {
+      min-height: 46px; padding: 0 18px; border: 1px solid var(--line); border-radius: 12px;
+      background: var(--surface-2); font-weight: 600; cursor: pointer;
+    }
+    .exam-wordcount { font-size: .82rem; color: var(--muted); margin-top: 6px; }
+    .exam-band { font-size: 2.6rem; font-weight: 800; line-height: 1; }
+    .exam-result-box { border: 1px solid var(--line); border-radius: 14px; padding: 16px; margin: 12px 0; }
+    .exam-result-box h3 { margin: 0 0 6px; }
+    .exam-result-box p, .exam-result-box li { font-size: .9rem; line-height: 1.6; color: var(--muted); }
+    .chart-bars { display: flex; gap: 18px; align-items: flex-end; height: 150px; margin: 14px 0 6px; border-bottom: 2px solid var(--line); padding: 0 8px; }
+    .chart-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 4px; height: 100%; }
+    .chart-pair { display: flex; gap: 4px; align-items: flex-end; height: 100%; }
+    .chart-bar { width: 22px; border-radius: 4px 4px 0 0; background: var(--navy); }
+    .chart-bar.b { background: var(--blue); }
+    .chart-label { font-size: .72rem; font-weight: 600; text-align: center; }
+    .chart-legend { display: flex; gap: 14px; font-size: .78rem; color: var(--muted); margin-bottom: 10px; }
+    .chart-legend i { display: inline-block; width: 10px; height: 10px; border-radius: 2px; background: var(--navy); vertical-align: -1px; }
+    .chart-legend i.b { background: var(--blue); }
+    @media (max-width: 640px) {
+      .exam-grid { grid-template-columns: 1fr; }
+      .exam { padding: 16px; }
+    }
   </style>
 </head>
 <body>
@@ -1112,6 +1191,7 @@
         <div class="mode-switch" id="modeSwitch">
           <button class="mode-btn" type="button" aria-pressed="true" data-mode="practice">Practice</button>
           <button class="mode-btn" type="button" aria-pressed="false" data-mode="mock">Mock test</button>
+          <button class="mode-btn" type="button" aria-pressed="false" data-mode="exam">Exam</button>
         </div>
       </div>
       <div class="level-field">
@@ -1157,7 +1237,7 @@
       <button class="small-action" id="newSession" type="button">New session</button>
     </section>
 
-    <section class="workspace">
+    <section class="workspace" id="workspaceSection">
       <article class="conversation" aria-label="Live English conversation">
         <header class="panel-head">
           <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">AI coach · ready</span></div>
@@ -1217,6 +1297,118 @@
           </div>
         </div>
       </aside>
+    </section>
+
+    <!-- British Council style exam practice: Listening, Writing, Speaking, Full Mock -->
+    <section class="exam" id="examSection" hidden>
+      <!-- Hub -->
+      <div id="examHub">
+        <div class="exam-head">
+          <h2>IELTS Exam Practice</h2>
+          <p class="bn">British Council-এর IELTS format অনুযায়ী practice version — আসল পরীক্ষার মতোই অংশ, সময় আর নিয়ম। ভয় কাটাতে বারবার practice করুন।</p>
+        </div>
+        <div class="exam-grid">
+          <button class="exam-card" type="button" data-exam="listening">
+            <h3>🎧 Listening Test</h3>
+            <p>4 parts · 12 questions · audio শুনে উত্তর দিন। Part 1 conversation, Part 2 monologue, Part 3 discussion, Part 4 lecture।</p>
+            <div class="exam-meta">PRACTICE VERSION · ~10 MIN</div>
+          </button>
+          <button class="exam-card" type="button" data-exam="writing">
+            <h3>✍️ Writing Test</h3>
+            <p>Task 1 chart description (150+ words, 20 min) + Task 2 essay (250+ words, 40 min)। AI band score + correction সহ।</p>
+            <div class="exam-meta">PRACTICE VERSION · 60 MIN</div>
+          </button>
+          <button class="exam-card" type="button" data-exam="speaking">
+            <h3>🗣️ Speaking Test</h3>
+            <p>Part 1 introduction, Part 2 cue card (1 min prep + 2 min talk), Part 3 discussion। AI band score সহ।</p>
+            <div class="exam-meta">11–14 MIN · MOCK TEST</div>
+          </button>
+          <button class="exam-card" type="button" data-exam="fullmock">
+            <h3>🏆 Full Mock Test</h3>
+            <p>Listening + Writing + Speaking — তিনটা অংশ একসাথে। শেষে combined band score। আসল পরীক্ষার আগে full rehearsal।</p>
+            <div class="exam-meta">COMPACT VERSION · ~30 MIN</div>
+          </button>
+        </div>
+      </div>
+
+      <!-- Listening -->
+      <div id="examListening" hidden>
+        <button class="exam-back" type="button" data-exam-back>← All exams</button>
+        <div class="exam-head">
+          <h2>Listening Test</h2>
+          <p>প্রশ্নগুলো দেখে নিন, তারপর ▶ Play চাপুন। Audio একবারই বাজবে — আসল পরীক্ষার মতো।</p>
+        </div>
+        <div class="exam-part" id="listeningPartLabel"></div>
+        <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+          <button class="exam-play" id="listeningPlayBtn" type="button">▶ Play audio</button>
+          <span class="exam-meta" id="listeningPlayNote"></span>
+        </div>
+        <div id="listeningQuestions"></div>
+        <div class="exam-actions">
+          <button class="exam-primary" id="listeningNextBtn" type="button">Next part →</button>
+        </div>
+      </div>
+
+      <!-- Writing -->
+      <div id="examWriting" hidden>
+        <button class="exam-back" type="button" data-exam-back>← All exams</button>
+        <div class="exam-head">
+          <h2>Writing Test</h2>
+          <p>Task 1 (20 min) + Task 2 (40 min)। দুইটা শেষ করে Submit চাপুন।</p>
+        </div>
+        <div class="exam-result-box">
+          <div class="exam-part">Task 1 · Academic · 20 minutes · at least 150 words</div>
+          <h3 style="margin-top:8px">Internet access at home</h3>
+          <p>The chart below shows the percentage of households with internet access in four countries in 2010 and 2020. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.</p>
+          <div class="chart-bars" aria-hidden="true">
+            <div class="chart-col"><div class="chart-pair"><div class="chart-bar" style="height:74%"></div><div class="chart-bar b" style="height:88%"></div></div><div class="chart-label">USA</div></div>
+            <div class="chart-col"><div class="chart-pair"><div class="chart-bar" style="height:70%"></div><div class="chart-bar b" style="height:92%"></div></div><div class="chart-label">UK</div></div>
+            <div class="chart-col"><div class="chart-pair"><div class="chart-bar" style="height:12%"></div><div class="chart-bar b" style="height:38%"></div></div><div class="chart-label">Bangladesh</div></div>
+            <div class="chart-col"><div class="chart-pair"><div class="chart-bar" style="height:78%"></div><div class="chart-bar b" style="height:91%"></div></div><div class="chart-label">Japan</div></div>
+          </div>
+          <div class="chart-legend"><span><i></i> 2010</span><span><i class="b"></i> 2020</span></div>
+          <p>Data: USA 74% → 88% · UK 70% → 92% · Bangladesh 12% → 38% · Japan 78% → 91%</p>
+          <textarea class="exam-textarea" id="writingTask1" placeholder="Write at least 150 words describing the chart…"></textarea>
+          <div class="exam-wordcount" id="writingTask1Count">0 words</div>
+          <div style="margin-top:8px">Time left: <span class="exam-timer" id="writingTask1Timer">20:00</span></div>
+        </div>
+        <div class="exam-result-box">
+          <div class="exam-part">Task 2 · Essay · 40 minutes · at least 250 words</div>
+          <h3 style="margin-top:8px">Learning English</h3>
+          <p>Some people think that the best way to learn English is to live in an English-speaking country. Others believe it is possible to learn well at home. Discuss both views and give your own opinion.</p>
+          <textarea class="exam-textarea" id="writingTask2" placeholder="Write at least 250 words…"></textarea>
+          <div class="exam-wordcount" id="writingTask2Count">0 words</div>
+          <div style="margin-top:8px">Time left: <span class="exam-timer" id="writingTask2Timer">40:00</span></div>
+        </div>
+        <div class="exam-actions">
+          <button class="exam-primary" id="writingSubmitBtn" type="button">Submit writing → Get band score</button>
+        </div>
+      </div>
+
+      <!-- Full Mock -->
+      <div id="examFullMock" hidden>
+        <button class="exam-back" type="button" data-exam-back>← All exams</button>
+        <div class="exam-head">
+          <h2>Full Mock Test</h2>
+          <p id="fullMockStageLabel">Stage 1 of 3 · Listening</p>
+        </div>
+        <div id="fullMockBody"></div>
+      </div>
+
+      <!-- Shared result -->
+      <div id="examResult" hidden>
+        <button class="exam-back" type="button" data-exam-back>← All exams</button>
+        <div class="exam-head"><h2 id="examResultTitle">Result</h2></div>
+        <div class="exam-result-box" style="text-align:center">
+          <div class="exam-part">Estimated band score</div>
+          <div class="exam-band" id="examResultBand">—</div>
+          <p id="examResultSub"></p>
+        </div>
+        <div id="examResultDetail"></div>
+        <div class="exam-actions">
+          <button class="exam-secondary" type="button" data-exam-back>← Back to exams</button>
+        </div>
+      </div>
     </section>
 
     <section class="hint-strip" aria-label="How to use">
@@ -2094,6 +2286,21 @@
         document.querySelectorAll('.mode-btn').forEach(function (button) {
           button.setAttribute('aria-pressed', String(button.dataset.mode === mode));
         });
+        // Exam mode shows the exam section instead of the chat workspace.
+        var examSection = document.getElementById('examSection');
+        var workspaceSection = document.getElementById('workspaceSection');
+        if (mode === 'exam') {
+          if (examSection) examSection.hidden = false;
+          if (workspaceSection) workspaceSection.style.display = 'none';
+          stopListeningAudio();
+          showExamHub();
+          newSessionBtn.textContent = 'All exams';
+          return;
+        }
+        if (examSection) examSection.hidden = true;
+        if (workspaceSection) workspaceSection.style.display = '';
+        stopListeningAudio();
+        stopExamTimers();
         document.querySelector('.coach-top h2').textContent = mode === 'mock' ? 'Test progress' : 'Coach notes';
         document.querySelector('.coach-top p').textContent = mode === 'mock' ? '৩ অংশের IELTS Speaking simulation' : 'সর্বশেষ উত্তরের ভুল ও উন্নতির জায়গা';
         levelSelect.disabled = mode === 'mock';
@@ -2114,8 +2321,447 @@
       });
 
       newSessionBtn.addEventListener('click', function () {
+        if (appMode === 'exam') { showExamHub(); return; }
         if (appMode === 'mock') startMockTest();
         else startPracticeSession();
+      });
+
+      /* ================= EXAM MODULE (British Council style) ================= */
+      var examTimers = [];
+      function stopExamTimers() {
+        examTimers.forEach(function (t) { clearInterval(t); });
+        examTimers = [];
+      }
+      function examCountdown(el, seconds) {
+        function render() {
+          var m = Math.floor(seconds / 60);
+          var s = seconds % 60;
+          el.textContent = (m < 10 ? '0' + m : m) + ':' + (s < 10 ? '0' + s : s);
+        }
+        render();
+        var timer = setInterval(function () {
+          if (seconds <= 0) { clearInterval(timer); return; }
+          seconds -= 1;
+          render();
+        }, 1000);
+        examTimers.push(timer);
+      }
+      function countWords(text) {
+        var words = String(text || '').trim().split(/\s+/).filter(Boolean);
+        return String(text || '').trim() ? words.length : 0;
+      }
+      function showExamHub() {
+        ['examHub', 'examListening', 'examWriting', 'examFullMock', 'examResult'].forEach(function (id) {
+          var el = document.getElementById(id);
+          if (el) el.hidden = id !== 'examHub';
+        });
+        stopListeningAudio();
+        stopExamTimers();
+      }
+      function showExamView(id) {
+        ['examHub', 'examListening', 'examWriting', 'examFullMock', 'examResult'].forEach(function (v) {
+          var el = document.getElementById(v);
+          if (el) el.hidden = v !== id;
+        });
+      }
+      function showExamResult(title, band, sub, detailHtml) {
+        document.getElementById('examResultTitle').textContent = title;
+        document.getElementById('examResultBand').textContent = band;
+        document.getElementById('examResultSub').textContent = sub || '';
+        document.getElementById('examResultDetail').innerHTML = detailHtml || '';
+        showExamView('examResult');
+      }
+      function escapeHtml(s) {
+        return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+      }
+
+      /* ---- Listening: 4 parts, 12 MCQ, TTS audio (female = speaker A, male = speaker B) ---- */
+      var LISTENING_PARTS = [
+        { title: 'Part 1 · Booking a hotel room', intro: 'A traveller is booking a hotel room by phone.',
+          script: [
+            { s: 'A', t: 'Good morning, Riverside Hotel. How can I help you?' },
+            { s: 'B', t: 'Good morning. I would like to book a room for two nights, please, from Friday to Sunday.' },
+            { s: 'A', t: 'Certainly. Would you like a single room or a double room?' },
+            { s: 'B', t: 'A double room, please, with a view of the river if possible.' },
+            { s: 'A', t: 'Let me check. Yes, we have a double room with a river view available. Breakfast is included, and check-in is from 2 p.m.' },
+            { s: 'B', t: 'That sounds perfect. Could I also request a late check-out on Sunday, around 12 noon?' },
+            { s: 'A', t: 'Yes, late check-out until 12 noon is free for this room. May I take your name, please?' },
+            { s: 'B', t: 'My name is Sarah Ahmed. A-H-M-E-D.' }
+          ],
+          questions: [
+            { q: 'How many nights is the traveller booking?', options: ['One night', 'Two nights', 'Three nights', 'Four nights'], answer: 1 },
+            { q: 'What kind of room does she want?', options: ['A single room', 'A double room with a river view', 'A family room', 'A room without breakfast'], answer: 1 },
+            { q: 'What time can she check in?', options: ['From 10 a.m.', 'From 12 noon', 'From 2 p.m.', 'From 4 p.m.'], answer: 2 }
+          ] },
+        { title: 'Part 2 · A talk about the city museum', intro: 'A guide is telling visitors about the city museum.',
+          script: [
+            { s: 'A', t: 'Welcome to the City Museum. Before you begin your visit, let me tell you a little about the building. The museum opened in 1985, and it has three floors.' },
+            { s: 'A', t: 'On the ground floor, you will find the history gallery. On the first floor, there is a special exhibition about the river and the boats that used it.' },
+            { s: 'A', t: 'The café is on the second floor, and it is open from 10 a.m. to 4 p.m. Please note that photography is allowed everywhere except in the special exhibition.' }
+          ],
+          questions: [
+            { q: 'When did the museum open?', options: ['In 1975', 'In 1985', 'In 1995', 'In 2005'], answer: 1 },
+            { q: 'Where is the special exhibition?', options: ['On the ground floor', 'On the first floor', 'On the second floor', 'In the café'], answer: 1 },
+            { q: 'Where is photography NOT allowed?', options: ['In the history gallery', 'In the café', 'In the special exhibition', 'On the second floor'], answer: 2 }
+          ] },
+        { title: 'Part 3 · Two students discuss an assignment', intro: 'Two students are discussing their group assignment.',
+          script: [
+            { s: 'A', t: 'So, for our assignment on water pollution, I think we should start by looking at the local river. We can collect samples on Saturday.' },
+            { s: 'B', t: 'That is a good idea, but we also need to read at least three journal articles before Saturday, otherwise we will not understand what to test for.' },
+            { s: 'A', t: 'You are right. I will find two articles tonight, and you can find one. Then we can meet in the library on Friday to plan the report.' },
+            { s: 'B', t: 'Perfect. And we should ask our tutor if we need permission to take samples from the river.' }
+          ],
+          questions: [
+            { q: 'What is the assignment about?', options: ['Air pollution', 'Water pollution', 'Noise pollution', 'Soil pollution'], answer: 1 },
+            { q: 'How many journal articles must they read before Saturday?', options: ['One', 'Two', 'Three', 'Four'], answer: 2 },
+            { q: 'When will they meet in the library?', options: ['On Wednesday', 'On Thursday', 'On Friday', 'On Sunday'], answer: 2 }
+          ] },
+        { title: 'Part 4 · A lecture about honeybees', intro: 'A lecturer is talking about honeybees and why they matter.',
+          script: [
+            { s: 'A', t: 'Today, I want to talk about honeybees. Bees are responsible for pollinating about one third of the food we eat, including many fruits and vegetables.' },
+            { s: 'A', t: 'In recent years, bee numbers have fallen sharply. One reason is the loss of wildflower meadows, where bees find food. Another reason is the use of certain pesticides.' },
+            { s: 'A', t: 'Scientists suggest three actions: plant more wildflowers, reduce pesticide use, and protect natural habitats. If we act now, bee populations can recover.' }
+          ],
+          questions: [
+            { q: 'About how much of our food do bees help pollinate?', options: ['One tenth', 'One quarter', 'One third', 'One half'], answer: 2 },
+            { q: 'Which is given as a reason for falling bee numbers?', options: ['Too much rain', 'Loss of wildflower meadows', 'Cold winters', 'Too many beekeepers'], answer: 1 },
+            { q: 'Which action do scientists suggest?', options: ['Plant more wildflowers', 'Keep bees indoors', 'Use more pesticides', 'Stop eating honey'], answer: 0 }
+          ] }
+      ];
+      var listeningPartIndex = 0;
+      var listeningAnswers = {};
+      var listeningPlayed = {};
+      var listeningAudio = null;
+
+      function stopListeningAudio() {
+        if (listeningAudio) { try { listeningAudio.pause(); } catch (e) {} listeningAudio = null; }
+        stopVoicePlayback();
+      }
+      function playListeningScript(lines, onDone) {
+        stopListeningAudio();
+        var i = 0;
+        function playNext() {
+          if (i >= lines.length) { listeningAudio = null; if (onDone) onDone(); return; }
+          var line = lines[i++];
+          var gender = line.s === 'B' ? 'male' : 'female';
+          var url = TTS_ENDPOINT + '?text=' + encodeURIComponent(line.t) +
+            '&voice_gender=' + gender + '&_=' + Date.now() + i;
+          listeningAudio = new Audio();
+          listeningAudio.playbackRate = 1.0;
+          listeningAudio.src = url;
+          listeningAudio.onended = playNext;
+          listeningAudio.onerror = playNext;
+          listeningAudio.play().catch(playNext);
+        }
+        playNext();
+      }
+      function renderListeningPart() {
+        var part = LISTENING_PARTS[listeningPartIndex];
+        document.getElementById('listeningPartLabel').textContent = part.title + ' · ' + part.intro;
+        var playBtn = document.getElementById('listeningPlayBtn');
+        playBtn.disabled = false;
+        playBtn.textContent = '▶ Play audio';
+        document.getElementById('listeningPlayNote').textContent = listeningPlayed[listeningPartIndex] ? 'Played — answer from memory, like the real test.' : 'Audio plays once per part.';
+        var box = document.getElementById('listeningQuestions');
+        box.innerHTML = '';
+        part.questions.forEach(function (item, qi) {
+          var globalQi = listeningPartIndex * 3 + qi;
+          var qDiv = document.createElement('div');
+          qDiv.className = 'exam-q';
+          var qText = document.createElement('p');
+          qText.textContent = 'Q' + (globalQi + 1) + '. ' + item.q;
+          qDiv.appendChild(qText);
+          var opts = document.createElement('div');
+          opts.className = 'exam-options';
+          item.options.forEach(function (opt, oi) {
+            var label = document.createElement('label');
+            var radio = document.createElement('input');
+            radio.type = 'radio';
+            radio.name = 'listen-q' + globalQi;
+            radio.value = oi;
+            if (listeningAnswers[globalQi] === oi) radio.checked = true;
+            radio.addEventListener('change', function () { listeningAnswers[globalQi] = oi; });
+            var span = document.createElement('span');
+            span.textContent = opt;
+            label.appendChild(radio);
+            label.appendChild(span);
+            opts.appendChild(label);
+          });
+          qDiv.appendChild(opts);
+          box.appendChild(qDiv);
+        });
+        document.getElementById('listeningNextBtn').textContent =
+          listeningPartIndex < LISTENING_PARTS.length - 1 ? 'Next part →' : 'Finish listening → See result';
+      }
+      function listeningBand(correct, total) {
+        if (correct >= 12) return '9.0';
+        if (correct >= 10) return '8.0';
+        if (correct >= 8) return '7.0';
+        if (correct >= 6) return '6.0';
+        if (correct >= 4) return '5.0';
+        return '4.0';
+      }
+      function finishListening() {
+        stopListeningAudio();
+        var total = 12, correct = 0;
+        LISTENING_PARTS.forEach(function (part, pi) {
+          part.questions.forEach(function (item, qi) {
+            if (listeningAnswers[pi * 3 + qi] === item.answer) correct += 1;
+          });
+        });
+        var band = listeningBand(correct, total);
+        var detail = '<div class="exam-result-box"><h3>Listening score</h3><p>You answered <strong>' + correct + ' / ' + total + '</strong> correctly.</p>' +
+          '<p class="bn">আসল IELTS-এ ৪০টা প্রশ্ন থাকে। এখানে ১২টা practice প্রশ্ন দিয়ে আপনার band অনুমান করা হয়েছে।</p></div>';
+        showExamResult('Listening Result', band, correct + ' / ' + total + ' correct', detail);
+      }
+      function startListening() {
+        listeningPartIndex = 0;
+        listeningAnswers = {};
+        listeningPlayed = {};
+        showExamView('examListening');
+        renderListeningPart();
+      }
+      document.getElementById('listeningPlayBtn').addEventListener('click', function () {
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Playing…';
+        listeningPlayed[listeningPartIndex] = true;
+        playListeningScript(LISTENING_PARTS[listeningPartIndex].script, function () {
+          btn.textContent = '▶ Played';
+          document.getElementById('listeningPlayNote').textContent = 'Played — answer from memory, like the real test.';
+        });
+      });
+      document.getElementById('listeningNextBtn').addEventListener('click', function () {
+        stopListeningAudio();
+        if (listeningPartIndex < LISTENING_PARTS.length - 1) {
+          listeningPartIndex += 1;
+          renderListeningPart();
+        } else {
+          finishListening();
+        }
+      });
+
+      /* ---- Writing: Task 1 + Task 2, AI band feedback ---- */
+      function startWriting() {
+        stopExamTimers();
+        showExamView('examWriting');
+        document.getElementById('writingTask1').value = '';
+        document.getElementById('writingTask2').value = '';
+        document.getElementById('writingTask1Count').textContent = '0 words';
+        document.getElementById('writingTask2Count').textContent = '0 words';
+        examCountdown(document.getElementById('writingTask1Timer'), 20 * 60);
+        examCountdown(document.getElementById('writingTask2Timer'), 40 * 60);
+      }
+      document.getElementById('writingTask1').addEventListener('input', function () {
+        document.getElementById('writingTask1Count').textContent = countWords(this.value) + ' words';
+      });
+      document.getElementById('writingTask2').addEventListener('input', function () {
+        document.getElementById('writingTask2Count').textContent = countWords(this.value) + ' words';
+      });
+      document.getElementById('writingSubmitBtn').addEventListener('click', async function () {
+        var t1 = document.getElementById('writingTask1').value.trim();
+        var t2 = document.getElementById('writingTask2').value.trim();
+        if (countWords(t1) < 20 || countWords(t2) < 20) {
+          showToast('দুটো Task-এই অন্তত কিছু লিখুন, তারপর Submit চাপুন।');
+          return;
+        }
+        var btn = this;
+        btn.disabled = true;
+        btn.textContent = 'Checking…';
+        stopExamTimers();
+        try {
+          var data = await requestAI(
+            'You are an IELTS Writing examiner. Assess the learner writing below using IELTS band criteria (task achievement, coherence, vocabulary, grammar). Return ONLY valid JSON with exactly these keys: band (number 1-9, one decimal allowed), task1_feedback (short English string), task2_feedback (short English string), corrections (array of up to 4 objects with original, corrected, explanation_bn). Never invent errors.',
+            'TASK 1 (chart description):\n' + t1 + '\n\nTASK 2 (essay):\n' + t2
+          );
+          var band = data.band != null ? String(data.band) : '—';
+          var detail = '';
+          if (data.task1_feedback) detail += '<div class="exam-result-box"><h3>Task 1 feedback</h3><p>' + escapeHtml(data.task1_feedback) + '</p></div>';
+          if (data.task2_feedback) detail += '<div class="exam-result-box"><h3>Task 2 feedback</h3><p>' + escapeHtml(data.task2_feedback) + '</p></div>';
+          if (Array.isArray(data.corrections) && data.corrections.length) {
+            detail += '<div class="exam-result-box"><h3>Corrections</h3><ul>' + data.corrections.map(function (c) {
+              return '<li><strong>' + escapeHtml(c.original || '') + '</strong> → ' + escapeHtml(c.corrected || '') + ' — ' + escapeHtml(c.explanation_bn || '') + '</li>';
+            }).join('') + '</ul></div>';
+          }
+          showExamResult('Writing Result', band, 'Task 1: ' + countWords(t1) + ' words · Task 2: ' + countWords(t2) + ' words', detail);
+        } catch (error) {
+          showToast('AI examiner-এর সঙ্গে সংযোগ পাওয়া যায়নি—আবার চেষ্টা করুন।');
+        } finally {
+          btn.disabled = false;
+          btn.textContent = 'Submit writing → Get band score';
+        }
+      });
+
+      /* ---- Full Mock: Listening (Part 1) → Writing (Task 2) → Speaking (Part 2) ---- */
+      var fullMock = { stage: 0, listening: 0, writingBand: null, speakingBand: null, speakingText: '' };
+      function startFullMock() {
+        fullMock = { stage: 0, listening: 0, writingBand: null, speakingBand: null, speakingText: '' };
+        showExamView('examFullMock');
+        renderFullMockStage();
+      }
+      function renderFullMockStage() {
+        var body = document.getElementById('fullMockBody');
+        var label = document.getElementById('fullMockStageLabel');
+        stopListeningAudio();
+        stopExamTimers();
+        if (fullMock.stage === 0) {
+          label.textContent = 'Stage 1 of 3 · Listening (Part 1)';
+          var part = LISTENING_PARTS[0];
+          var html = '<div class="exam-part">' + part.title + '</div>' +
+            '<div style="margin:10px 0"><button class="exam-play" id="fmPlayBtn" type="button">▶ Play audio</button></div>' +
+            '<div id="fmQuestions"></div>' +
+            '<div class="exam-actions"><button class="exam-primary" id="fmNextBtn" type="button">Next → Writing</button></div>';
+          body.innerHTML = html;
+          var qBox = document.getElementById('fmQuestions');
+          part.questions.forEach(function (item, qi) {
+            var qDiv = document.createElement('div');
+            qDiv.className = 'exam-q';
+            var qText = document.createElement('p');
+            qText.textContent = 'Q' + (qi + 1) + '. ' + item.q;
+            qDiv.appendChild(qText);
+            var opts = document.createElement('div');
+            opts.className = 'exam-options';
+            item.options.forEach(function (opt, oi) {
+              var lab = document.createElement('label');
+              var radio = document.createElement('input');
+              radio.type = 'radio'; radio.name = 'fm-q' + qi; radio.value = oi;
+              radio.addEventListener('change', function () { fullMock['fm' + qi] = oi; });
+              var span = document.createElement('span');
+              span.textContent = opt;
+              lab.appendChild(radio); lab.appendChild(span); opts.appendChild(lab);
+            });
+            qDiv.appendChild(opts);
+            qBox.appendChild(qDiv);
+          });
+          document.getElementById('fmPlayBtn').addEventListener('click', function () {
+            this.disabled = true; this.textContent = 'Playing…';
+            playListeningScript(part.script, function () {});
+          });
+          document.getElementById('fmNextBtn').addEventListener('click', function () {
+            var correct = 0;
+            part.questions.forEach(function (item, qi) {
+              if (fullMock['fm' + qi] === item.answer) correct += 1;
+            });
+            fullMock.listening = correct;
+            fullMock.stage = 1;
+            renderFullMockStage();
+          });
+        } else if (fullMock.stage === 1) {
+          label.textContent = 'Stage 2 of 3 · Writing (Task 2)';
+          body.innerHTML = '<div class="exam-part">Task 2 · Essay · at least 250 words</div>' +
+            '<p style="margin:10px 0">Some people think that the best way to learn English is to live in an English-speaking country. Others believe it is possible to learn well at home. Discuss both views and give your own opinion.</p>' +
+            '<textarea class="exam-textarea" id="fmWriting" placeholder="Write at least 250 words…"></textarea>' +
+            '<div class="exam-wordcount" id="fmWritingCount">0 words</div>' +
+            '<div style="margin-top:8px">Time left: <span class="exam-timer" id="fmWritingTimer">40:00</span></div>' +
+            '<div class="exam-actions"><button class="exam-primary" id="fmWriteNextBtn" type="button">Submit writing → Speaking</button></div>';
+          examCountdown(document.getElementById('fmWritingTimer'), 40 * 60);
+          document.getElementById('fmWriting').addEventListener('input', function () {
+            document.getElementById('fmWritingCount').textContent = countWords(this.value) + ' words';
+          });
+          document.getElementById('fmWriteNextBtn').addEventListener('click', async function () {
+            var essay = document.getElementById('fmWriting').value.trim();
+            if (countWords(essay) < 20) { showToast('অন্তত কিছু লিখুন, তারপর Submit চাপুন।'); return; }
+            this.disabled = true; this.textContent = 'Checking…';
+            stopExamTimers();
+            try {
+              var data = await requestAI(
+                'You are an IELTS Writing examiner. Assess the Task 2 essay below (task achievement, coherence, vocabulary, grammar). Return ONLY valid JSON with exactly: band (number 1-9), feedback (short English string).',
+                'TASK 2 ESSAY:\n' + essay
+              );
+              fullMock.writingBand = Number(data.band) || null;
+              fullMock.writingFeedback = data.feedback || '';
+              fullMock.stage = 2;
+              renderFullMockStage();
+            } catch (error) {
+              showToast('AI examiner-এর সঙ্গে সংযোগ পাওয়া যায়নি—আবার চেষ্টা করুন।');
+              this.disabled = false; this.textContent = 'Submit writing → Speaking';
+            }
+          });
+        } else if (fullMock.stage === 2) {
+          label.textContent = 'Stage 3 of 3 · Speaking (Part 2)';
+          body.innerHTML = '<div class="exam-part">Part 2 · Cue card · 1 min prep + 2 min talk</div>' +
+            '<div class="exam-result-box"><h3>Describe a place you like to visit.</h3><p>You should say: where it is, who you go with, what you do there, and explain why you like it.</p></div>' +
+            '<p class="bn">প্রস্তুতি: <span class="exam-timer" id="fmPrepTimer">60</span> সেকেন্ড &nbsp;·&nbsp; কথা বলা: <span class="exam-timer" id="fmTalkTimer">120</span> সেকেন্ড</p>' +
+            '<div class="exam-actions"><button class="exam-secondary" id="fmMicBtn" type="button">🎤 Start speaking</button></div>' +
+            '<p class="exam-meta" id="fmSpeakNote" style="margin-top:8px">মাইকে চাপ দিয়ে cue card নিয়ে বলুন।</p>' +
+            '<div class="exam-actions"><button class="exam-primary" id="fmFinishBtn" type="button">Finish mock → See result</button></div>';
+          var prepLeft = 60, talkLeft = 120, prepTimer = null, talkTimer = null;
+          prepTimer = setInterval(function () {
+            if (prepLeft <= 0) { clearInterval(prepTimer); return; }
+            prepLeft -= 1;
+            document.getElementById('fmPrepTimer').textContent = prepLeft;
+          }, 1000);
+          examTimers.push(prepTimer);
+          document.getElementById('fmMicBtn').addEventListener('click', function () {
+            if (talkTimer) return;
+            this.disabled = true; this.textContent = '🎤 Listening… (speak now)';
+            document.getElementById('fmSpeakNote').textContent = 'শুনছি… শেষ হলে mic বন্ধ হবে।';
+            talkTimer = setInterval(function () {
+              if (talkLeft <= 0) { clearInterval(talkTimer); return; }
+              talkLeft -= 1;
+              document.getElementById('fmTalkTimer').textContent = talkLeft;
+            }, 1000);
+            examTimers.push(talkTimer);
+            if (recognition && !isListening) {
+              fullMock.speakingText = '';
+              // Temporarily capture the transcript for the mock. Save and
+              // restore the original onend handler so normal voice input
+              // keeps working after the mock ends.
+              var savedOnEnd = recognition.onend;
+              recognition.onend = function () {
+                fullMock.speakingText = (input.value || '').trim();
+                document.getElementById('fmSpeakNote').textContent = fullMock.speakingText ? 'আপনার উত্তর নেওয়া হয়েছে: ' + fullMock.speakingText.slice(0, 120) : 'কথা শোনা যায়নি—আবার চেষ্টা করুন।';
+                recognition.onend = savedOnEnd;
+                resetVoiceInputUi();
+              };
+              try { recognition.start(); } catch (e) {}
+            } else {
+              document.getElementById('fmSpeakNote').textContent = 'এই ব্রাউজারে voice input নেই — নিচে Finish চাপুন।';
+            }
+          });
+          document.getElementById('fmFinishBtn').addEventListener('click', async function () {
+            stopListeningAudio();
+            stopExamTimers();
+            var btn = this;
+            btn.disabled = true; btn.textContent = 'Preparing result…';
+            try {
+              var spoken = fullMock.speakingText || '';
+              var sBand = null, sFeedback = '';
+              if (spoken) {
+                var sData = await requestAI(
+                  'You are an IELTS Speaking examiner. Assess the Part 2 spoken answer below (fluency, vocabulary, grammar, pronunciation cannot be judged from text — judge the other three). Return ONLY valid JSON with exactly: band (number 1-9), feedback (short English string).',
+                  'PART 2 ANSWER (transcribed):\n' + spoken
+                );
+                sBand = Number(sData.band) || null;
+                sFeedback = sData.feedback || '';
+              }
+              fullMock.speakingBand = sBand;
+              var bands = [fullMock.listening === 3 ? 9 : fullMock.listening === 2 ? 7 : fullMock.listening === 1 ? 5.5 : 4, fullMock.writingBand, sBand].filter(function (b) { return typeof b === 'number'; });
+              var overall = bands.length ? (bands.reduce(function (a, b) { return a + b; }, 0) / bands.length).toFixed(1) : '—';
+              var detail = '<div class="exam-result-box"><h3>Listening</h3><p>' + fullMock.listening + ' / 3 correct</p></div>' +
+                '<div class="exam-result-box"><h3>Writing</h3><p>Band ' + (fullMock.writingBand != null ? fullMock.writingBand : '—') + (fullMock.writingFeedback ? ' — ' + escapeHtml(fullMock.writingFeedback) : '') + '</p></div>' +
+                '<div class="exam-result-box"><h3>Speaking</h3><p>Band ' + (sBand != null ? sBand : '—') + (sFeedback ? ' — ' + escapeHtml(sFeedback) : '') + '</p></div>';
+              showExamResult('Full Mock Result', overall, 'Listening + Writing + Speaking combined', detail);
+            } catch (error) {
+              showToast('Result তৈরি করা যায়নি—আবার চেষ্টা করুন।');
+              btn.disabled = false; btn.textContent = 'Finish mock → See result';
+            }
+          });
+        }
+      }
+
+      /* ---- Exam hub wiring ---- */
+      document.getElementById('examHub').addEventListener('click', function (event) {
+        var card = event.target.closest('.exam-card');
+        if (!card) return;
+        var which = card.dataset.exam;
+        if (which === 'listening') startListening();
+        else if (which === 'writing') startWriting();
+        else if (which === 'speaking') switchMode('mock');
+        else if (which === 'fullmock') startFullMock();
+      });
+      document.querySelectorAll('[data-exam-back]').forEach(function (btn) {
+        btn.addEventListener('click', function () { showExamHub(); });
       });
     })();
   </script>
