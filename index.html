@@ -1437,6 +1437,12 @@
         </div>
         <div class="exam-result-box" id="writingTask1General" hidden>
           <div class="exam-part">Task 1 · General Training · Letter · 20 minutes · at least 150 words</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0">
+            <span style="align-self:center;font-size:.85rem;opacity:.8">Letter:</span>
+            <button class="exam-secondary" type="button" data-writing-letter="0" style="min-height:36px;padding:0 12px">Letter 1</button>
+            <button class="exam-secondary" type="button" data-writing-letter="1" style="min-height:36px;padding:0 12px">Letter 2</button>
+          </div>
+          <div id="writingLetterBody">
           <h3 style="margin-top:8px">A faulty bicycle</h3>
           <p>You recently bought a bicycle from a local shop, but it has a problem. Write a letter to the shop manager. In your letter:</p>
           <ul style="line-height:1.7;font-size:.92rem">
@@ -1444,6 +1450,7 @@
             <li>explain why the problem is urgent for you,</li>
             <li>say what you would like the shop to do.</li>
           </ul>
+          </div>
           <p>Write at least 150 words. You do NOT need to write any addresses.</p>
           <textarea class="exam-textarea" id="writingTask1GT" placeholder="Dear Sir or Madam, …"></textarea>
           <div class="exam-wordcount" id="writingTask1GTCount">0 words</div>
@@ -1451,8 +1458,15 @@
         </div>
         <div class="exam-result-box">
           <div class="exam-part">Task 2 · Essay · 40 minutes · at least 250 words</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0">
+            <span style="align-self:center;font-size:.85rem;opacity:.8">Essay prompt:</span>
+            <button class="exam-secondary" type="button" data-writing-essay="0" style="min-height:36px;padding:0 12px">Prompt 1</button>
+            <button class="exam-secondary" type="button" data-writing-essay="1" style="min-height:36px;padding:0 12px">Prompt 2</button>
+          </div>
+          <div id="writingEssayBody">
           <h3 style="margin-top:8px">Learning English</h3>
           <p>Some people think that the best way to learn English is to live in an English-speaking country. Others believe it is possible to learn well at home. Discuss both views and give your own opinion.</p>
+          </div>
           <textarea class="exam-textarea" id="writingTask2" placeholder="Write at least 250 words…"></textarea>
           <div class="exam-wordcount" id="writingTask2Count">0 words</div>
           <div style="margin-top:8px">Time left: <span class="exam-timer" id="writingTask2Timer">40:00</span></div>
@@ -3317,6 +3331,59 @@
         showExamResult('Full Reading Mock · ' + examModeLabel(), '≈ ' + band40 + ' (est.)', 'Raw score: ' + correct + ' / ' + total + ' correct · ' + pct + '%', conversion + review);
       });
 
+      /* ---- Phase 3: Writing question bank — 2 essay prompts, 2 GT letters ---- */
+      var writingLetterIndex = 0;
+      var writingEssayIndex = 0;
+      var writingLetterBody2 = '<h3 style="margin-top:8px">A noisy neighbour</h3>' +
+        '<p>You have a problem with a neighbour who plays loud music late at night. Write a letter to the neighbour. In your letter:</p>' +
+        '<ul style="line-height:1.7;font-size:.92rem">' +
+        '<li>describe the problem,</li>' +
+        '<li>explain how it affects you,</li>' +
+        '<li>suggest what the neighbour should do.</li></ul>';
+      var writingEssayBody2 = '<h3 style="margin-top:8px">Online learning</h3>' +
+        '<p>Some people believe that online learning will completely replace classroom learning in the future. Others think classrooms will always be necessary. Discuss both views and give your own opinion.</p>';
+      var writingLetterBody1 = null, writingEssayBody1 = null;
+      function updateWritingPickerUI() {
+        document.querySelectorAll('[data-writing-letter]').forEach(function (btn) {
+          var on = parseInt(btn.getAttribute('data-writing-letter'), 10) === writingLetterIndex;
+          btn.style.fontWeight = on ? '700' : '400';
+          btn.setAttribute('aria-pressed', String(on));
+        });
+        document.querySelectorAll('[data-writing-essay]').forEach(function (btn) {
+          var on = parseInt(btn.getAttribute('data-writing-essay'), 10) === writingEssayIndex;
+          btn.style.fontWeight = on ? '700' : '400';
+          btn.setAttribute('aria-pressed', String(on));
+        });
+      }
+      function renderWritingLetter() {
+        var el = document.getElementById('writingLetterBody');
+        if (writingLetterBody1 === null) writingLetterBody1 = el.innerHTML;
+        el.innerHTML = writingLetterIndex === 0 ? writingLetterBody1 : writingLetterBody2;
+        document.getElementById('writingTask1GT').value = '';
+        document.getElementById('writingTask1GTCount').textContent = '0 words';
+        updateWritingPickerUI();
+      }
+      function renderWritingEssay() {
+        var el = document.getElementById('writingEssayBody');
+        if (writingEssayBody1 === null) writingEssayBody1 = el.innerHTML;
+        el.innerHTML = writingEssayIndex === 0 ? writingEssayBody1 : writingEssayBody2;
+        document.getElementById('writingTask2').value = '';
+        document.getElementById('writingTask2Count').textContent = '0 words';
+        updateWritingPickerUI();
+      }
+      document.querySelectorAll('[data-writing-letter]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          writingLetterIndex = parseInt(this.getAttribute('data-writing-letter'), 10);
+          renderWritingLetter();
+        });
+      });
+      document.querySelectorAll('[data-writing-essay]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          writingEssayIndex = parseInt(this.getAttribute('data-writing-essay'), 10);
+          renderWritingEssay();
+        });
+      });
+
       /* ---- Writing: Task 1 + Task 2, AI band feedback ---- */
       var writingMode = 'academic';
       var writingTask1Type = 'chart';
@@ -3347,6 +3414,9 @@
         document.getElementById('writingTask1Count').textContent = '0 words';
         document.getElementById('writingTask1GTCount').textContent = '0 words';
         document.getElementById('writingTask2Count').textContent = '0 words';
+        // Render the bank prompts for the remembered indices.
+        renderWritingLetter();
+        renderWritingEssay();
         examCountdown(document.getElementById(writingMode === 'general' ? 'writingTask1GTTimer' : 'writingTask1Timer'), 20 * 60);
         examCountdown(document.getElementById('writingTask2Timer'), 40 * 60);
       }
