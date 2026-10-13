@@ -2509,7 +2509,13 @@
 
       newSessionBtn.addEventListener('click', function () {
         if (appMode === 'exam') { showExamHub(); return; }
-        if (appMode === 'mock') startMockTest();
+        if (appMode === 'mock') {
+          // After a completed test ("Try another test"), return to the
+          // pre-test screen so the Speaking set picker is visible.
+          // Mid-test "Restart test" still restarts immediately.
+          if (mockStarted && mockQuestionIndex >= activeMockQuestions.length) { switchMode('mock'); return; }
+          startMockTest();
+        }
         else startPracticeSession();
       });
 
