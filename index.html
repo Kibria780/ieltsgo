@@ -1464,6 +1464,11 @@
           <h2>Reading Test</h2>
           <p>Passage পড়ে প্রশ্নগুলোর উত্তর দিন। Time left: <span class="exam-timer" id="readingTimer">20:00</span></p>
         </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px">
+          <span style="align-self:center;font-size:.85rem;opacity:.8">Question set:</span>
+          <button class="exam-secondary" type="button" data-reading-set="0" style="min-height:36px;padding:0 12px">Set 1</button>
+          <button class="exam-secondary" type="button" data-reading-set="1" style="min-height:36px;padding:0 12px">Set 2</button>
+        </div>
         <div class="exam-result-box">
           <h3 id="readingPassageTitle"></h3>
           <div id="readingPassage" style="max-height:320px;overflow-y:auto;line-height:1.75;font-size:.93rem"></div>
@@ -2768,15 +2773,68 @@
           { type: 'complete', q: 'Complete the sentence: The fine for a late book is 5 taka per _____.', accepted: ['day'], explain: 'Paragraph D: "the fine is 5 taka per day".' }
         ]
       };
+      /* ---- Phase 3: Reading question bank — Set 2 per mode ---- */
+      var READING_ACADEMIC_2 = {
+        title: 'The Power of Sleep',
+        paragraphs: [
+          'A. Sleep is one of the most common human activities, yet scientists still do not fully understand why we need it. Adults usually sleep for seven to nine hours each night, and children need even more. During sleep, the body repairs muscles, the brain organises memories, and the immune system grows stronger. People who regularly sleep too little are more likely to become ill, to have accidents, and to struggle with learning.',
+          'B. One of the most important discoveries about sleep is that it happens in cycles. Each cycle lasts about ninety minutes and includes light sleep, deep sleep, and dream sleep, which is called REM sleep. In the first part of the night, deep sleep is longer. In the second part, dream sleep becomes longer. If a person wakes up in the middle of a cycle, they often feel tired and confused, even if they have slept for many hours.',
+          'C. Modern life makes good sleep difficult. Bright screens, late-night work, and noisy cities all disturb the body\u2019s natural rhythm. Many people drink coffee late in the day, which keeps the brain awake for hours. Others check their phones in bed, and the blue light from the screen tells the brain that it is still daytime. Doctors say that a regular sleep schedule, a dark bedroom, and no screens before bed can greatly improve sleep quality.',
+          'D. Despite the challenges, small changes can make a big difference. Short naps of twenty minutes can improve attention without making a person feel sleepy afterwards. Regular exercise also helps, although exercising very late at night can keep some people awake. Most importantly, people should treat sleep as a basic need, like food and water, not as a waste of time.'
+        ],
+        questions: [
+          { type: 'tfng', q: 'Scientists fully understand why humans need sleep.', answer: 1, explain: 'Paragraph A: scientists "still do not fully understand why we need it".' },
+          { type: 'tfng', q: 'Children need less sleep than adults.', answer: 1, explain: 'Paragraph A: "children need even more".' },
+          { type: 'tfng', q: 'During sleep, the brain organises memories.', answer: 0, explain: 'Paragraph A: "the brain organises memories".' },
+          { type: 'mcq', q: 'How long does one sleep cycle usually last?', options: ['About 30 minutes', 'About 60 minutes', 'About 90 minutes', 'About 120 minutes'], answer: 2, explain: 'Paragraph B: "Each cycle lasts about ninety minutes".' },
+          { type: 'mcq', q: 'When is dream sleep longer?', options: ['In the first part of the night', 'In the second part of the night', 'Only in the morning', 'Only after exercise'], answer: 1, explain: 'Paragraph B: "In the second part, dream sleep becomes longer".' },
+          { type: 'heading', q: 'Which heading best fits paragraph C?', options: ['Why modern life disturbs sleep', 'The benefits of coffee', 'How to choose a bed', 'The history of sleep'], answer: 0, explain: 'Paragraph C is about screens, work, noise and coffee disturbing sleep.' },
+          { type: 'heading', q: 'Which heading best fits paragraph D?', options: ['Why sleep is a waste of time', 'Small changes that improve sleep', 'The dangers of napping', 'How to avoid exercise'], answer: 1, explain: 'Paragraph D: "small changes can make a big difference".' },
+          { type: 'complete', q: 'Complete the sentence: Drinking coffee late in the day keeps the brain _____ for hours.', accepted: ['awake'], explain: 'Paragraph C: "keeps the brain awake for hours".' },
+          { type: 'complete', q: 'Complete the sentence: A short nap of _____ minutes can improve attention.', accepted: ['twenty', '20'], explain: 'Paragraph D: "Short naps of twenty minutes".' },
+          { type: 'complete', q: 'Complete the sentence: People should treat sleep as a basic need, like food and _____.', accepted: ['water'], explain: 'Paragraph D: "like food and water".' }
+        ]
+      };
+      var READING_GT_2 = {
+        title: 'City Sports Centre',
+        paragraphs: [
+          'A. The City Sports Centre is open to everyone, from complete beginners to experienced athletes. The centre is open from 6 a.m. to 10 p.m. on weekdays, and from 8 a.m. to 8 p.m. on weekends. You do not need to be a member to use most facilities, but members pay lower prices and can book courts in advance.',
+          'B. The centre has a large swimming pool, a gym with modern equipment, and three courts for badminton and tennis. Swimming lessons for children are held on Saturday mornings, and there is a beginners\u2019 swimming class for adults on Tuesday evenings. The gym is busiest between 5 p.m. and 7 p.m., so visitors who prefer a quiet workout should come in the morning.',
+          'C. Classes must be booked at least one day in advance, either by phone or at the reception desk. If you cannot come to a class you have booked, please cancel at least three hours before the class starts. If you do not cancel, you will still have to pay the full price of the class. This rule helps the centre offer places to other people.',
+          'D. The centre also has a small café that serves drinks, sandwiches, and fruit. The café is open from 8 a.m. to 6 p.m. every day. Visitors can also hire towels and sports equipment at the reception desk for a small fee. Lost property is kept at reception for one month.'
+        ],
+        questions: [
+          { type: 'tfng', q: 'The centre is open to everyone.', answer: 0, explain: 'Paragraph A: "open to everyone".' },
+          { type: 'tfng', q: 'You must be a member to use most facilities.', answer: 1, explain: 'Paragraph A: "You do not need to be a member".' },
+          { type: 'tfng', q: 'The centre closes at 10 p.m. on weekends.', answer: 1, explain: 'Paragraph A: weekends 8 a.m. to 8 p.m.' },
+          { type: 'mcq', q: 'When are children\u2019s swimming lessons held?', options: ['Tuesday evenings', 'Saturday mornings', 'Sunday afternoons', 'Monday mornings'], answer: 1, explain: 'Paragraph B: "Swimming lessons for children are held on Saturday mornings".' },
+          { type: 'mcq', q: 'When is the gym busiest?', options: ['In the morning', 'Between 5 p.m. and 7 p.m.', 'At midnight', 'On Sunday mornings'], answer: 1, explain: 'Paragraph B: "busiest between 5 p.m. and 7 p.m.".' },
+          { type: 'heading', q: 'Which heading best fits paragraph C?', options: ['How to book and cancel classes', 'How to join the gym', 'The café menu', 'Opening hours'], answer: 0, explain: 'Paragraph C is about booking and cancelling classes.' },
+          { type: 'heading', q: 'Which heading best fits paragraph D?', options: ['Café, hire, and lost property', 'Swimming lessons', 'Membership prices', 'The history of the centre'], answer: 0, explain: 'Paragraph D covers the café, hire, and lost property.' },
+          { type: 'complete', q: 'Complete the sentence: Classes must be booked at least _____ day in advance.', accepted: ['one', '1'], explain: 'Paragraph C: "at least one day in advance".' },
+          { type: 'complete', q: 'Complete the sentence: If you cannot come, cancel at least _____ hours before the class starts.', accepted: ['three', '3'], explain: 'Paragraph C: "cancel at least three hours before".' },
+          { type: 'complete', q: 'Complete the sentence: Lost property is kept at reception for one _____.', accepted: ['month'], explain: 'Paragraph D: "kept at reception for one month".' }
+        ]
+      };
+      // Question bank: sets per mode. The practice test loads the selected
+      // set; switching sets restarts the test fresh (new timer, cleared answers).
+      var READING_SETS = { academic: [READING, READING_ACADEMIC_2], general: [READING_GT, READING_GT_2] };
+      var readingSetIndex = { academic: 0, general: 0 };
       var readingAnswers = {};
       var activeReading = READING;
       function startReading() {
         stopExamTimers();
         readingAnswers = {};
-        // Snapshot the mode at test start: changing mode mid-test cannot
-        // mix another test's questions into this one.
-        activeReading = examMode === 'general' ? READING_GT : READING;
+        // Snapshot the mode AND the selected bank set at test start: changing
+        // mode or set mid-test cannot mix another test's questions in.
+        activeReading = READING_SETS[examMode][readingSetIndex[examMode]];
         showExamView('examReading');
+        document.querySelectorAll('[data-reading-set]').forEach(function (btn) {
+          var idx = parseInt(btn.getAttribute('data-reading-set'), 10);
+          var on = idx === readingSetIndex[examMode];
+          btn.style.fontWeight = on ? '700' : '400';
+          btn.setAttribute('aria-pressed', String(on));
+        });
         document.getElementById('readingPassageTitle').textContent = activeReading.title + ' · ' + examModeLabel();
         document.getElementById('readingPassage').innerHTML = activeReading.paragraphs.map(function (p) {
           return '<p style="margin:0 0 12px">' + escapeHtml(p) + '</p>';
@@ -2822,6 +2880,12 @@
         });
         examCountdown(document.getElementById('readingTimer'), 20 * 60);
       }
+      document.querySelectorAll('[data-reading-set]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          readingSetIndex[examMode] = parseInt(this.getAttribute('data-reading-set'), 10);
+          startReading();
+        });
+      });
       document.getElementById('readingSubmitBtn').addEventListener('click', function () {
         stopExamTimers();
         var total = activeReading.questions.length, correct = 0;
