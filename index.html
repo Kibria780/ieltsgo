@@ -2763,7 +2763,7 @@
             var d = new Date(e.at);
             return '<div class="exam-result-box"><strong>' + escapeHtml(e.test || '') + '</strong> · ' +
               escapeHtml(e.mode || '') + (e.set ? ' · ' + escapeHtml(e.set) : '') + '<br><span>' +
-              escapeHtml(e.score || '') + (e.band != null ? ' · Band ' + e.band : '') +
+              escapeHtml(e.score || '') + ((e.band != null && String(e.score || '').indexOf('Band') === -1) ? ' · Band ' + e.band : '') +
               ' · ' + d.toLocaleString('en-GB') + '</span></div>';
           }).join('');
         }
