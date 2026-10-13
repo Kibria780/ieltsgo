@@ -2783,12 +2783,6 @@
         });
         examCountdown(document.getElementById('readingTimer'), 20 * 60);
       }
-      // Transparent practice estimate for a 10-question test. Raw score is
-      // primary; the band is an approximation, NEVER an official score.
-      function practiceBand10(correct) {
-        var map = ['3.5', '4.0', '4.5', '5.0', '5.5', '6.0', '6.5', '7.0', '7.5', '8.0', '8.5'];
-        return map[correct] || '3.5';
-      }
       document.getElementById('readingSubmitBtn').addEventListener('click', function () {
         stopExamTimers();
         var total = activeReading.questions.length, correct = 0;
@@ -2805,8 +2799,12 @@
           review += '<div class="exam-result-box"><h3>Q' + (qi + 1) + ' — ' + (ok ? '✅ Correct' : '❌ Incorrect') + '</h3><p>' + escapeHtml(item.q) + '</p><p>' + escapeHtml(item.explain) + '</p></div>';
         });
         var pct = Math.round(correct / total * 100);
-        var disclaimer = '<div class="exam-result-box"><h3>About this score</h3><p>Raw practice score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>. Estimated practice band ≈ <strong>' + practiceBand10(correct) + '</strong> using this transparent 10-question mapping: 10→8.5, 9→8.0, 8→7.5, 7→7.0, 6→6.5, 5→6.0, 4→5.5, 3→5.0, 2→4.5, 1→4.0, 0→3.5.</p><p class="exam-disclaimer">This is an ESTIMATED practice band from a short practice test. It is NOT an official IELTS score and does not guarantee any official result.</p></div>';
-        showExamResult('Reading Result · ' + examModeLabel(), '≈ ' + practiceBand10(correct) + ' (est.)', 'Raw score: ' + correct + ' / ' + total + ' correct · ' + pct + '%', disclaimer + review);
+        // No band estimate for a short 10-question practice test: a short test
+        // cannot estimate a band reliably. Raw score + percentage only.
+        // (The Full Reading Mock, 40 questions, uses the IDP-published
+        // raw-to-band conversion and is the only place a band is estimated.)
+        var disclaimer = '<div class="exam-result-box"><h3>About this score</h3><p>Raw practice score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p><p class="exam-disclaimer">No band estimate is shown for this short 10-question practice test — a short test cannot estimate a band reliably. For a band estimate, take the Full Reading Mock (40 questions). This is NOT an official IELTS score.</p></div>';
+        showExamResult('Reading Result · ' + examModeLabel(), correct + ' / ' + total + ' correct · ' + pct + '%', 'Short practice test · No band estimate', disclaimer + review);
       });
 
       /* ---- Phase 2: Full Reading Mock (40 questions, 60 min) ---- */
