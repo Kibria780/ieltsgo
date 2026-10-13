@@ -1364,6 +1364,12 @@
             <div class="exam-meta">COMPACT VERSION · ~40 MIN</div>
           </button>
         </div>
+        <div style="margin-top:24px">
+          <h3>Practice history</h3>
+          <p class="exam-meta">Progress ও history এই device/browser-এই save হয় (localStorage, ~5MB limit)। কোনো account নেই, cross-device sync নেই।</p>
+          <div id="p4HistoryList"></div>
+          <button class="exam-secondary" type="button" id="p4ClearHistory" style="margin-top:8px">Clear history</button>
+        </div>
       </div>
 
       <!-- Listening -->
@@ -1373,6 +1379,8 @@
           <h2>Listening Test</h2>
           <p>প্রশ্নগুলো দেখে নিন, তারপর ▶ Play চাপুন। Audio একবারই বাজবে — আসল পরীক্ষার মতো।</p>
         </div>
+        <div class="exam-meta p4-attempt"><span class="p4-attempt-text"></span> <button class="exam-secondary" type="button" data-p4-fresh="listening" style="min-height:30px;padding:0 10px">Start fresh</button></div>
+        <div class="exam-meta p4-autosave"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px">
           <span style="align-self:center;font-size:.85rem;opacity:.8">Length:</span>
           <button class="exam-secondary" type="button" data-listening-length="0" style="min-height:36px;padding:0 12px">Short practice (12Q)</button>
@@ -1401,6 +1409,8 @@
           <h2>Writing Test</h2>
           <p><span id="writingModeBadge"></span> Task 1 (20 min) + Task 2 (40 min)। দুইটা শেষ করে Submit চাপুন।</p>
         </div>
+        <div class="exam-meta p4-attempt"><span class="p4-attempt-text"></span> <button class="exam-secondary" type="button" data-p4-fresh="writing" style="min-height:30px;padding:0 10px">Start fresh</button></div>
+        <div class="exam-meta p4-autosave"></div>
         <div class="exam-result-box" id="writingTask1Academic">
           <div class="exam-part">Task 1 · Academic · 20 minutes · at least 150 words</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0">
@@ -1488,6 +1498,8 @@
           <h2>Reading Test</h2>
           <p>Passage পড়ে প্রশ্নগুলোর উত্তর দিন। Time left: <span class="exam-timer" id="readingTimer">20:00</span></p>
         </div>
+        <div class="exam-meta p4-attempt"><span class="p4-attempt-text"></span> <button class="exam-secondary" type="button" data-p4-fresh="reading" style="min-height:30px;padding:0 10px">Start fresh</button></div>
+        <div class="exam-meta p4-autosave"></div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px">
           <span style="align-self:center;font-size:.85rem;opacity:.8">Question set:</span>
           <button class="exam-secondary" type="button" data-reading-set="0" style="min-height:36px;padding:0 12px">Set 1</button>
@@ -1781,6 +1793,50 @@
           ? 'টেস্ট চলাকালে সংশোধন দেখানো হবে না। শেষ প্রশ্নের পর আনুমানিক ব্যান্ড ও বিস্তারিত ফিডব্যাক পাবেন।'
           : 'এটি একটি অনুশীলনমূলক IELTS Speaking simulation—অফিশিয়াল স্কোর নয়। প্রস্তুত হলে “Start mock test” চাপুন।';
         wrap.appendChild(note);
+        if (!mockStarted) {
+          // Phase 4: resume banner for an unfinished Speaking test.
+          var savedSpeaking = P4.load('progress_speaking', null);
+          if (savedSpeaking && savedSpeaking.attemptId && savedSpeaking.mockQuestionIndex < activeMockQuestions.length) {
+            var banner = document.createElement('div');
+            banner.style.cssText = 'border:1px solid #888;padding:8px;border-radius:8px;margin:8px 0';
+            var bText = document.createElement('p');
+            bText.className = 'mock-note';
+            bText.textContent = 'Unfinished Speaking test found — ' + savedSpeaking.mockQuestionIndex + ' of ' + activeMockQuestions.length + ' answered. Attempt ' + savedSpeaking.attemptId + '.';
+            banner.appendChild(bText);
+            var resumeBtn = document.createElement('button');
+            resumeBtn.className = 'exam-secondary';
+            resumeBtn.type = 'button';
+            resumeBtn.textContent = 'Resume test';
+            resumeBtn.addEventListener('click', function () { restoreSpeakingProgress(); });
+            banner.appendChild(resumeBtn);
+            var freshBtn = document.createElement('button');
+            freshBtn.className = 'exam-secondary';
+            freshBtn.type = 'button';
+            freshBtn.textContent = 'Start fresh';
+            freshBtn.style.marginLeft = '6px';
+            freshBtn.addEventListener('click', function () { P4.remove('progress_speaking'); renderMockProgress(); });
+            banner.appendChild(freshBtn);
+            wrap.appendChild(banner);
+          }
+        }
+        if (mockStarted) {
+          var saveNote = document.createElement('p');
+          saveNote.className = 'mock-note p4-autosave';
+          wrap.appendChild(saveNote);
+          P4.refreshNotes();
+          if (speakingResumed) {
+            var rLine = document.createElement('p');
+            rLine.className = 'mock-note';
+            rLine.textContent = 'Resumed attempt ' + speakingAttemptId + '. ';
+            var rFresh = document.createElement('button');
+            rFresh.className = 'exam-secondary';
+            rFresh.type = 'button';
+            rFresh.textContent = 'Start fresh';
+            rFresh.addEventListener('click', function () { P4.remove('progress_speaking'); prepareMockTest(); });
+            rLine.appendChild(rFresh);
+            wrap.appendChild(rLine);
+          }
+        }
         if (!mockStarted) {
           // Speaking bank picker: visible only before the test starts, so a
           // set cannot be swapped mid-test.
@@ -2090,6 +2146,7 @@
         transcript.push({ role: 'user', text: text });
         turns += 1;
         mockQuestionIndex += 1;
+        p4SaveSpeaking();
 
         if (mockQuestionIndex < activeMockQuestions.length) {
           var next = activeMockQuestions[mockQuestionIndex];
@@ -2098,6 +2155,7 @@
           setTimeout(function () {
             addMessage('assistant', transition + next.text, false);
             transcript.push({ role: 'assistant', text: next.text });
+            p4SaveSpeaking();
             renderMockProgress();
             updateMockHeader();
             speak(transition + next.text);
@@ -2117,6 +2175,9 @@
           removeTyping();
           addMessage('assistant', 'That is the end of the speaking test. Your AI assessment is ready.', false);
           renderMockResult(result);
+          // Phase 4: record the completed test in history; clear progress.
+          P4.recordSubmission(speakingAttemptId, { type: 'speaking', band: result.overall_band }, { attemptId: speakingAttemptId, test: 'Speaking', mode: '—', set: 'Set ' + (mockSetIndex + 1), score: 'Band ' + (result.overall_band != null ? result.overall_band : '—'), pct: null, band: result.overall_band != null ? Number(result.overall_band) : null, at: Date.now() });
+          P4.remove('progress_speaking');
           scoreLabel.textContent = 'Estimated overall band';
           setStatus('Mock test complete', false);
           newSessionBtn.textContent = 'Try another test';
@@ -2419,6 +2480,7 @@
       function prepareMockTest() {
         stopMockTimer();
         stopVoicePlayback();
+        speakingResumed = false;
         mockStarted = false;
         mockQuestionIndex = 0;
         mockStartedAt = 0;
@@ -2441,11 +2503,58 @@
         renderMockProgress();
       }
 
+      function restoreSpeakingProgress() {
+        var saved = P4.load('progress_speaking', null);
+        if (!saved || !saved.attemptId) return;
+        if (saved.mockQuestionIndex >= MOCK_QUESTION_SETS[saved.set || 0].length) {
+          // Grading never completed for this attempt — discard and reset.
+          P4.remove('progress_speaking');
+          prepareMockTest();
+          return;
+        }
+        stopMockTimer();
+        stopVoicePlayback();
+        mockSetIndex = saved.set || 0;
+        activeMockQuestions = MOCK_QUESTION_SETS[mockSetIndex];
+        transcript = saved.transcript || [];
+        mockQuestionIndex = saved.mockQuestionIndex;
+        speakingAttemptId = saved.attemptId;
+        speakingResumed = true;
+        mockStarted = true;
+        mockStartedAt = Date.now();
+        turns = transcript.filter(function (m) { return m.role === 'user'; }).length;
+        messagesEl.innerHTML = '';
+        resetScore();
+        scoreLabel.textContent = 'Test in progress';
+        scoreSub.textContent = 'Feedback hidden until the end';
+        input.disabled = false;
+        input.readOnly = false;
+        composerForm.setAttribute('aria-busy', 'false');
+        sendBtn.disabled = false;
+        sendBtn.textContent = 'Send';
+        micBtn.disabled = false;
+        newSessionBtn.textContent = 'Restart test';
+        var question = activeMockQuestions[mockQuestionIndex];
+        addMessage('assistant', 'Resumed — ' + mockQuestionIndex + ' of ' + activeMockQuestions.length + ' answered. Continuing…', false);
+        addMessage('assistant', 'Part ' + question.part + '. ' + question.text, false);
+        var lastT = transcript[transcript.length - 1];
+        if (!lastT || lastT.role !== 'assistant' || lastT.text !== question.text) transcript.push({ role: 'assistant', text: question.text });
+        p4SaveSpeaking();
+        renderMockProgress();
+        updateMockHeader();
+        mockTimer = setInterval(updateMockHeader, 1000);
+        speak('Part ' + question.part + '. ' + question.text);
+        input.focus();
+      }
+
       function startMockTest() {
         stopMockTimer();
         stopVoicePlayback();
         // Snapshot the selected bank set at test start.
         activeMockQuestions = MOCK_QUESTION_SETS[mockSetIndex];
+        // Phase 4: new attempt; progress autosaves after each answer.
+        speakingAttemptId = P4.newAttemptId();
+        speakingResumed = false;
         mockStarted = true;
         mockQuestionIndex = 0;
         mockStartedAt = Date.now();
@@ -2465,6 +2574,7 @@
         var question = activeMockQuestions[0];
         addMessage('assistant', 'Part 1. ' + question.text, false);
         transcript.push({ role: 'assistant', text: question.text });
+        p4SaveSpeaking();
         renderMockProgress();
         updateMockHeader();
         mockTimer = setInterval(updateMockHeader, 1000);
@@ -2554,6 +2664,7 @@
       }
       function showExamHub() {
         refreshExamModeUi();
+        P4.renderHistory();
         ['examHub', 'examListening', 'examReading', 'examFullReading', 'examWriting', 'examFullMock', 'examResult'].forEach(function (id) {
           var el = document.getElementById(id);
           if (el) el.hidden = id !== 'examHub';
@@ -2598,6 +2709,118 @@
       }
       document.getElementById('modeAcademicBtn').addEventListener('click', function () { setExamMode('academic'); });
       document.getElementById('modeGeneralBtn').addEventListener('click', function () { setExamMode('general'); });
+
+      /* ================= Phase 4: Progress persistence (localStorage) ================= */
+      // Single-device only: progress + history live in this browser's
+      // localStorage (~5MB limit, last-write-wins across tabs). No account,
+      // no cross-device sync. Server-side per-user progress would need
+      // authentication + user-scoped storage — NOT built here (see audit).
+      // NOT persisted in Phase 4: Full Mock (4-skill) and Full Reading Mock
+      // (multi-stage flows) — standalone Reading/Listening/Writing/Speaking
+      // tests are covered.
+      var P4 = (function () {
+        var PREFIX = 'ieltsgo_p4_';
+        var lastLabel = 'Not saved yet';
+        function load(key, fallback) {
+          try { var raw = localStorage.getItem(PREFIX + key); return raw ? JSON.parse(raw) : fallback; } catch (e) { return fallback; }
+        }
+        function save(key, value) {
+          try { localStorage.setItem(PREFIX + key, JSON.stringify(value)); markSaved(true); return true; }
+          catch (e) { markSaved(false); return false; }
+        }
+        function remove(key) { try { localStorage.removeItem(PREFIX + key); } catch (e) {} }
+        function markSaved(ok) {
+          lastLabel = ok ? 'Autosaved · ' + new Date().toLocaleTimeString('en-GB') : 'Autosave unavailable — storage blocked';
+          refreshNotes();
+        }
+        function refreshNotes() {
+          document.querySelectorAll('.p4-autosave').forEach(function (el) { el.textContent = lastLabel; });
+        }
+        function newAttemptId() { return 'att_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8); }
+        function getSubmitted(attemptId) {
+          if (!attemptId) return null;
+          var s = load('submitted', {});
+          return s[attemptId] || null;
+        }
+        function recordSubmission(attemptId, result, historyEntry) {
+          var s = load('submitted', {});
+          s[attemptId] = result;
+          // Cap stored results so localStorage (~5MB) cannot fill up.
+          var keys = Object.keys(s);
+          if (keys.length > 100) { for (var i = 0; i < keys.length - 100; i++) delete s[keys[i]]; }
+          save('submitted', s);
+          var h = load('history', []);
+          h.unshift(historyEntry);
+          save('history', h.slice(0, 100));
+          renderHistory();
+        }
+        function renderHistory() {
+          var list = document.getElementById('p4HistoryList');
+          if (!list) return;
+          var h = load('history', []);
+          if (!h.length) { list.innerHTML = '<p class="exam-meta">No submitted results yet.</p>'; return; }
+          list.innerHTML = h.map(function (e) {
+            var d = new Date(e.at);
+            return '<div class="exam-result-box"><strong>' + escapeHtml(e.test || '') + '</strong> · ' +
+              escapeHtml(e.mode || '') + (e.set ? ' · ' + escapeHtml(e.set) : '') + '<br><span>' +
+              escapeHtml(e.score || '') + (e.band != null ? ' · Band ' + e.band : '') +
+              ' · ' + d.toLocaleString('en-GB') + '</span></div>';
+          }).join('');
+        }
+        return { load: load, save: save, remove: remove, markSaved: markSaved, refreshNotes: refreshNotes, newAttemptId: newAttemptId, getSubmitted: getSubmitted, recordSubmission: recordSubmission, renderHistory: renderHistory };
+      })();
+      // Per-test attempt state (restored from saved progress on open).
+      var readingAttemptId = null, readingEndsAt = 0;
+      var listeningAttemptId = null;
+      var writingAttemptId = null, writingSaveTimer = null;
+      var speakingAttemptId = null, speakingResumed = false;
+      function p4ShowAttempt(viewId, text) {
+        var el = document.querySelector('#' + viewId + ' .p4-attempt-text');
+        if (el) el.textContent = text;
+      }
+      function p4SaveReading() {
+        P4.save('progress_reading', { attemptId: readingAttemptId, mode: examMode, setIndex: readingSetIndex[examMode], answers: readingAnswers, endsAt: readingEndsAt, updatedAt: Date.now() });
+      }
+      function p4SaveListening() {
+        P4.save('progress_listening', { attemptId: listeningAttemptId, fullMock: listeningFullMock, setIndex: listeningSetIndex, answers: listeningAnswers, partIndex: listeningPartIndex, played: listeningPlayed, updatedAt: Date.now() });
+      }
+      function p4SaveWriting() {
+        P4.save('progress_writing', { attemptId: writingAttemptId, mode: writingMode, letterIndex: writingLetterIndex, essayIndex: writingEssayIndex, task1Type: writingTask1Type, task1: document.getElementById('writingTask1').value, task1GT: document.getElementById('writingTask1GT').value, task2: document.getElementById('writingTask2').value, updatedAt: Date.now() });
+      }
+      function p4SaveWritingSoon() {
+        clearTimeout(writingSaveTimer);
+        writingSaveTimer = setTimeout(p4SaveWriting, 600);
+      }
+      function p4SaveSpeaking() {
+        P4.save('progress_speaking', { attemptId: speakingAttemptId, set: mockSetIndex, transcript: transcript, mockQuestionIndex: mockQuestionIndex, updatedAt: Date.now() });
+      }
+      function openReading() {
+        var saved = P4.load('progress_reading', null);
+        if (saved && saved.attemptId) startReading(saved); else startReading(null);
+      }
+      function openListening() {
+        var saved = P4.load('progress_listening', null);
+        if (saved && saved.attemptId) startListening(saved); else startListening(null);
+      }
+      function openWriting() {
+        var saved = P4.load('progress_writing', null);
+        if (saved && saved.attemptId) startWriting(saved); else startWriting(null);
+      }
+      document.querySelectorAll('[data-p4-fresh]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var test = this.getAttribute('data-p4-fresh');
+          P4.remove('progress_' + test);
+          if (test === 'reading') startReading(null);
+          else if (test === 'listening') startListening(null);
+          else if (test === 'writing') startWriting(null);
+        });
+      });
+      document.getElementById('p4ClearHistory').addEventListener('click', function () {
+        P4.save('history', []);
+        P4.renderHistory();
+        showToast('Practice history cleared.');
+      });
+      P4.renderHistory();
 
       function escapeHtml(s) {
         return String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
@@ -2930,7 +3153,7 @@
             radio.name = 'listen-q' + globalQi;
             radio.value = oi;
             if (listeningAnswers[globalQi] === oi) radio.checked = true;
-            radio.addEventListener('change', function () { listeningAnswers[globalQi] = oi; });
+            radio.addEventListener('change', function () { listeningAnswers[globalQi] = oi; p4SaveListening(); });
             var span = document.createElement('span');
             span.textContent = opt;
             label.appendChild(radio);
@@ -2951,6 +3174,13 @@
       // IDP notes actual marks may vary slightly between tests.
       function finishListening() {
         stopListeningAudio();
+        // Phase 4: duplicate submission prevention — replay the saved result.
+        var dupListening = P4.getSubmitted(listeningAttemptId);
+        if (dupListening) {
+          showExamResult(dupListening.title, dupListening.headline, dupListening.sub, dupListening.detail, dupListening.label);
+          showToast('Already submitted — showing your saved result.');
+          return;
+        }
         var total = 0, correct = 0;
         activeListeningParts.forEach(function (part) {
           part.questions.forEach(function (item) {
@@ -2966,18 +3196,36 @@
             ? '<p>Estimated band: <strong>≈' + band.toFixed(1) + ' (est.)</strong></p>'
             : '<p>Estimated band: <strong>below 4.0 — no estimate</strong></p>';
           var detail = '<div class="exam-result-box"><h3>Listening score</h3><p>Raw score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p>' + bandLine + '<p class="exam-disclaimer">Based on the IDP-published average conversion for a 40-question Listening test. Actual marks can vary slightly between tests, so this is an estimate, not an official score.</p></div>';
-          showExamResult('Listening Result', correct + ' / ' + total + ' correct · ' + pct + '%', 'Full-length Listening Mock (40Q) · Estimated band', detail, 'Score');
+          var fullResult = { title: 'Listening Result', headline: correct + ' / ' + total + ' correct · ' + pct + '%', sub: 'Full-length Listening Mock (40Q) · Estimated band', detail: detail, label: 'Score' };
+          showExamResult(fullResult.title, fullResult.headline, fullResult.sub, fullResult.detail, fullResult.label);
+          P4.recordSubmission(listeningAttemptId, fullResult, { attemptId: listeningAttemptId, test: 'Listening', mode: examModeLabel(), set: 'Full mock 40Q', score: correct + ' / ' + total, pct: pct, band: band, at: Date.now() });
+          P4.remove('progress_listening');
           return;
         }
         // No band estimate for a short 12-question practice test: no
         // reliable conversion exists for 12 questions. Raw score only.
         var detail = '<div class="exam-result-box"><h3>Listening score</h3><p>Raw score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p><p class="exam-disclaimer">No band estimate is shown for this short 12-question practice test — a short test cannot estimate a band reliably. The full IELTS Listening test has 40 questions; its IDP-published band conversion applies only to a full-length test.</p></div>';
-        showExamResult('Listening Result', correct + ' / ' + total + ' correct · ' + pct + '%', 'Short practice test · No band estimate', detail, 'Score');
+        var shortResult = { title: 'Listening Result', headline: correct + ' / ' + total + ' correct · ' + pct + '%', sub: 'Short practice test · No band estimate', detail: detail, label: 'Score' };
+        showExamResult(shortResult.title, shortResult.headline, shortResult.sub, shortResult.detail, shortResult.label);
+        P4.recordSubmission(listeningAttemptId, shortResult, { attemptId: listeningAttemptId, test: 'Listening', mode: examModeLabel(), set: 'Short 12Q · Set ' + (listeningSetIndex + 1), score: correct + ' / ' + total, pct: pct, band: null, at: Date.now() });
+        P4.remove('progress_listening');
       }
-      function startListening() {
-        listeningPartIndex = 0;
-        listeningAnswers = {};
-        listeningPlayed = {};
+      function startListening(restore) {
+        var resumed = !!restore;
+        if (restore) {
+          // Phase 4: resume the saved attempt (length + set + answers + part).
+          listeningFullMock = !!restore.fullMock;
+          listeningSetIndex = restore.setIndex;
+          listeningPartIndex = restore.partIndex || 0;
+          listeningAnswers = restore.answers || {};
+          listeningPlayed = restore.played || {};
+          listeningAttemptId = restore.attemptId;
+        } else {
+          listeningPartIndex = 0;
+          listeningAnswers = {};
+          listeningPlayed = {};
+          listeningAttemptId = P4.newAttemptId();
+        }
         // Snapshot the selected bank set / full mock at test start.
         activeListeningParts = listeningFullMock ? LISTENING_FULL_PARTS : LISTENING_SETS[listeningSetIndex];
         showExamView('examListening');
@@ -2995,6 +3243,9 @@
           btn.setAttribute('aria-pressed', String(on));
         });
         renderListeningPart();
+        p4ShowAttempt('examListening', (resumed ? 'Resumed attempt ' : 'Attempt ') + listeningAttemptId + ' · ' + (listeningFullMock ? 'Full mock 40Q' : 'Short 12Q · Set ' + (listeningSetIndex + 1)));
+        p4SaveListening();
+        P4.refreshNotes();
       }
       document.querySelectorAll('[data-listening-length]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -3020,6 +3271,7 @@
             listeningPlayed[partIndex] = true;
             btn.textContent = '▶ Played';
             noteEl.textContent = 'Played — answer from memory, like the real test.';
+            p4SaveListening();
           } else {
             btn.disabled = false;
             btn.textContent = '↻ Retry audio';
@@ -3034,6 +3286,7 @@
         if (listeningPartIndex < activeListeningParts.length - 1) {
           listeningPartIndex += 1;
           renderListeningPart();
+          p4SaveListening();
         } else {
           finishListening();
         }
@@ -3132,9 +3385,21 @@
       var readingSetIndex = { academic: 0, general: 0 };
       var readingAnswers = {};
       var activeReading = READING;
-      function startReading() {
+      function startReading(restore) {
         stopExamTimers();
-        readingAnswers = {};
+        var resumed = !!restore;
+        if (restore) {
+          // Phase 4: resume the saved attempt (mode + set + answers + timer).
+          setExamMode(restore.mode);
+          readingSetIndex[examMode] = restore.setIndex;
+          readingAnswers = restore.answers || {};
+          readingAttemptId = restore.attemptId;
+          readingEndsAt = restore.endsAt || (Date.now() + 20 * 60 * 1000);
+        } else {
+          readingAnswers = {};
+          readingAttemptId = P4.newAttemptId();
+          readingEndsAt = Date.now() + 20 * 60 * 1000;
+        }
         // Snapshot the mode AND the selected bank set at test start: changing
         // mode or set mid-test cannot mix another test's questions in.
         activeReading = READING_SETS[examMode][readingSetIndex[examMode]];
@@ -3164,7 +3429,7 @@
             input.placeholder = 'Type your answer…';
             input.style.width = '100%';
             if (readingAnswers[qi] != null) input.value = readingAnswers[qi];
-            input.addEventListener('input', function () { readingAnswers[qi] = this.value; });
+            input.addEventListener('input', function () { readingAnswers[qi] = this.value; p4SaveReading(); });
             qDiv.appendChild(input);
           } else {
             var opts = document.createElement('div');
@@ -3177,7 +3442,7 @@
               radio.name = 'read-q' + qi;
               radio.value = oi;
               if (readingAnswers[qi] === oi) radio.checked = true;
-              radio.addEventListener('change', function () { readingAnswers[qi] = oi; });
+              radio.addEventListener('change', function () { readingAnswers[qi] = oi; p4SaveReading(); });
               var span = document.createElement('span');
               span.textContent = opt;
               label.appendChild(radio);
@@ -3188,7 +3453,10 @@
           }
           box.appendChild(qDiv);
         });
-        examCountdown(document.getElementById('readingTimer'), 20 * 60);
+        examCountdown(document.getElementById('readingTimer'), Math.max(0, Math.floor((readingEndsAt - Date.now()) / 1000)));
+        p4ShowAttempt('examReading', (resumed ? 'Resumed attempt ' : 'Attempt ') + readingAttemptId + ' · ' + examModeLabel() + ' · Set ' + (readingSetIndex[examMode] + 1));
+        p4SaveReading();
+        P4.refreshNotes();
       }
       document.querySelectorAll('[data-reading-set]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -3198,6 +3466,14 @@
       });
       document.getElementById('readingSubmitBtn').addEventListener('click', function () {
         stopExamTimers();
+        // Phase 4: duplicate submission prevention — replay the saved
+        // result instead of re-scoring the same attempt.
+        var dupReading = P4.getSubmitted(readingAttemptId);
+        if (dupReading) {
+          showExamResult(dupReading.title, dupReading.headline, dupReading.sub, dupReading.detail, dupReading.label);
+          showToast('Already submitted — showing your saved result.');
+          return;
+        }
         var total = activeReading.questions.length, correct = 0;
         var review = '';
         activeReading.questions.forEach(function (item, qi) {
@@ -3217,7 +3493,10 @@
         // (The Full Reading Mock, 40 questions, uses the IDP-published
         // raw-to-band conversion and is the only place a band is estimated.)
         var disclaimer = '<div class="exam-result-box"><h3>About this score</h3><p>Raw practice score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p><p class="exam-disclaimer">No band estimate is shown for this short 10-question practice test — a short test cannot estimate a band reliably. For a band estimate, take the Full Reading Mock (40 questions). This is NOT an official IELTS score.</p></div>';
-        showExamResult('Reading Result · ' + examModeLabel(), correct + ' / ' + total + ' correct · ' + pct + '%', 'Short practice test · No band estimate', disclaimer + review, 'Score');
+        var readingResult = { title: 'Reading Result · ' + examModeLabel(), headline: correct + ' / ' + total + ' correct · ' + pct + '%', sub: 'Short practice test · No band estimate', detail: disclaimer + review, label: 'Score' };
+        showExamResult(readingResult.title, readingResult.headline, readingResult.sub, readingResult.detail, readingResult.label);
+        P4.recordSubmission(readingAttemptId, readingResult, { attemptId: readingAttemptId, test: 'Reading', mode: examModeLabel(), set: 'Set ' + (readingSetIndex[examMode] + 1), score: correct + ' / ' + total, pct: pct, band: null, at: Date.now() });
+        P4.remove('progress_reading');
       });
 
       /* ---- Phase 2: Full Reading Mock (40 questions, 60 min) ---- */
@@ -3575,6 +3854,7 @@
         document.getElementById('writingTask1GT').value = '';
         document.getElementById('writingTask1GTCount').textContent = '0 words';
         updateWritingPickerUI();
+        p4SaveWriting();
       }
       function renderWritingEssay() {
         var el = document.getElementById('writingEssayBody');
@@ -3583,6 +3863,7 @@
         document.getElementById('writingTask2').value = '';
         document.getElementById('writingTask2Count').textContent = '0 words';
         updateWritingPickerUI();
+        p4SaveWriting();
       }
       document.querySelectorAll('[data-writing-letter]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -3606,47 +3887,84 @@
           ['chart', 'table', 'map', 'process'].forEach(function (t) {
             document.getElementById('task1' + t.charAt(0).toUpperCase() + t.slice(1)).hidden = t !== writingTask1Type;
           });
+          p4SaveWriting();
         });
       });
-      function startWriting() {
+      function startWriting(restore) {
         stopExamTimers();
-        // Snapshot the mode at test start so a mid-test mode change cannot
-        // mix the other format's Task 1 into this test.
-        writingMode = examMode;
-        writingTask1Type = 'chart';
+        var resumed = !!restore;
+        if (restore) {
+          // Phase 4: resume the saved attempt (mode + prompts + text).
+          setExamMode(restore.mode);
+          writingMode = examMode;
+          writingLetterIndex = restore.letterIndex;
+          writingEssayIndex = restore.essayIndex;
+          writingTask1Type = restore.task1Type || 'chart';
+          writingAttemptId = restore.attemptId;
+        } else {
+          // Snapshot the mode at test start so a mid-test mode change cannot
+          // mix the other format's Task 1 into this test.
+          writingMode = examMode;
+          writingTask1Type = 'chart';
+          writingAttemptId = P4.newAttemptId();
+        }
         ['chart', 'table', 'map', 'process'].forEach(function (t) {
-          document.getElementById('task1' + t.charAt(0).toUpperCase() + t.slice(1)).hidden = t !== 'chart';
+          document.getElementById('task1' + t.charAt(0).toUpperCase() + t.slice(1)).hidden = t !== writingTask1Type;
         });
         showExamView('examWriting');
         document.getElementById('writingModeBadge').textContent = 'Mode: ' + examModeLabel() + ' · ';
         document.getElementById('writingTask1Academic').hidden = writingMode !== 'academic';
         document.getElementById('writingTask1General').hidden = writingMode !== 'general';
-        document.getElementById('writingTask1').value = '';
-        document.getElementById('writingTask1GT').value = '';
-        document.getElementById('writingTask2').value = '';
-        document.getElementById('writingTask1Count').textContent = '0 words';
-        document.getElementById('writingTask1GTCount').textContent = '0 words';
-        document.getElementById('writingTask2Count').textContent = '0 words';
-        // Render the bank prompts for the remembered indices.
+        // Render the bank prompts (these clear the task textareas), then
+        // refill the saved text on resume.
         renderWritingLetter();
         renderWritingEssay();
+        if (restore) {
+          document.getElementById('writingTask1').value = restore.task1 || '';
+          document.getElementById('writingTask1GT').value = restore.task1GT || '';
+          document.getElementById('writingTask2').value = restore.task2 || '';
+          document.getElementById('writingTask1Count').textContent = countWords(restore.task1 || '') + ' words';
+          document.getElementById('writingTask1GTCount').textContent = countWords(restore.task1GT || '') + ' words';
+          document.getElementById('writingTask2Count').textContent = countWords(restore.task2 || '') + ' words';
+        } else {
+          document.getElementById('writingTask1').value = '';
+          document.getElementById('writingTask1GT').value = '';
+          document.getElementById('writingTask2').value = '';
+          document.getElementById('writingTask1Count').textContent = '0 words';
+          document.getElementById('writingTask1GTCount').textContent = '0 words';
+          document.getElementById('writingTask2Count').textContent = '0 words';
+        }
         examCountdown(document.getElementById(writingMode === 'general' ? 'writingTask1GTTimer' : 'writingTask1Timer'), 20 * 60);
         examCountdown(document.getElementById('writingTask2Timer'), 40 * 60);
+        p4ShowAttempt('examWriting', (resumed ? 'Resumed attempt ' : 'Attempt ') + writingAttemptId + ' · ' + examModeLabel());
+        p4SaveWriting();
+        P4.refreshNotes();
       }
       document.getElementById('writingTask1').addEventListener('input', function () {
         document.getElementById('writingTask1Count').textContent = countWords(this.value) + ' words';
+        p4SaveWritingSoon();
       });
       document.getElementById('writingTask1GT').addEventListener('input', function () {
         document.getElementById('writingTask1GTCount').textContent = countWords(this.value) + ' words';
+        p4SaveWritingSoon();
       });
       document.getElementById('writingTask2').addEventListener('input', function () {
         document.getElementById('writingTask2Count').textContent = countWords(this.value) + ' words';
+        p4SaveWritingSoon();
       });
       document.getElementById('writingSubmitBtn').addEventListener('click', async function () {
         var t1 = (writingMode === 'general' ? document.getElementById('writingTask1GT') : document.getElementById('writingTask1')).value.trim();
         var t2 = document.getElementById('writingTask2').value.trim();
         if (countWords(t1) < 20 || countWords(t2) < 20) {
           showToast('দুটো Task-এই অন্তত কিছু লিখুন, তারপর Submit চাপুন।');
+          return;
+        }
+        // Phase 4: duplicate submission prevention — replay the saved
+        // result instead of calling the AI examiner again.
+        var dupWriting = P4.getSubmitted(writingAttemptId);
+        if (dupWriting) {
+          showExamResult(dupWriting.title, dupWriting.headline, dupWriting.sub, dupWriting.detail, dupWriting.label);
+          showToast('Already submitted — showing your saved result.');
           return;
         }
         var btn = this;
@@ -3676,7 +3994,10 @@
             }).join('') + '</ul></div>';
           }
           detail += '<p class="exam-disclaimer">This is an ESTIMATED AI band. It is NOT an official IELTS score and does not guarantee any official result.</p>';
-          showExamResult('Writing Result · ' + examModeLabel(), band + ' (est.)', 'Task 1: ' + countWords(t1) + ' words · Task 2: ' + countWords(t2) + ' words', detail);
+          var writingResult = { title: 'Writing Result · ' + examModeLabel(), headline: band + ' (est.)', sub: 'Task 1: ' + countWords(t1) + ' words · Task 2: ' + countWords(t2) + ' words', detail: detail, label: undefined };
+          showExamResult(writingResult.title, writingResult.headline, writingResult.sub, writingResult.detail, writingResult.label);
+          P4.recordSubmission(writingAttemptId, writingResult, { attemptId: writingAttemptId, test: 'Writing', mode: examModeLabel(), set: null, score: band + ' (est.)', pct: null, band: data.band != null ? Number(data.band) : null, at: Date.now() });
+          P4.remove('progress_writing');
         } catch (error) {
           console.error('Writing evaluation failed:', error);
           showToast('AI examiner error: ' + (error && error.message ? error.message : 'connection failed') + ' — আবার চেষ্টা করুন।');
@@ -3919,10 +4240,10 @@
         var card = event.target.closest('.exam-card');
         if (!card) return;
         var which = card.dataset.exam;
-        if (which === 'listening') startListening();
-        else if (which === 'reading') startReading();
+        if (which === 'listening') openListening();
+        else if (which === 'reading') openReading();
         else if (which === 'fullreading') startFullReading();
-        else if (which === 'writing') startWriting();
+        else if (which === 'writing') openWriting();
         else if (which === 'speaking') switchMode('mock');
         else if (which === 'fullmock') startFullMock();
       });
