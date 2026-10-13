@@ -1609,6 +1609,20 @@
         { part: 3, text: 'Do you think schools should teach more practical skills?', hint: 'Discussion questions' },
         { part: 3, text: 'How might technology change the way people learn skills in the future?', hint: 'Discussion questions' }
       ];
+      /* ---- Phase 3: Speaking question bank — Set 2 ---- */
+      var MOCK_QUESTIONS_2 = [
+        { part: 1, text: 'Let’s talk about your free time. What do you usually do in your free time?', hint: 'Short personal questions' },
+        { part: 1, text: 'What kind of books or films do you enjoy?', hint: 'Short personal questions' },
+        { part: 1, text: 'Do you prefer spending free time alone or with other people? Why?', hint: 'Short personal questions' },
+        { part: 2, text: 'Now speak for one to two minutes. Describe a place you would like to visit. Say where it is, why you want to visit it, what you would do there, and explain why this place is special to you.', hint: 'Long turn · aim for 1–2 minutes' },
+        { part: 3, text: 'Why do you think people enjoy travelling?', hint: 'Discussion questions' },
+        { part: 3, text: 'Do you think tourism is good or bad for local communities?', hint: 'Discussion questions' },
+        { part: 3, text: 'How might travel change in the future?', hint: 'Discussion questions' }
+      ];
+      // Speaking bank: the mock test loads the selected set (same 7-question shape).
+      var MOCK_QUESTION_SETS = [mockQuestions, MOCK_QUESTIONS_2];
+      var mockSetIndex = 0;
+      var activeMockQuestions = mockQuestions;
 
       function showToast(text) {
         toast.textContent = text;
@@ -1700,7 +1714,7 @@
       async function getMockFeedback() {
         var answers = transcript.filter(function (item) { return item.role === 'user'; });
         var answerIndex = 0;
-        var testText = mockQuestions.map(function (question, index) {
+        var testText = activeMockQuestions.map(function (question, index) {
           var answer = answers[answerIndex++] || { text: '' };
           return 'Question ' + (index + 1) + ' (Part ' + question.part + '): ' + question.text + '\nAnswer: ' + answer.text;
         }).join('\n\n');
@@ -1741,18 +1755,18 @@
 
       function updateMockHeader() {
         if (appMode !== 'mock') return;
-        var current = mockQuestions[Math.min(mockQuestionIndex, mockQuestions.length - 1)];
+        var current = activeMockQuestions[Math.min(mockQuestionIndex, activeMockQuestions.length - 1)];
         var elapsed = mockStartedAt ? Math.floor((Date.now() - mockStartedAt) / 1000) : 0;
         statusText.textContent = mockStarted ? 'Mock test · Part ' + current.part : 'Mock test ready';
         turnCount.innerHTML = '<span class="timer">' + formatTime(elapsed) + '</span>';
-        if (mockStarted && mockQuestionIndex < mockQuestions.length) {
-          scoreSub.textContent = 'Question ' + (mockQuestionIndex + 1) + ' of ' + mockQuestions.length + ' · ' + current.hint;
+        if (mockStarted && mockQuestionIndex < activeMockQuestions.length) {
+          scoreSub.textContent = 'Question ' + (mockQuestionIndex + 1) + ' of ' + activeMockQuestions.length + ' · ' + current.hint;
         }
       }
 
       function renderMockProgress() {
-        var currentPart = mockStarted && mockQuestionIndex < mockQuestions.length ? mockQuestions[mockQuestionIndex].part : 0;
-        var completedPart = mockQuestionIndex >= mockQuestions.length ? 3 : (mockQuestionIndex >= 4 ? 2 : mockQuestionIndex >= 3 ? 1 : 0);
+        var currentPart = mockStarted && mockQuestionIndex < activeMockQuestions.length ? activeMockQuestions[mockQuestionIndex].part : 0;
+        var completedPart = mockQuestionIndex >= activeMockQuestions.length ? 3 : (mockQuestionIndex >= 4 ? 2 : mockQuestionIndex >= 3 ? 1 : 0);
         feedbackEl.innerHTML = '';
         var wrap = document.createElement('div');
         wrap.className = 'mock-progress';
@@ -1762,6 +1776,34 @@
           ? 'টেস্ট চলাকালে সংশোধন দেখানো হবে না। শেষ প্রশ্নের পর আনুমানিক ব্যান্ড ও বিস্তারিত ফিডব্যাক পাবেন।'
           : 'এটি একটি অনুশীলনমূলক IELTS Speaking simulation—অফিশিয়াল স্কোর নয়। প্রস্তুত হলে “Start mock test” চাপুন।';
         wrap.appendChild(note);
+        if (!mockStarted) {
+          // Speaking bank picker: visible only before the test starts, so a
+          // set cannot be swapped mid-test.
+          var picker = document.createElement('div');
+          picker.style.cssText = 'display:flex;gap:6px;flex-wrap:wrap;margin:8px 0;align-items:center';
+          var pickerLabel = document.createElement('span');
+          pickerLabel.textContent = 'Speaking set:';
+          pickerLabel.style.fontSize = '.85rem';
+          picker.appendChild(pickerLabel);
+          [0, 1].forEach(function (idx) {
+            var btn = document.createElement('button');
+            btn.className = 'exam-secondary';
+            btn.type = 'button';
+            btn.textContent = 'Set ' + (idx + 1);
+            btn.style.cssText = 'min-height:36px;padding:0 12px;font-weight:' + (idx === mockSetIndex ? '700' : '400');
+            btn.setAttribute('aria-pressed', String(idx === mockSetIndex));
+            btn.addEventListener('click', function () {
+              mockSetIndex = idx;
+              renderMockProgress();
+            });
+            picker.appendChild(btn);
+          });
+          wrap.appendChild(picker);
+          var cue = document.createElement('p');
+          cue.className = 'mock-note';
+          cue.textContent = 'Part 2 cue card (Set ' + (mockSetIndex + 1) + '): ' + MOCK_QUESTION_SETS[mockSetIndex][3].text;
+          wrap.appendChild(cue);
+        }
         [
           { n: 1, title: 'Part 1', sub: '3 personal questions' },
           { n: 2, title: 'Part 2', sub: '1 long turn' },
@@ -2044,9 +2086,9 @@
         turns += 1;
         mockQuestionIndex += 1;
 
-        if (mockQuestionIndex < mockQuestions.length) {
-          var next = mockQuestions[mockQuestionIndex];
-          var previousPart = mockQuestions[mockQuestionIndex - 1].part;
+        if (mockQuestionIndex < activeMockQuestions.length) {
+          var next = activeMockQuestions[mockQuestionIndex];
+          var previousPart = activeMockQuestions[mockQuestionIndex - 1].part;
           var transition = next.part !== previousPart ? 'Part ' + next.part + '. ' : '';
           setTimeout(function () {
             addMessage('assistant', transition + next.text, false);
@@ -2397,6 +2439,8 @@
       function startMockTest() {
         stopMockTimer();
         stopVoicePlayback();
+        // Snapshot the selected bank set at test start.
+        activeMockQuestions = MOCK_QUESTION_SETS[mockSetIndex];
         mockStarted = true;
         mockQuestionIndex = 0;
         mockStartedAt = Date.now();
@@ -2413,7 +2457,7 @@
         sendBtn.textContent = 'Send';
         micBtn.disabled = false;
         newSessionBtn.textContent = 'Restart test';
-        var question = mockQuestions[0];
+        var question = activeMockQuestions[0];
         addMessage('assistant', 'Part 1. ' + question.text, false);
         transcript.push({ role: 'assistant', text: question.text });
         renderMockProgress();
