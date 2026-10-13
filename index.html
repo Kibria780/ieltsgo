@@ -2512,8 +2512,10 @@
         if (appMode === 'mock') {
           // After a completed test ("Try another test"), return to the
           // pre-test screen so the Speaking set picker is visible.
+          // (mockStarted is already false by then — completion resets it —
+          // so the completed-test check is the question index alone.)
           // Mid-test "Restart test" still restarts immediately.
-          if (mockStarted && mockQuestionIndex >= activeMockQuestions.length) { switchMode('mock'); return; }
+          if (mockQuestionIndex >= activeMockQuestions.length) { switchMode('mock'); return; }
           startMockTest();
         }
         else startPracticeSession();
