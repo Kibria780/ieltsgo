@@ -1650,6 +1650,57 @@
 
       var AI_ENDPOINT = 'https://ieltsgo-proxy.vercel.app/api/chat';
 
+      /* ---- Phase 5: server-side question bank + scoring ----
+         Questions (WITHOUT answer keys) come from GET /api/questions.
+         Scores come from POST /api/submit, computed on the server from the
+         protected answer key. The browser NEVER receives or computes a
+         score from an answer key — it only sends {questionId, answer}
+         pairs and renders what the server returns. Any score/band the
+         browser sends is ignored by the server. */
+      var QUESTIONS_ENDPOINT = 'https://ieltsgo-proxy.vercel.app/api/questions';
+      var SUBMIT_ENDPOINT = 'https://ieltsgo-proxy.vercel.app/api/submit';
+      var QUESTION_BANK_VERSION = 1;
+      function fetchTest(testId) {
+        return fetch(QUESTIONS_ENDPOINT + '?test=' + encodeURIComponent(testId))
+          .then(function (r) {
+            if (!r.ok) throw new Error('Could not load the test (HTTP ' + r.status + '). Check your connection and try again.');
+            return r.json();
+          })
+          .then(function (data) {
+            if (!data || !data.test) throw new Error('Could not load the test. Try again.');
+            return data.test;
+          });
+      }
+      function submitAnswers(payload) {
+        return fetch(SUBMIT_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        })
+          .then(function (r) {
+            if (!r.ok) {
+              return r.json().then(function (e) {
+                throw new Error((e && e.error) || 'Score unavailable (HTTP ' + r.status + ').');
+              }).catch(function () {
+                throw new Error('Score unavailable (HTTP ' + r.status + ').');
+              });
+            }
+            return r.json();
+          });
+      }
+      // Builds a submit payload from a fetched test + answers keyed by the
+      // question's INDEX inside the test (the app's internal format).
+      // questionIndexes: which questions are being answered (all for a
+      // standalone test; a stage subset for the Full Mock).
+      function buildSubmitPayload(attemptId, test, mode, context, questionIndexes, answersByIndex) {
+        var questionIds = questionIndexes.map(function (i) { return test.questions[i].id; });
+        var answers = questionIndexes.map(function (i) {
+          return { questionId: test.questions[i].id, answer: answersByIndex[i] == null ? null : answersByIndex[i] };
+        });
+        return { attemptId: attemptId, testId: test.id, version: QUESTION_BANK_VERSION, mode: mode, context: context, questionIds: questionIds, answers: answers };
+      }
+      function allIndexes(test) { return test.questions.map(function (q, i) { return i; }); }
+
       function extractJsonObject(raw) {
         var text = String(raw || '').trim();
         if (text.indexOf('```') === 0) {
@@ -2827,245 +2878,16 @@
       }
 
       /* ---- Listening: 4 parts, 12 MCQ, TTS audio (female = speaker A, male = speaker B) ---- */
-      var LISTENING_PARTS = [
-        { title: 'Part 1 · Booking a hotel room', intro: 'A traveller is booking a hotel room by phone.',
-          script: [
-            { s: 'A', t: 'Good morning, Riverside Hotel. How can I help you?' },
-            { s: 'B', t: 'Good morning. I would like to book a room for two nights, please, from Friday to Sunday.' },
-            { s: 'A', t: 'Certainly. Would you like a single room or a double room?' },
-            { s: 'B', t: 'A double room, please, with a view of the river if possible.' },
-            { s: 'A', t: 'Let me check. Yes, we have a double room with a river view available. Breakfast is included, and check-in is from 2 p.m.' },
-            { s: 'B', t: 'That sounds perfect. Could I also request a late check-out on Sunday, around 12 noon?' },
-            { s: 'A', t: 'Yes, late check-out until 12 noon is free for this room. May I take your name, please?' },
-            { s: 'B', t: 'My name is Sarah Ahmed. A-H-M-E-D.' }
-          ],
-          questions: [
-            { q: 'How many nights is the traveller booking?', options: ['One night', 'Two nights', 'Three nights', 'Four nights'], answer: 1 },
-            { q: 'What kind of room does she want?', options: ['A single room', 'A double room with a river view', 'A family room', 'A room without breakfast'], answer: 1 },
-            { q: 'What time can she check in?', options: ['From 10 a.m.', 'From 12 noon', 'From 2 p.m.', 'From 4 p.m.'], answer: 2 }
-          ] },
-        { title: 'Part 2 · A talk about the city museum', intro: 'A guide is telling visitors about the city museum.',
-          script: [
-            { s: 'A', t: 'Welcome to the City Museum. Before you begin your visit, let me tell you a little about the building. The museum opened in 1985, and it has three floors.' },
-            { s: 'A', t: 'On the ground floor, you will find the history gallery. On the first floor, there is a special exhibition about the river and the boats that used it.' },
-            { s: 'A', t: 'The café is on the second floor, and it is open from 10 a.m. to 4 p.m. Please note that photography is allowed everywhere except in the special exhibition.' }
-          ],
-          questions: [
-            { q: 'When did the museum open?', options: ['In 1975', 'In 1985', 'In 1995', 'In 2005'], answer: 1 },
-            { q: 'Where is the special exhibition?', options: ['On the ground floor', 'On the first floor', 'On the second floor', 'In the café'], answer: 1 },
-            { q: 'Where is photography NOT allowed?', options: ['In the history gallery', 'In the café', 'In the special exhibition', 'On the second floor'], answer: 2 }
-          ] },
-        { title: 'Part 3 · Two students discuss an assignment', intro: 'Two students are discussing their group assignment.',
-          script: [
-            { s: 'A', t: 'So, for our assignment on water pollution, I think we should start by looking at the local river. We can collect samples on Saturday.' },
-            { s: 'B', t: 'That is a good idea, but we also need to read at least three journal articles before Saturday, otherwise we will not understand what to test for.' },
-            { s: 'A', t: 'You are right. I will find two articles tonight, and you can find one. Then we can meet in the library on Friday to plan the report.' },
-            { s: 'B', t: 'Perfect. And we should ask our tutor if we need permission to take samples from the river.' }
-          ],
-          questions: [
-            { q: 'What is the assignment about?', options: ['Air pollution', 'Water pollution', 'Noise pollution', 'Soil pollution'], answer: 1 },
-            { q: 'How many journal articles must they read before Saturday?', options: ['One', 'Two', 'Three', 'Four'], answer: 2 },
-            { q: 'When will they meet in the library?', options: ['On Wednesday', 'On Thursday', 'On Friday', 'On Sunday'], answer: 2 }
-          ] },
-        { title: 'Part 4 · A lecture about honeybees', intro: 'A lecturer is talking about honeybees and why they matter.',
-          script: [
-            { s: 'A', t: 'Today, I want to talk about honeybees. Bees are responsible for pollinating about one third of the food we eat, including many fruits and vegetables.' },
-            { s: 'A', t: 'In recent years, bee numbers have fallen sharply. One reason is the loss of wildflower meadows, where bees find food. Another reason is the use of certain pesticides.' },
-            { s: 'A', t: 'Scientists suggest three actions: plant more wildflowers, reduce pesticide use, and protect natural habitats. If we act now, bee populations can recover.' }
-          ],
-          questions: [
-            { q: 'About how much of our food do bees help pollinate?', options: ['One tenth', 'One quarter', 'One third', 'One half'], answer: 2 },
-            { q: 'Which is given as a reason for falling bee numbers?', options: ['Too much rain', 'Loss of wildflower meadows', 'Cold winters', 'Too many beekeepers'], answer: 1 },
-            { q: 'Which action do scientists suggest?', options: ['Plant more wildflowers', 'Keep bees indoors', 'Use more pesticides', 'Stop eating honey'], answer: 0 }
-          ] }
-      ];
       /* ---- Phase 3: Listening question bank — Set 2 ---- */
-      var LISTENING_PARTS_2 = [
-        { title: 'Part 1 · Booking a taxi', intro: 'A caller is booking a taxi to the airport.',
-          script: [
-            { s: 'A', t: 'Good morning, City Taxis. How can I help you?' },
-            { s: 'B', t: 'Hello, I would like to book a taxi to the airport, please.' },
-            { s: 'A', t: 'Of course. What time do you need the taxi?' },
-            { s: 'B', t: 'My flight is at ten, so I need to leave home at seven thirty.' },
-            { s: 'A', t: 'And what is your address?' },
-            { s: 'B', t: 'It is 24 Park Street. How much will it cost?' },
-            { s: 'A', t: 'It will be about twenty-five pounds.' },
-            { s: 'B', t: 'That is fine. See you at seven thirty.' }
-          ],
-          questions: [
-            { q: 'Where does the caller want to go?', options: ['To the airport', 'To the station', 'To the hospital', 'To the school'], answer: 0 },
-            { q: 'What time will the taxi arrive?', options: ['At 7:00', 'At 7:30', 'At 8:00', 'At 10:00'], answer: 1 },
-            { q: 'How much will the taxi cost?', options: ['Fifteen pounds', 'Twenty pounds', 'Twenty-five pounds', 'Thirty pounds'], answer: 2 }
-          ] },
-        { title: 'Part 2 · A talk about the school trip', intro: 'A teacher is telling students about a school trip.',
-          script: [
-            { s: 'A', t: 'Good morning, everyone. I want to tell you about our school trip next month.' },
-            { s: 'A', t: 'We will visit the Science Museum in London on Friday, the fifteenth of May.' },
-            { s: 'A', t: 'The bus will leave school at eight in the morning, so please arrive by half past seven.' },
-            { s: 'A', t: 'You should bring a packed lunch and a water bottle. You do not need to bring money.' },
-            { s: 'A', t: 'We will return to school at five in the afternoon.' }
-          ],
-          questions: [
-            { q: 'Where will the students visit?', options: ['The History Museum', 'The Science Museum', 'The Art Gallery', 'The Zoo'], answer: 1 },
-            { q: 'What time should students arrive?', options: ['By 7:30', 'By 8:00', 'By 9:00', 'By 10:00'], answer: 0 },
-            { q: 'What should students bring?', options: ['Money and a camera', 'A packed lunch and a water bottle', 'Books and pens', 'Sports clothes'], answer: 1 }
-          ] },
-        { title: 'Part 3 · Two friends discuss a project', intro: 'Two students are planning a history project.',
-          script: [
-            { s: 'A', t: 'Hi, Sara. Have you started our history project yet?' },
-            { s: 'B', t: 'Not yet. I was thinking we could write about the Roman Empire.' },
-            { s: 'A', t: 'Good idea. We need to finish it by next Thursday.' },
-            { s: 'B', t: 'Okay. I can do the research, and you can write the report.' },
-            { s: 'A', t: 'That works for me. Let us meet in the library on Monday.' },
-            { s: 'B', t: 'Perfect. See you on Monday.' }
-          ],
-          questions: [
-            { q: 'What is the project about?', options: ['The Roman Empire', 'The Greek Empire', 'The British Empire', 'The French Empire'], answer: 0 },
-            { q: 'When must the project be finished?', options: ['By Monday', 'By Tuesday', 'By Thursday', 'By Friday'], answer: 2 },
-            { q: 'What will Sara do?', options: ['Write the report', 'Do the research', 'Give a presentation', 'Draw pictures'], answer: 1 }
-          ] },
-        { title: 'Part 4 · A lecture about the water cycle', intro: 'A lecturer is explaining the water cycle.',
-          script: [
-            { s: 'A', t: 'Today, we will look at the water cycle.' },
-            { s: 'A', t: 'First, water from oceans, lakes, and rivers evaporates into the air.' },
-            { s: 'A', t: 'Then, the water vapour cools and forms clouds. This is called condensation.' },
-            { s: 'A', t: 'Finally, the water falls back to the Earth as rain or snow. This is called precipitation.' },
-            { s: 'A', t: 'About seventy percent of the Earth\u2019s surface is covered by water.' }
-          ],
-          questions: [
-            { q: 'What is the first stage of the water cycle?', options: ['Condensation', 'Precipitation', 'Evaporation', 'Collection'], answer: 2 },
-            { q: 'What is precipitation?', options: ['Water falling as rain or snow', 'Water turning into clouds', 'Water heating in the sun', 'Water flowing into rivers'], answer: 0 },
-            { q: 'How much of the Earth\u2019s surface is covered by water?', options: ['About fifty percent', 'About sixty percent', 'About seventy percent', 'About eighty percent'], answer: 2 }
-          ] }
-      ];
-      // Listening bank: the standalone Listening test loads the selected set.
+      // Listening bank: test IDs per set. Questions live on the server
+      // (Phase 5) — the browser fetches them without the answer key.
       // (The Full Mock always uses Set 1 Part 1 — it is a fixed compact flow.)
-      var LISTENING_SETS = [LISTENING_PARTS, LISTENING_PARTS_2];
+      var LISTENING_TEST_IDS = ['listening-set1', 'listening-set2'];
       var listeningSetIndex = 0;
-      var activeListeningParts = LISTENING_PARTS;
+      var activeListeningTest = null; // fetched test (public view, no answer key)
+      var activeListeningParts = [];
       /* ---- Phase 3: Full-length Listening Mock (40Q) — IDP-published conversion ---- */
-      var LISTENING_FULL_PARTS = [
-        { title: 'Part 1 · Booking a holiday cottage', intro: 'A caller is booking a holiday cottage.',
-          script: [
-            { s: 'A', t: 'Good morning, Hilltop Cottages. How can I help you?' },
-            { s: 'B', t: 'Hello, I would like to book a cottage for a holiday in July, please.' },
-            { s: 'A', t: 'Of course. How many people will be staying?' },
-            { s: 'B', t: 'There will be four of us: two adults and two children.' },
-            { s: 'A', t: 'And how many nights would you like to stay?' },
-            { s: 'B', t: 'We would like to stay for five nights, from Monday the seventh of July.' },
-            { s: 'A', t: 'We have a cottage with two bedrooms and a garden. It costs ninety pounds per night.' },
-            { s: 'B', t: 'That sounds good. Does the cottage have internet?' },
-            { s: 'A', t: 'Yes, it has free internet, and there is a car park next to the cottage.' },
-            { s: 'B', t: 'Perfect. Can we bring our dog?' },
-            { s: 'A', t: 'Yes, dogs are welcome. There is a small extra charge of ten pounds.' },
-            { s: 'B', t: 'That is fine. Please book it for us.' }
-          ],
-          questions: [
-            { q: 'How many people will be staying?', options: ['Two', 'Three', 'Four', 'Five'], answer: 2 },
-            { q: 'How many nights will they stay?', options: ['Three', 'Four', 'Five', 'Seven'], answer: 2 },
-            { q: 'On which day do they arrive?', options: ['Friday', 'Saturday', 'Sunday', 'Monday'], answer: 3 },
-            { q: 'In which month is the holiday?', options: ['June', 'July', 'August', 'September'], answer: 1 },
-            { q: 'How many bedrooms does the cottage have?', options: ['One', 'Two', 'Three', 'Four'], answer: 1 },
-            { q: 'How much does the cottage cost per night?', options: ['Seventy pounds', 'Eighty pounds', 'Ninety pounds', 'One hundred pounds'], answer: 2 },
-            { q: 'Does the cottage have internet?', options: ['No internet', 'Free internet', 'Paid internet', 'Internet only in the office'], answer: 1 },
-            { q: 'Where is the car park?', options: ['Next to the cottage', 'In the town centre', 'Behind the shop', 'Two miles away'], answer: 0 },
-            { q: 'Can they bring their dog?', options: ['No', 'Yes, free', 'Yes, for ten pounds', 'Only small dogs'], answer: 2 },
-            { q: 'How many children are in the group?', options: ['One', 'Two', 'Three', 'None'], answer: 1 }
-          ] },
-        { title: 'Part 2 · A talk about the new sports centre', intro: 'A manager is describing a new sports centre.',
-          script: [
-            { s: 'A', t: 'Good morning, everyone. Today I will tell you about our new sports centre, which opens next Monday.' },
-            { s: 'A', t: 'The centre is on Green Street, next to the library.' },
-            { s: 'A', t: 'On the ground floor, there is a swimming pool and a gym.' },
-            { s: 'A', t: 'On the first floor, there are two badminton courts and a dance studio.' },
-            { s: 'A', t: 'The centre opens at six in the morning and closes at ten at night.' },
-            { s: 'A', t: 'Membership costs twenty pounds a month for adults and twelve pounds a month for students.' },
-            { s: 'A', t: 'Swimming lessons are on Tuesday and Thursday afternoons.' },
-            { s: 'A', t: 'The gym has twenty-five exercise machines and five trainers.' },
-            { s: 'A', t: 'There is a cafe on the ground floor that serves drinks and sandwiches.' },
-            { s: 'A', t: 'On the opening day, Saturday, all activities are free.' }
-          ],
-          questions: [
-            { q: 'When does the centre open?', options: ['This Friday', 'Next Monday', 'Next Tuesday', 'Next Saturday'], answer: 1 },
-            { q: 'Where is the centre?', options: ['On Green Street', 'On Park Street', 'On High Street', 'On School Road'], answer: 0 },
-            { q: 'What is on the ground floor?', options: ['A swimming pool and a gym', 'Two badminton courts', 'A dance studio', 'A cinema'], answer: 0 },
-            { q: 'What is on the first floor?', options: ['A swimming pool', 'A cafe', 'Two badminton courts and a dance studio', 'A library'], answer: 2 },
-            { q: 'When does the centre close?', options: ['At 8 p.m.', 'At 9 p.m.', 'At 10 p.m.', 'At 11 p.m.'], answer: 2 },
-            { q: 'How much is adult membership per month?', options: ['Twelve pounds', 'Fifteen pounds', 'Twenty pounds', 'Twenty-five pounds'], answer: 2 },
-            { q: 'How much is student membership per month?', options: ['Ten pounds', 'Twelve pounds', 'Fifteen pounds', 'Twenty pounds'], answer: 1 },
-            { q: 'When are the swimming lessons?', options: ['Monday and Wednesday', 'Tuesday and Thursday', 'Friday and Saturday', 'Saturday and Sunday'], answer: 1 },
-            { q: 'How many exercise machines are in the gym?', options: ['Fifteen', 'Twenty', 'Twenty-five', 'Thirty'], answer: 2 },
-            { q: 'What does the cafe serve?', options: ['Drinks and sandwiches', 'Only coffee', 'Hot meals only', 'Fruit only'], answer: 0 }
-          ] },
-        { title: 'Part 3 · Two students discuss a survey', intro: 'Two students are discussing a survey for their psychology class.',
-          script: [
-            { s: 'A', t: 'Hi, Emma. Have you finished our survey for the psychology class?' },
-            { s: 'B', t: 'Almost. I asked fifty students about their study habits.' },
-            { s: 'A', t: 'What did you find?' },
-            { s: 'B', t: 'Thirty students said they study in the library, and twenty said they study at home.' },
-            { s: 'A', t: 'Interesting. What about study time?' },
-            { s: 'B', t: 'Most students study for two hours a day. Only five students study for more than four hours.' },
-            { s: 'A', t: 'Did you ask about music while studying?' },
-            { s: 'B', t: 'Yes. Forty students listen to music while they study, and ten prefer silence.' },
-            { s: 'A', t: 'We need to write the report by Friday.' },
-            { s: 'B', t: 'Yes. I will write the first part, and you can write the second part.' },
-            { s: 'A', t: 'Good. Let us meet in the library on Wednesday to check it.' }
-          ],
-          questions: [
-            { q: 'How many students were surveyed?', options: ['Thirty', 'Forty', 'Fifty', 'Sixty'], answer: 2 },
-            { q: 'How many students study in the library?', options: ['Ten', 'Twenty', 'Thirty', 'Forty'], answer: 2 },
-            { q: 'How many students study at home?', options: ['Ten', 'Twenty', 'Thirty', 'Forty'], answer: 1 },
-            { q: 'How long do most students study a day?', options: ['One hour', 'Two hours', 'Three hours', 'Four hours'], answer: 1 },
-            { q: 'How many students study for more than four hours?', options: ['Three', 'Five', 'Ten', 'Fifteen'], answer: 1 },
-            { q: 'How many students listen to music while studying?', options: ['Ten', 'Twenty', 'Thirty', 'Forty'], answer: 3 },
-            { q: 'How many students prefer silence?', options: ['Five', 'Ten', 'Fifteen', 'Twenty'], answer: 1 },
-            { q: 'When is the report due?', options: ['Wednesday', 'Thursday', 'Friday', 'Monday'], answer: 2 },
-            { q: 'Who will write the first part of the report?', options: ['Emma', 'The other student', 'The teacher', 'Both together'], answer: 0 },
-            { q: 'When will they meet to check the report?', options: ['Monday', 'Tuesday', 'Wednesday', 'Thursday'], answer: 2 }
-          ] },
-        { title: 'Part 4 · A lecture about penguins', intro: 'A lecturer is talking about penguins.',
-          script: [
-            { s: 'A', t: 'Today, I will talk about penguins, one of the most interesting birds in the world.' },
-            { s: 'A', t: 'There are eighteen species of penguins in the world.' },
-            { s: 'A', t: 'Most penguins live in the Southern Hemisphere, and many live in Antarctica.' },
-            { s: 'A', t: 'The largest penguin is the Emperor penguin, which can be up to one hundred and twenty centimetres tall.' },
-            { s: 'A', t: 'The smallest penguin is the Little Blue penguin, which is about forty centimetres tall.' },
-            { s: 'A', t: 'Penguins cannot fly, but they are excellent swimmers. They can swim up to thirty-five kilometres per hour.' },
-            { s: 'A', t: 'Penguins eat fish, squid, and krill.' },
-            { s: 'A', t: 'The Emperor penguin can stay underwater for more than twenty minutes.' },
-            { s: 'A', t: 'Penguins have thick feathers that keep them warm in cold weather.' },
-            { s: 'A', t: 'Sadly, the number of penguins is falling because of climate change and loss of sea ice.' }
-          ],
-          questions: [
-            { q: 'How many species of penguins are there?', options: ['Eight', 'Twelve', 'Eighteen', 'Twenty'], answer: 2 },
-            { q: 'Where do most penguins live?', options: ['The Northern Hemisphere', 'The Southern Hemisphere', 'Africa only', 'Asia only'], answer: 1 },
-            { q: 'Which is the largest penguin?', options: ['The King penguin', 'The Emperor penguin', 'The Little Blue penguin', 'The Rockhopper penguin'], answer: 1 },
-            { q: 'How tall can the Emperor penguin be?', options: ['Up to eighty centimetres', 'Up to one hundred centimetres', 'Up to one hundred and twenty centimetres', 'Up to one hundred and fifty centimetres'], answer: 2 },
-            { q: 'Which is the smallest penguin?', options: ['The Emperor penguin', 'The King penguin', 'The Little Blue penguin', 'The Gentoo penguin'], answer: 2 },
-            { q: 'How tall is the Little Blue penguin?', options: ['About twenty centimetres', 'About thirty centimetres', 'About forty centimetres', 'About fifty centimetres'], answer: 2 },
-            { q: 'How fast can penguins swim?', options: ['Up to fifteen km per hour', 'Up to twenty-five km per hour', 'Up to thirty-five km per hour', 'Up to forty-five km per hour'], answer: 2 },
-            { q: 'What do penguins eat?', options: ['Fish, squid, and krill', 'Only fish', 'Plants and seeds', 'Insects and worms'], answer: 0 },
-            { q: 'How long can the Emperor penguin stay underwater?', options: ['More than five minutes', 'More than ten minutes', 'More than twenty minutes', 'More than thirty minutes'], answer: 2 },
-            { q: 'Why are penguin numbers falling?', options: ['Too many zoos', 'Climate change and loss of sea ice', 'Too much rain', 'Hunting by farmers'], answer: 1 }
-          ] }
-      ];
       var listeningFullMock = false;
-      function listening40Band(correct) {
-        // IDP-published average conversion for a 40-question Listening test.
-        // Actual marks can vary slightly between tests.
-        if (correct >= 39) return 9.0;
-        if (correct >= 37) return 8.5;
-        if (correct >= 35) return 8.0;
-        if (correct >= 32) return 7.5;
-        if (correct >= 30) return 7.0;
-        if (correct >= 26) return 6.5;
-        if (correct >= 23) return 6.0;
-        if (correct >= 18) return 5.5;
-        if (correct >= 16) return 5.0;
-        if (correct >= 13) return 4.5;
-        if (correct >= 11) return 4.0;
-        return null; // below 4.0: no estimate
-      }
       var listeningPartIndex = 0;
       var listeningAnswers = {};
       var listeningPlayed = {};
@@ -3123,9 +2945,10 @@
       }
       // Question-key offset for a part: parts may hold different question
       // counts (3 in short practice, 10 in the full 40Q mock).
+      // Flat server questions carry their part in .section (Phase 5).
       function listeningPartOffset(pi) {
         var n = 0;
-        for (var i = 0; i < pi; i++) n += activeListeningParts[i].questions.length;
+        if (activeListeningTest) activeListeningTest.questions.forEach(function (q) { if (q.section < pi) n += 1; });
         return n;
       }
       function renderListeningPart() {
@@ -3137,12 +2960,13 @@
         document.getElementById('listeningPlayNote').textContent = listeningPlayed[listeningPartIndex] ? 'Played — answer from memory, like the real test.' : 'Audio plays once per part.';
         var box = document.getElementById('listeningQuestions');
         box.innerHTML = '';
-        part.questions.forEach(function (item, qi) {
+        var partQuestions = activeListeningTest.questions.filter(function (q) { return q.section === listeningPartIndex; });
+        partQuestions.forEach(function (item, qi) {
           var globalQi = listeningPartOffset(listeningPartIndex) + qi;
           var qDiv = document.createElement('div');
           qDiv.className = 'exam-q';
           var qText = document.createElement('p');
-          qText.textContent = 'Q' + (globalQi + 1) + '. ' + item.q;
+          qText.textContent = 'Q' + (globalQi + 1) + '. ' + item.prompt;
           qDiv.appendChild(qText);
           var opts = document.createElement('div');
           opts.className = 'exam-options';
@@ -3172,6 +2996,8 @@
       // 39-40→9.0, 37-38→8.5, 35-36→8.0, 32-34→7.5, 30-31→7.0, 26-29→6.5,
       // 23-25→6.0, 18-22→5.5, 16-17→5.0, 13-15→4.5, 11-12→4.0.
       // IDP notes actual marks may vary slightly between tests.
+      // Phase 5: the score is computed on the SERVER from the protected
+      // answer key. The browser sends only {questionId, answer} pairs.
       function finishListening() {
         stopListeningAudio();
         // Phase 4: duplicate submission prevention — replay the saved result.
@@ -3181,34 +3007,37 @@
           showToast('Already submitted — showing your saved result.');
           return;
         }
-        var total = 0, correct = 0;
-        activeListeningParts.forEach(function (part) {
-          part.questions.forEach(function (item) {
-            if (listeningAnswers[total] === item.answer) correct += 1;
-            total += 1;
+        var test = activeListeningTest;
+        if (!test) { showToast('Test data is missing — reload the test and try again.'); return; }
+        submitAnswers(buildSubmitPayload(listeningAttemptId, test, examMode, 'practice', allIndexes(test), listeningAnswers))
+          .then(function (result) {
+            var correct = result.score, total = result.total;
+            var pct = Math.round(correct / total * 1000) / 10;
+            var detail, sub;
+            if (listeningFullMock) {
+              // Full 40Q mock: the IDP-published conversion applies (server).
+              var band = result.band;
+              var bandLine = band != null
+                ? '<p>Estimated band: <strong>≈' + band.toFixed(1) + ' (est.)</strong></p>'
+                : '<p>Estimated band: <strong>below 4.0 — no estimate</strong></p>';
+              detail = '<div class="exam-result-box"><h3>Listening score</h3><p>Raw score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p>' + bandLine + '<p class="exam-disclaimer">Based on the IDP-published average conversion for a 40-question Listening test. Actual marks can vary slightly between tests, so this is an estimate, not an official score.</p></div>';
+              sub = 'Full-length Listening Mock (40Q) · Estimated band';
+            } else {
+              // No band estimate for a short 12-question practice test: no
+              // reliable conversion exists for 12 questions. Raw score only.
+              detail = '<div class="exam-result-box"><h3>Listening score</h3><p>Raw score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p><p class="exam-disclaimer">No band estimate is shown for this short 12-question practice test — a short test cannot estimate a band reliably. The full IELTS Listening test has 40 questions; its IDP-published band conversion applies only to a full-length test.</p></div>';
+              sub = 'Short practice test · No band estimate';
+            }
+            var fullResult = { title: 'Listening Result', headline: correct + ' / ' + total + ' correct · ' + pct + '%', sub: sub, detail: detail, label: 'Score' };
+            showExamResult(fullResult.title, fullResult.headline, fullResult.sub, fullResult.detail, fullResult.label);
+            P4.recordSubmission(listeningAttemptId, fullResult, { attemptId: listeningAttemptId, test: 'Listening', mode: examModeLabel(), set: listeningFullMock ? 'Full mock 40Q' : 'Short 12Q · Set ' + (listeningSetIndex + 1), score: correct + ' / ' + total, pct: pct, band: listeningFullMock ? result.band : null, at: Date.now() });
+            P4.remove('progress_listening');
+          })
+          .catch(function (err) {
+            // Do NOT clear progress or record anything: the answers stay
+            // saved, and Finish can be pressed again to retry.
+            showToast('Score unavailable — ' + err.message + ' Your answers are saved; press Finish again to retry.');
           });
-        });
-        var pct = Math.round(correct / total * 1000) / 10;
-        if (listeningFullMock) {
-          // Full 40Q mock: the IDP-published conversion applies.
-          var band = listening40Band(correct);
-          var bandLine = band !== null
-            ? '<p>Estimated band: <strong>≈' + band.toFixed(1) + ' (est.)</strong></p>'
-            : '<p>Estimated band: <strong>below 4.0 — no estimate</strong></p>';
-          var detail = '<div class="exam-result-box"><h3>Listening score</h3><p>Raw score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p>' + bandLine + '<p class="exam-disclaimer">Based on the IDP-published average conversion for a 40-question Listening test. Actual marks can vary slightly between tests, so this is an estimate, not an official score.</p></div>';
-          var fullResult = { title: 'Listening Result', headline: correct + ' / ' + total + ' correct · ' + pct + '%', sub: 'Full-length Listening Mock (40Q) · Estimated band', detail: detail, label: 'Score' };
-          showExamResult(fullResult.title, fullResult.headline, fullResult.sub, fullResult.detail, fullResult.label);
-          P4.recordSubmission(listeningAttemptId, fullResult, { attemptId: listeningAttemptId, test: 'Listening', mode: examModeLabel(), set: 'Full mock 40Q', score: correct + ' / ' + total, pct: pct, band: band, at: Date.now() });
-          P4.remove('progress_listening');
-          return;
-        }
-        // No band estimate for a short 12-question practice test: no
-        // reliable conversion exists for 12 questions. Raw score only.
-        var detail = '<div class="exam-result-box"><h3>Listening score</h3><p>Raw score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p><p class="exam-disclaimer">No band estimate is shown for this short 12-question practice test — a short test cannot estimate a band reliably. The full IELTS Listening test has 40 questions; its IDP-published band conversion applies only to a full-length test.</p></div>';
-        var shortResult = { title: 'Listening Result', headline: correct + ' / ' + total + ' correct · ' + pct + '%', sub: 'Short practice test · No band estimate', detail: detail, label: 'Score' };
-        showExamResult(shortResult.title, shortResult.headline, shortResult.sub, shortResult.detail, shortResult.label);
-        P4.recordSubmission(listeningAttemptId, shortResult, { attemptId: listeningAttemptId, test: 'Listening', mode: examModeLabel(), set: 'Short 12Q · Set ' + (listeningSetIndex + 1), score: correct + ' / ' + total, pct: pct, band: null, at: Date.now() });
-        P4.remove('progress_listening');
       }
       function startListening(restore) {
         var resumed = !!restore;
@@ -3226,26 +3055,36 @@
           listeningPlayed = {};
           listeningAttemptId = P4.newAttemptId();
         }
-        // Snapshot the selected bank set / full mock at test start.
-        activeListeningParts = listeningFullMock ? LISTENING_FULL_PARTS : LISTENING_SETS[listeningSetIndex];
         showExamView('examListening');
-        document.getElementById('listeningSetRow').style.display = listeningFullMock ? 'none' : 'flex';
-        document.querySelectorAll('[data-listening-length]').forEach(function (btn) {
-          var idx = parseInt(btn.getAttribute('data-listening-length'), 10);
-          var on = (idx === 1) === listeningFullMock;
-          btn.style.fontWeight = on ? '700' : '400';
-          btn.setAttribute('aria-pressed', String(on));
+        document.getElementById('listeningQuestions').innerHTML = '<p>Loading test…</p>';
+        // Phase 5: fetch the selected bank set / full mock from the server
+        // (questions WITHOUT the answer key). The selection is snapshotted
+        // at test start so a mid-test change cannot mix tests.
+        var testId = listeningFullMock ? 'listening-full' : LISTENING_TEST_IDS[listeningSetIndex];
+        fetchTest(testId).then(function (test) {
+          activeListeningTest = test;
+          activeListeningParts = test.parts;
+          document.getElementById('listeningSetRow').style.display = listeningFullMock ? 'none' : 'flex';
+          document.querySelectorAll('[data-listening-length]').forEach(function (btn) {
+            var idx = parseInt(btn.getAttribute('data-listening-length'), 10);
+            var on = (idx === 1) === listeningFullMock;
+            btn.style.fontWeight = on ? '700' : '400';
+            btn.setAttribute('aria-pressed', String(on));
+          });
+          document.querySelectorAll('[data-listening-set]').forEach(function (btn) {
+            var idx = parseInt(btn.getAttribute('data-listening-set'), 10);
+            var on = idx === listeningSetIndex;
+            btn.style.fontWeight = on ? '700' : '400';
+            btn.setAttribute('aria-pressed', String(on));
+          });
+          renderListeningPart();
+          p4ShowAttempt('examListening', (resumed ? 'Resumed attempt ' : 'Attempt ') + listeningAttemptId + ' · ' + (listeningFullMock ? 'Full mock 40Q' : 'Short 12Q · Set ' + (listeningSetIndex + 1)));
+          p4SaveListening();
+          P4.refreshNotes();
+        }).catch(function (err) {
+          document.getElementById('listeningQuestions').innerHTML = '<p>' + escapeHtml(err.message) + '</p><div class="exam-actions"><button class="exam-primary" id="listeningRetryBtn" type="button">Retry</button></div>';
+          document.getElementById('listeningRetryBtn').addEventListener('click', function () { startListening(restore); });
         });
-        document.querySelectorAll('[data-listening-set]').forEach(function (btn) {
-          var idx = parseInt(btn.getAttribute('data-listening-set'), 10);
-          var on = idx === listeningSetIndex;
-          btn.style.fontWeight = on ? '700' : '400';
-          btn.setAttribute('aria-pressed', String(on));
-        });
-        renderListeningPart();
-        p4ShowAttempt('examListening', (resumed ? 'Resumed attempt ' : 'Attempt ') + listeningAttemptId + ' · ' + (listeningFullMock ? 'Full mock 40Q' : 'Short 12Q · Set ' + (listeningSetIndex + 1)));
-        p4SaveListening();
-        P4.refreshNotes();
       }
       document.querySelectorAll('[data-listening-length]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -3293,98 +3132,15 @@
       });
 
       /* ---- Reading: 1 passage + 10 questions (T/F/NG, MCQ, headings, completion) ---- */
-      var READING = {
-        title: 'The Rise of Urban Farming',
-        paragraphs: [
-          'A. In many large cities, a quiet revolution is taking place on rooftops, balconies and empty plots of land. Urban farming — the practice of growing food inside or near a city — has grown from a hobby for a few enthusiasts into a serious part of how some cities feed themselves. Supporters argue that it shortens the distance food travels, reduces waste, and reconnects city dwellers with where their food comes from.',
-          'B. One of the most striking forms of urban farming is the vertical farm. Instead of spreading crops across wide fields, vertical farms grow plants in stacked layers inside buildings, often using LED light and nutrient-rich water instead of soil. Because the environment is controlled, crops can be harvested all year round. However, vertical farms use large amounts of electricity, and critics question whether they can ever compete with traditional farms on cost.',
-          'C. A simpler and older idea is the community garden, where local residents share a piece of land and grow vegetables together. Studies have found that community gardens do more than produce food: they strengthen neighbourhood relationships, give children a place to learn about nature, and provide gentle exercise for older people. In several cities, waiting lists for garden plots are now years long.',
-          'D. Despite the enthusiasm, urban farming faces real limits. City land is expensive, water can be scarce, and most urban farms produce only a small fraction of what a city eats. Few experts believe cities will ever feed themselves entirely. The more realistic hope is that urban farming becomes one useful part of a wider food system — supplying fresh herbs, salads and soft fruits, while staple crops continue to come from the countryside.'
-        ],
-        questions: [
-          { type: 'tfng', q: 'Urban farming is a completely new idea that started in the last five years.', answer: 1, explain: 'The passage says it grew "from a hobby" into something bigger — it is not completely new.' },
-          { type: 'tfng', q: 'Vertical farms can produce crops throughout the year.', answer: 0, explain: 'Paragraph B: "crops can be harvested all year round" because the environment is controlled.' },
-          { type: 'tfng', q: 'Community gardens are only useful for producing food.', answer: 1, explain: 'Paragraph C lists other benefits: relationships, learning, exercise.' },
-          { type: 'mcq', q: 'What is a disadvantage of vertical farms mentioned in the passage?', options: ['They need a lot of land', 'They use large amounts of electricity', 'They only grow in summer', 'They need no water at all'], answer: 1, explain: 'Paragraph B: "vertical farms use large amounts of electricity".' },
-          { type: 'mcq', q: 'Why do some cities have long waiting lists for garden plots?', options: ['Because plots are free', 'Because community gardens are popular', 'Because gardens produce all city food', 'Because the land is cheap'], answer: 1, explain: 'Paragraph C: waiting lists are "years long" — gardens are in high demand.' },
-          { type: 'mcq', q: 'What do most experts believe about cities feeding themselves?', options: ['Cities will soon be fully self-sufficient', 'Urban farms will replace countryside farms', 'Cities will never feed themselves entirely', 'Staple crops will come from rooftops'], answer: 2, explain: 'Paragraph D: "Few experts believe cities will ever feed themselves entirely."' },
-          { type: 'heading', q: 'Which heading best fits paragraph B?', options: ['A hobby becomes serious', 'Growing upwards: the vertical farm', 'Gardens that build communities', 'The limits of city farming'], answer: 1, explain: 'Paragraph B is entirely about vertical farms.' },
-          { type: 'heading', q: 'Which heading best fits paragraph D?', options: ['A hobby becomes serious', 'Growing upwards: the vertical farm', 'Gardens that build communities', 'The limits of city farming'], answer: 3, explain: 'Paragraph D discusses the real limits of urban farming.' },
-          { type: 'complete', q: 'Complete the sentence: Vertical farms grow plants in stacked layers, often using LED light and nutrient-rich water instead of _____.', accepted: ['soil'], explain: 'Paragraph B: "instead of soil".' },
-          { type: 'complete', q: 'Complete the sentence: Urban farming shortens the distance food _____.', accepted: ['travels'], explain: 'Paragraph A: "it shortens the distance food travels".' }
-        ]
-      };
       /* General Training practice passage: everyday text, same 10-question format. */
-      var READING_GT = {
-        title: 'Using the Local Library',
-        paragraphs: [
-          'A. The Riverside Public Library is open to everyone in the neighbourhood, and membership is free. To join, you need to bring one document that shows your name and address, such as a utility bill or a rental agreement. New members can borrow up to five books at a time, and the standard loan period is three weeks.',
-          'B. The library offers more than books. On the ground floor, there are twelve computers with free internet access. You can use a computer for up to one hour per day, but you must book in advance at the front desk. Printing costs 10 taka per page, and the printer is available during all opening hours.',
-          'C. The library also runs weekly activities. On Tuesday mornings, there is a story session for children under seven. On Thursday evenings, a volunteer group offers free help with English reading and writing for adults. There is no need to book for these sessions — just come to the activity room on the first floor.',
-          'D. Please remember the library rules. Mobile phones must be switched to silent. Food is not allowed anywhere in the building, but you may bring a bottle of water. If a book is returned late, the fine is 5 taka per day. If you lose a book, you must pay for a replacement copy.'
-        ],
-        questions: [
-          { type: 'tfng', q: 'Library membership costs money.', answer: 1, explain: 'Paragraph A: "membership is free".' },
-          { type: 'tfng', q: 'New members can borrow up to five books at a time.', answer: 0, explain: 'Paragraph A: "New members can borrow up to five books at a time".' },
-          { type: 'tfng', q: 'The library is closed on Sundays.', answer: 2, explain: 'The passage does not say anything about Sunday opening.' },
-          { type: 'mcq', q: 'How long can you use a library computer each day?', options: ['30 minutes', 'One hour', 'Two hours', 'Three hours'], answer: 1, explain: 'Paragraph B: "up to one hour per day".' },
-          { type: 'mcq', q: 'What must you do before using a computer?', options: ['Pay a fee', 'Bring a passport', 'Book in advance at the front desk', 'Join a waiting list'], answer: 2, explain: 'Paragraph B: "you must book in advance at the front desk".' },
-          { type: 'mcq', q: 'When is the English help session for adults?', options: ['Tuesday mornings', 'Wednesday evenings', 'Thursday evenings', 'Friday mornings'], answer: 2, explain: 'Paragraph C: "On Thursday evenings, a volunteer group offers free help".' },
-          { type: 'heading', q: 'Which heading best fits paragraph B?', options: ['Joining the library', 'Computers and printing', 'Weekly activities', 'Library rules'], answer: 1, explain: 'Paragraph B is about computers, internet and printing.' },
-          { type: 'heading', q: 'Which heading best fits paragraph D?', options: ['Joining the library', 'Computers and printing', 'Weekly activities', 'Library rules'], answer: 3, explain: 'Paragraph D lists the library rules.' },
-          { type: 'complete', q: 'Complete the sentence: The standard loan period for books is _____ weeks.', accepted: ['three', '3'], explain: 'Paragraph A: "the standard loan period is three weeks".' },
-          { type: 'complete', q: 'Complete the sentence: The fine for a late book is 5 taka per _____.', accepted: ['day'], explain: 'Paragraph D: "the fine is 5 taka per day".' }
-        ]
-      };
       /* ---- Phase 3: Reading question bank — Set 2 per mode ---- */
-      var READING_ACADEMIC_2 = {
-        title: 'The Power of Sleep',
-        paragraphs: [
-          'A. Sleep is one of the most common human activities, yet scientists still do not fully understand why we need it. Adults usually sleep for seven to nine hours each night, and children need even more. During sleep, the body repairs muscles, the brain organises memories, and the immune system grows stronger. People who regularly sleep too little are more likely to become ill, to have accidents, and to struggle with learning.',
-          'B. One of the most important discoveries about sleep is that it happens in cycles. Each cycle lasts about ninety minutes and includes light sleep, deep sleep, and dream sleep, which is called REM sleep. In the first part of the night, deep sleep is longer. In the second part, dream sleep becomes longer. If a person wakes up in the middle of a cycle, they often feel tired and confused, even if they have slept for many hours.',
-          'C. Modern life makes good sleep difficult. Bright screens, late-night work, and noisy cities all disturb the body\u2019s natural rhythm. Many people drink coffee late in the day, which keeps the brain awake for hours. Others check their phones in bed, and the blue light from the screen tells the brain that it is still daytime. Doctors say that a regular sleep schedule, a dark bedroom, and no screens before bed can greatly improve sleep quality.',
-          'D. Despite the challenges, small changes can make a big difference. Short naps of twenty minutes can improve attention without making a person feel sleepy afterwards. Regular exercise also helps, although exercising very late at night can keep some people awake. Most importantly, people should treat sleep as a basic need, like food and water, not as a waste of time.'
-        ],
-        questions: [
-          { type: 'tfng', q: 'Scientists fully understand why humans need sleep.', answer: 1, explain: 'Paragraph A: scientists "still do not fully understand why we need it".' },
-          { type: 'tfng', q: 'Children need less sleep than adults.', answer: 1, explain: 'Paragraph A: "children need even more".' },
-          { type: 'tfng', q: 'During sleep, the brain organises memories.', answer: 0, explain: 'Paragraph A: "the brain organises memories".' },
-          { type: 'mcq', q: 'How long does one sleep cycle usually last?', options: ['About 30 minutes', 'About 60 minutes', 'About 90 minutes', 'About 120 minutes'], answer: 2, explain: 'Paragraph B: "Each cycle lasts about ninety minutes".' },
-          { type: 'mcq', q: 'When is dream sleep longer?', options: ['In the first part of the night', 'In the second part of the night', 'Only in the morning', 'Only after exercise'], answer: 1, explain: 'Paragraph B: "In the second part, dream sleep becomes longer".' },
-          { type: 'heading', q: 'Which heading best fits paragraph C?', options: ['Why modern life disturbs sleep', 'The benefits of coffee', 'How to choose a bed', 'The history of sleep'], answer: 0, explain: 'Paragraph C is about screens, work, noise and coffee disturbing sleep.' },
-          { type: 'heading', q: 'Which heading best fits paragraph D?', options: ['Why sleep is a waste of time', 'Small changes that improve sleep', 'The dangers of napping', 'How to avoid exercise'], answer: 1, explain: 'Paragraph D: "small changes can make a big difference".' },
-          { type: 'complete', q: 'Complete the sentence: Drinking coffee late in the day keeps the brain _____ for hours.', accepted: ['awake'], explain: 'Paragraph C: "keeps the brain awake for hours".' },
-          { type: 'complete', q: 'Complete the sentence: A short nap of _____ minutes can improve attention.', accepted: ['twenty', '20'], explain: 'Paragraph D: "Short naps of twenty minutes".' },
-          { type: 'complete', q: 'Complete the sentence: People should treat sleep as a basic need, like food and _____.', accepted: ['water'], explain: 'Paragraph D: "like food and water".' }
-        ]
-      };
-      var READING_GT_2 = {
-        title: 'City Sports Centre',
-        paragraphs: [
-          'A. The City Sports Centre is open to everyone, from complete beginners to experienced athletes. The centre is open from 6 a.m. to 10 p.m. on weekdays, and from 8 a.m. to 8 p.m. on weekends. You do not need to be a member to use most facilities, but members pay lower prices and can book courts in advance.',
-          'B. The centre has a large swimming pool, a gym with modern equipment, and three courts for badminton and tennis. Swimming lessons for children are held on Saturday mornings, and there is a beginners\u2019 swimming class for adults on Tuesday evenings. The gym is busiest between 5 p.m. and 7 p.m., so visitors who prefer a quiet workout should come in the morning.',
-          'C. Classes must be booked at least one day in advance, either by phone or at the reception desk. If you cannot come to a class you have booked, please cancel at least three hours before the class starts. If you do not cancel, you will still have to pay the full price of the class. This rule helps the centre offer places to other people.',
-          'D. The centre also has a small café that serves drinks, sandwiches, and fruit. The café is open from 8 a.m. to 6 p.m. every day. Visitors can also hire towels and sports equipment at the reception desk for a small fee. Lost property is kept at reception for one month.'
-        ],
-        questions: [
-          { type: 'tfng', q: 'The centre is open to everyone.', answer: 0, explain: 'Paragraph A: "open to everyone".' },
-          { type: 'tfng', q: 'You must be a member to use most facilities.', answer: 1, explain: 'Paragraph A: "You do not need to be a member".' },
-          { type: 'tfng', q: 'The centre closes at 10 p.m. on weekends.', answer: 1, explain: 'Paragraph A: weekends 8 a.m. to 8 p.m.' },
-          { type: 'mcq', q: 'When are children\u2019s swimming lessons held?', options: ['Tuesday evenings', 'Saturday mornings', 'Sunday afternoons', 'Monday mornings'], answer: 1, explain: 'Paragraph B: "Swimming lessons for children are held on Saturday mornings".' },
-          { type: 'mcq', q: 'When is the gym busiest?', options: ['In the morning', 'Between 5 p.m. and 7 p.m.', 'At midnight', 'On Sunday mornings'], answer: 1, explain: 'Paragraph B: "busiest between 5 p.m. and 7 p.m.".' },
-          { type: 'heading', q: 'Which heading best fits paragraph C?', options: ['How to book and cancel classes', 'How to join the gym', 'The café menu', 'Opening hours'], answer: 0, explain: 'Paragraph C is about booking and cancelling classes.' },
-          { type: 'heading', q: 'Which heading best fits paragraph D?', options: ['Café, hire, and lost property', 'Swimming lessons', 'Membership prices', 'The history of the centre'], answer: 0, explain: 'Paragraph D covers the café, hire, and lost property.' },
-          { type: 'complete', q: 'Complete the sentence: Classes must be booked at least _____ day in advance.', accepted: ['one', '1'], explain: 'Paragraph C: "at least one day in advance".' },
-          { type: 'complete', q: 'Complete the sentence: If you cannot come, cancel at least _____ hours before the class starts.', accepted: ['three', '3'], explain: 'Paragraph C: "cancel at least three hours before".' },
-          { type: 'complete', q: 'Complete the sentence: Lost property is kept at reception for one _____.', accepted: ['month'], explain: 'Paragraph D: "kept at reception for one month".' }
-        ]
-      };
-      // Question bank: sets per mode. The practice test loads the selected
-      // set; switching sets restarts the test fresh (new timer, cleared answers).
-      var READING_SETS = { academic: [READING, READING_ACADEMIC_2], general: [READING_GT, READING_GT_2] };
+      // Question bank: test IDs per mode + set. The practice test loads
+      // the selected set from the server (Phase 5); switching sets
+      // restarts the test fresh (new timer, cleared answers).
+      var READING_TEST_IDS = { academic: ['reading-academic-1', 'reading-academic-2'], general: ['reading-general-1', 'reading-general-2'] };
       var readingSetIndex = { academic: 0, general: 0 };
       var readingAnswers = {};
-      var activeReading = READING;
+      var activeReadingTest = null; // fetched test (public view, no answer key)
       function startReading(restore) {
         stopExamTimers();
         var resumed = !!restore;
@@ -3400,63 +3156,71 @@
           readingAttemptId = P4.newAttemptId();
           readingEndsAt = Date.now() + 20 * 60 * 1000;
         }
-        // Snapshot the mode AND the selected bank set at test start: changing
-        // mode or set mid-test cannot mix another test's questions in.
-        activeReading = READING_SETS[examMode][readingSetIndex[examMode]];
         showExamView('examReading');
-        document.querySelectorAll('[data-reading-set]').forEach(function (btn) {
-          var idx = parseInt(btn.getAttribute('data-reading-set'), 10);
-          var on = idx === readingSetIndex[examMode];
-          btn.style.fontWeight = on ? '700' : '400';
-          btn.setAttribute('aria-pressed', String(on));
+        document.getElementById('readingQuestions').innerHTML = '<p>Loading test…</p>';
+        // Phase 5: fetch the selected bank set from the server (questions
+        // WITHOUT the answer key). Mode + set are snapshotted at test start:
+        // changing mode or set mid-test cannot mix another test's questions in.
+        var testId = READING_TEST_IDS[examMode][readingSetIndex[examMode]];
+        fetchTest(testId).then(function (test) {
+          activeReadingTest = test;
+          document.querySelectorAll('[data-reading-set]').forEach(function (btn) {
+            var idx = parseInt(btn.getAttribute('data-reading-set'), 10);
+            var on = idx === readingSetIndex[examMode];
+            btn.style.fontWeight = on ? '700' : '400';
+            btn.setAttribute('aria-pressed', String(on));
+          });
+          var passage = test.passages[0];
+          document.getElementById('readingPassageTitle').textContent = passage.title + ' · ' + examModeLabel();
+          document.getElementById('readingPassage').innerHTML = passage.paragraphs.map(function (p) {
+            return '<p style="margin:0 0 12px">' + escapeHtml(p) + '</p>';
+          }).join('');
+          var box = document.getElementById('readingQuestions');
+          box.innerHTML = '';
+          test.questions.forEach(function (item, qi) {
+            var qDiv = document.createElement('div');
+            qDiv.className = 'exam-q';
+            var qText = document.createElement('p');
+            qText.textContent = 'Q' + (qi + 1) + '. ' + item.prompt;
+            qDiv.appendChild(qText);
+            if (item.type === 'complete') {
+              var input = document.createElement('input');
+              input.type = 'text';
+              input.className = 'text-input';
+              input.placeholder = 'Type your answer…';
+              input.style.width = '100%';
+              if (readingAnswers[qi] != null) input.value = readingAnswers[qi];
+              input.addEventListener('input', function () { readingAnswers[qi] = this.value; p4SaveReading(); });
+              qDiv.appendChild(input);
+            } else {
+              var opts = document.createElement('div');
+              opts.className = 'exam-options';
+              item.options.forEach(function (opt, oi) {
+                var label = document.createElement('label');
+                var radio = document.createElement('input');
+                radio.type = 'radio';
+                radio.name = 'read-q' + qi;
+                radio.value = oi;
+                if (readingAnswers[qi] === oi) radio.checked = true;
+                radio.addEventListener('change', function () { readingAnswers[qi] = oi; p4SaveReading(); });
+                var span = document.createElement('span');
+                span.textContent = opt;
+                label.appendChild(radio);
+                label.appendChild(span);
+                opts.appendChild(label);
+              });
+              qDiv.appendChild(opts);
+            }
+            box.appendChild(qDiv);
+          });
+          examCountdown(document.getElementById('readingTimer'), Math.max(0, Math.floor((readingEndsAt - Date.now()) / 1000)));
+          p4ShowAttempt('examReading', (resumed ? 'Resumed attempt ' : 'Attempt ') + readingAttemptId + ' · ' + examModeLabel() + ' · Set ' + (readingSetIndex[examMode] + 1));
+          p4SaveReading();
+          P4.refreshNotes();
+        }).catch(function (err) {
+          document.getElementById('readingQuestions').innerHTML = '<p>' + escapeHtml(err.message) + '</p><div class="exam-actions"><button class="exam-primary" id="readingRetryBtn" type="button">Retry</button></div>';
+          document.getElementById('readingRetryBtn').addEventListener('click', function () { startReading(restore); });
         });
-        document.getElementById('readingPassageTitle').textContent = activeReading.title + ' · ' + examModeLabel();
-        document.getElementById('readingPassage').innerHTML = activeReading.paragraphs.map(function (p) {
-          return '<p style="margin:0 0 12px">' + escapeHtml(p) + '</p>';
-        }).join('');
-        var box = document.getElementById('readingQuestions');
-        box.innerHTML = '';
-        activeReading.questions.forEach(function (item, qi) {
-          var qDiv = document.createElement('div');
-          qDiv.className = 'exam-q';
-          var qText = document.createElement('p');
-          qText.textContent = 'Q' + (qi + 1) + '. ' + item.q;
-          qDiv.appendChild(qText);
-          if (item.type === 'complete') {
-            var input = document.createElement('input');
-            input.type = 'text';
-            input.className = 'text-input';
-            input.placeholder = 'Type your answer…';
-            input.style.width = '100%';
-            if (readingAnswers[qi] != null) input.value = readingAnswers[qi];
-            input.addEventListener('input', function () { readingAnswers[qi] = this.value; p4SaveReading(); });
-            qDiv.appendChild(input);
-          } else {
-            var opts = document.createElement('div');
-            opts.className = 'exam-options';
-            var choices = item.type === 'tfng' ? ['True', 'False', 'Not Given'] : item.options;
-            choices.forEach(function (opt, oi) {
-              var label = document.createElement('label');
-              var radio = document.createElement('input');
-              radio.type = 'radio';
-              radio.name = 'read-q' + qi;
-              radio.value = oi;
-              if (readingAnswers[qi] === oi) radio.checked = true;
-              radio.addEventListener('change', function () { readingAnswers[qi] = oi; p4SaveReading(); });
-              var span = document.createElement('span');
-              span.textContent = opt;
-              label.appendChild(radio);
-              label.appendChild(span);
-              opts.appendChild(label);
-            });
-            qDiv.appendChild(opts);
-          }
-          box.appendChild(qDiv);
-        });
-        examCountdown(document.getElementById('readingTimer'), Math.max(0, Math.floor((readingEndsAt - Date.now()) / 1000)));
-        p4ShowAttempt('examReading', (resumed ? 'Resumed attempt ' : 'Attempt ') + readingAttemptId + ' · ' + examModeLabel() + ' · Set ' + (readingSetIndex[examMode] + 1));
-        p4SaveReading();
-        P4.refreshNotes();
       }
       document.querySelectorAll('[data-reading-set]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -3474,205 +3238,59 @@
           showToast('Already submitted — showing your saved result.');
           return;
         }
-        var total = activeReading.questions.length, correct = 0;
-        var review = '';
-        activeReading.questions.forEach(function (item, qi) {
-          var ok = false;
-          if (item.type === 'complete') {
-            var given = String(readingAnswers[qi] || '').trim().toLowerCase();
-            ok = item.accepted.some(function (a) { return a.toLowerCase() === given; });
-          } else {
-            ok = readingAnswers[qi] === item.answer;
-          }
-          if (ok) correct += 1;
-          review += '<div class="exam-result-box"><h3>Q' + (qi + 1) + ' — ' + (ok ? '✅ Correct' : '❌ Incorrect') + '</h3><p>' + escapeHtml(item.q) + '</p><p>' + escapeHtml(item.explain) + '</p></div>';
-        });
-        var pct = Math.round(correct / total * 100);
-        // No band estimate for a short 10-question practice test: a short test
-        // cannot estimate a band reliably. Raw score + percentage only.
-        // (The Full Reading Mock, 40 questions, uses the IDP-published
-        // raw-to-band conversion and is the only place a band is estimated.)
-        var disclaimer = '<div class="exam-result-box"><h3>About this score</h3><p>Raw practice score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p><p class="exam-disclaimer">No band estimate is shown for this short 10-question practice test — a short test cannot estimate a band reliably. For a band estimate, take the Full Reading Mock (40 questions). This is NOT an official IELTS score.</p></div>';
-        var readingResult = { title: 'Reading Result · ' + examModeLabel(), headline: correct + ' / ' + total + ' correct · ' + pct + '%', sub: 'Short practice test · No band estimate', detail: disclaimer + review, label: 'Score' };
-        showExamResult(readingResult.title, readingResult.headline, readingResult.sub, readingResult.detail, readingResult.label);
-        P4.recordSubmission(readingAttemptId, readingResult, { attemptId: readingAttemptId, test: 'Reading', mode: examModeLabel(), set: 'Set ' + (readingSetIndex[examMode] + 1), score: correct + ' / ' + total, pct: pct, band: null, at: Date.now() });
-        P4.remove('progress_reading');
+        // Phase 5: the score is computed on the SERVER from the protected
+        // answer key. Review (correct flag + explanation) comes back with
+        // the server's response — it is never in the page.
+        var test = activeReadingTest;
+        if (!test) { showToast('Test data is missing — reload the test and try again.'); return; }
+        submitAnswers(buildSubmitPayload(readingAttemptId, test, examMode, 'practice', allIndexes(test), readingAnswers))
+          .then(function (result) {
+            var correct = result.score, total = result.total;
+            var pct = Math.round(correct / total * 100);
+            var review = '';
+            test.questions.forEach(function (item, qi) {
+              var per = null;
+              for (var i = 0; i < result.perQuestion.length; i++) if (result.perQuestion[i].id === item.id) { per = result.perQuestion[i]; break; }
+              var ok = per ? per.correct : false;
+              review += '<div class="exam-result-box"><h3>Q' + (qi + 1) + ' — ' + (ok ? '✅ Correct' : '❌ Incorrect') + '</h3><p>' + escapeHtml(item.prompt) + '</p><p>' + escapeHtml(per ? per.explanation : '') + '</p></div>';
+            });
+            // No band estimate for a short 10-question practice test: a short test
+            // cannot estimate a band reliably. Raw score + percentage only.
+            // (The Full Reading Mock, 40 questions, uses the IDP-published
+            // raw-to-band conversion and is the only place a band is estimated.)
+            var disclaimer = '<div class="exam-result-box"><h3>About this score</h3><p>Raw practice score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p><p class="exam-disclaimer">No band estimate is shown for this short 10-question practice test — a short test cannot estimate a band reliably. For a band estimate, take the Full Reading Mock (40 questions). This is NOT an official IELTS score.</p></div>';
+            var readingResult = { title: 'Reading Result · ' + examModeLabel(), headline: correct + ' / ' + total + ' correct · ' + pct + '%', sub: 'Short practice test · No band estimate', detail: disclaimer + review, label: 'Score' };
+            showExamResult(readingResult.title, readingResult.headline, readingResult.sub, readingResult.detail, readingResult.label);
+            P4.recordSubmission(readingAttemptId, readingResult, { attemptId: readingAttemptId, test: 'Reading', mode: examModeLabel(), set: 'Set ' + (readingSetIndex[examMode] + 1), score: correct + ' / ' + total, pct: pct, band: null, at: Date.now() });
+            P4.remove('progress_reading');
+          })
+          .catch(function (err) {
+            // Do NOT clear progress or record anything: the answers stay
+            // saved, and Submit can be pressed again to retry.
+            showToast('Score unavailable — ' + err.message + ' Your answers are saved; press Submit again to retry.');
+          });
       });
 
       /* ---- Phase 2: Full Reading Mock (40 questions, 60 min) ---- */
-      var READING_FULL = {
-        academic: { passages: [
-          { title: 'Passage 1 · The History of the Bicycle', paragraphs: [
-            'A. The bicycle is now one of the most common vehicles on Earth, yet when it first appeared in the early 19th century, it looked very different. The earliest machines had no pedals. Riders pushed themselves along with their feet, and the wooden frames were heavy and uncomfortable. These machines were toys for wealthy young men, not practical transport.',
-            'B. A major change came in the 1860s, when pedals were added to the front wheel. This made cycling faster, but the machines were still difficult to ride. Then, in the 1880s, the "safety bicycle" appeared, with two wheels of equal size and a chain driving the rear wheel. It was much easier and safer to ride, and cycling suddenly became popular with ordinary people, including women.',
-            'C. The bicycle also changed society. It gave many women a new sense of freedom, because they could travel alone without waiting for a horse or a carriage. Cycling clubs were formed in towns and cities, and some historians argue that the bicycle helped to change ideas about what women could do.',
-            'D. In the 20th century, cars pushed bicycles aside in many countries, but the bicycle never disappeared. Today, cities around the world are building cycle lanes and bike-sharing schemes, and electric bicycles are making cycling possible for older riders and for people in hilly areas.',
-            'E. The story of the bicycle is a reminder that a simple idea can have a long and surprising life. From a wooden toy for the rich, it became a machine that changed how millions of people move, work and spend their free time.'
-          ], questions: [
-            { type: 'tfng', q: 'The earliest bicycles had pedals.', answer: 1, explain: 'Paragraph A: "The earliest machines had no pedals."' },
-            { type: 'tfng', q: 'The earliest bicycles were mainly used by wealthy young men.', answer: 0, explain: 'Paragraph A: "toys for wealthy young men".' },
-            { type: 'tfng', q: 'The safety bicycle had a chain driving the front wheel.', answer: 1, explain: 'Paragraph B: "a chain driving the rear wheel".' },
-            { type: 'tfng', q: 'Cycling became popular with ordinary people after the safety bicycle appeared.', answer: 0, explain: 'Paragraph B: "cycling suddenly became popular with ordinary people".' },
-            { type: 'tfng', q: 'The bicycle had no effect on women\'s freedom.', answer: 1, explain: 'Paragraph C: "It gave many women a new sense of freedom."' },
-            { type: 'mcq', q: 'What made the safety bicycle easier to ride?', options: ['It had no pedals', 'Two equal wheels and a chain to the rear wheel', 'It was made of wood', 'It had an electric motor'], answer: 1, explain: 'Paragraph B describes two equal wheels and a chain driving the rear wheel.' },
-            { type: 'mcq', q: 'Where were cycling clubs formed?', options: ['Only in villages', 'In towns and cities', 'Only for women', 'Only for the wealthy'], answer: 1, explain: 'Paragraph C: "Cycling clubs were formed in towns and cities".' },
-            { type: 'mcq', q: 'Why are electric bicycles mentioned?', options: ['They replaced all cars', 'They help older riders and people in hilly areas', 'They are cheaper than normal bicycles', 'They need no cycle lanes'], answer: 1, explain: 'Paragraph D: "electric bicycles are making cycling possible for older riders and for people in hilly areas".' },
-            { type: 'mcq', q: 'What is the main idea of paragraph E?', options: ['Bicycles are now useless', 'A simple idea can have a long and surprising life', 'Cars are better than bicycles', 'Only rich people ride bicycles'], answer: 1, explain: 'Paragraph E: "a simple idea can have a long and surprising life".' },
-            { type: 'complete', q: 'Complete the sentence: The earliest machines had no _____.', accepted: ['pedals'], explain: 'Paragraph A: "The earliest machines had no pedals."' },
-            { type: 'complete', q: 'Complete the sentence: The safety bicycle appeared in the _____.', accepted: ['1880s'], explain: 'Paragraph B: "in the 1880s, the safety bicycle appeared".' },
-            { type: 'complete', q: 'Complete the sentence: In the 20th century, _____ pushed bicycles aside in many countries.', accepted: ['cars'], explain: 'Paragraph D: "cars pushed bicycles aside".' },
-            { type: 'complete', q: 'Complete the sentence: Today, cities are building cycle lanes and _____ schemes.', accepted: ['bike-sharing', 'bike sharing'], explain: 'Paragraph D: "bike-sharing schemes".' }
-          ] },
-          { title: 'Passage 2 · How Languages Disappear', paragraphs: [
-            'A. There are around 7,000 languages spoken in the world today, but linguists warn that almost half of them could disappear by the end of this century. When a language dies, a unique way of describing the world dies with it — including stories, songs and knowledge about plants, animals and medicine that may never have been written down.',
-            'B. Languages usually disappear for practical reasons. When speakers of a small language need jobs, education or government services, they often must use a larger, more powerful language. Over time, parents may stop speaking the small language to their children, hoping to give them a better future. Within two or three generations, the language can be lost completely.',
-            'C. Some people argue that this is natural and even useful: fewer languages could mean easier communication. Others disagree strongly. They point out that each language carries a different view of the world. For example, some languages have dozens of words for snow or for family relationships, and losing them means losing a way of thinking.',
-            'D. Around the world, communities are fighting back. In Wales, Welsh is taught in schools and used on road signs. In New Zealand, Maori language programmes have grown strongly. Technology also helps: apps, online dictionaries and social media allow small languages to reach new speakers. The fight is difficult, but many believe it is worth it.'
-          ], questions: [
-            { type: 'ynng', q: 'The writer believes that losing a language means losing knowledge.', answer: 0, explain: 'Paragraph A: losing a language means losing "knowledge about plants, animals and medicine".' },
-            { type: 'ynng', q: 'Parents always want their children to forget the small language.', answer: 1, explain: 'Paragraph B: parents "may stop speaking" it hoping for a better future — not "always want to forget".' },
-            { type: 'ynng', q: 'The writer agrees that fewer languages would make communication easier.', answer: 2, explain: 'Paragraph C presents this as what "some people argue" — the writer\'s own view is not stated.' },
-            { type: 'ynng', q: 'Many people believe the fight to save languages is worth it.', answer: 0, explain: 'Paragraph D: "many believe it is worth it".' },
-            { type: 'ynng', q: 'Technology has helped small languages reach new speakers.', answer: 0, explain: 'Paragraph D: "Technology also helps: apps, online dictionaries and social media allow small languages to reach new speakers."' },
-            { type: 'heading', q: 'Which heading fits paragraph A?', options: ['A world of disappearing voices', 'Why parents choose big languages', 'The argument for fewer languages', 'Fighting back'], answer: 0, explain: 'Paragraph A is about languages disappearing around the world.' },
-            { type: 'heading', q: 'Which heading fits paragraph B?', options: ['A world of disappearing voices', 'Why parents choose big languages', 'The argument for fewer languages', 'Fighting back'], answer: 1, explain: 'Paragraph B explains why parents switch to bigger languages.' },
-            { type: 'heading', q: 'Which heading fits paragraph C?', options: ['A world of disappearing voices', 'Why parents choose big languages', 'The argument for fewer languages', 'Fighting back'], answer: 2, explain: 'Paragraph C presents the argument for fewer languages and the counter-argument.' },
-            { type: 'heading', q: 'Which heading fits paragraph D?', options: ['A world of disappearing voices', 'Why parents choose big languages', 'The argument for fewer languages', 'Fighting back'], answer: 3, explain: 'Paragraph D is about communities fighting back to save languages.' },
-            { type: 'mcq', q: 'According to the passage, languages often disappear because speakers need…', options: ['More songs', 'Jobs, education or government services', 'New alphabets', 'Longer words'], answer: 1, explain: 'Paragraph B: "need jobs, education or government services".' },
-            { type: 'mcq', q: 'What example is given of a language being protected?', options: ['Welsh taught in schools', 'English banned in Wales', 'Maori replaced by English', 'Apps that teach only big languages'], answer: 0, explain: 'Paragraph D: "In Wales, Welsh is taught in schools".' },
-            { type: 'mcq', q: 'How can a language be lost completely?', options: ['In one day', 'Within two or three generations', 'Only by war', 'Only when books are burned'], answer: 1, explain: 'Paragraph B: "Within two or three generations, the language can be lost completely."' },
-            { type: 'mcq', q: 'What does the passage say about apps and social media?', options: ['They harm small languages', 'They allow small languages to reach new speakers', 'They replace schools', 'They are too expensive'], answer: 1, explain: 'Paragraph D: "apps, online dictionaries and social media allow small languages to reach new speakers".' }
-          ] },
-          { title: 'Passage 3 · The Deep Ocean', paragraphs: [
-            'A. Sunlight reaches only the top 200 metres of the ocean. Below that lies the deep ocean — cold, dark and under enormous pressure. Yet this strange world is full of life. Scientists estimate that more species live in the deep ocean than in any other habitat on Earth, and most of them have never been studied.',
-            'B. Animals in the deep ocean have remarkable adaptations. Many produce their own light, a process called bioluminescence, to attract prey or to confuse predators. Others have huge eyes to catch the faintest light, or no eyes at all. The giant squid, which can grow to 13 metres, lives in these depths and was photographed alive for the first time in 2004.',
-            'C. Exploring the deep ocean is extremely difficult. The pressure at 4,000 metres is about 400 times the pressure at sea level, enough to crush most machines. For many years, scientists could only study dead animals brought up in nets. Today, special submersibles with thick titanium walls carry researchers down to observe living animals in their own environment.',
-            'D. The deep ocean is also important for the whole planet. It stores huge amounts of carbon dioxide, which helps to slow climate change. Deep-sea currents move heat around the world and influence weather. If the deep ocean is damaged — for example, by deep-sea mining — the effects could reach far beyond the sea itself.',
-            'E. Despite its importance, less than 5% of the deep ocean has been explored in detail. Scientists say that protecting it is urgent, because we may be destroying species and habitats before we even know they exist.'
-          ], questions: [
-            { type: 'info', q: 'Which paragraph mentions an animal photographed alive for the first time in 2004?', options: ['Paragraph A', 'Paragraph B', 'Paragraph C', 'Paragraph D', 'Paragraph E'], answer: 1, explain: 'Paragraph B: the giant squid "was photographed alive for the first time in 2004".' },
-            { type: 'info', q: 'Which paragraph explains why exploring the deep ocean is difficult?', options: ['Paragraph A', 'Paragraph B', 'Paragraph C', 'Paragraph D', 'Paragraph E'], answer: 2, explain: 'Paragraph C: pressure "enough to crush most machines".' },
-            { type: 'info', q: 'Which paragraph describes the deep ocean\'s role in slowing climate change?', options: ['Paragraph A', 'Paragraph B', 'Paragraph C', 'Paragraph D', 'Paragraph E'], answer: 3, explain: 'Paragraph D: "stores huge amounts of carbon dioxide, which helps to slow climate change".' },
-            { type: 'info', q: 'Which paragraph says most deep-ocean species have never been studied?', options: ['Paragraph A', 'Paragraph B', 'Paragraph C', 'Paragraph D', 'Paragraph E'], answer: 0, explain: 'Paragraph A: "most of them have never been studied".' },
-            { type: 'info', q: 'Which paragraph mentions that very little of the deep ocean has been explored?', options: ['Paragraph A', 'Paragraph B', 'Paragraph C', 'Paragraph D', 'Paragraph E'], answer: 4, explain: 'Paragraph E: "less than 5% of the deep ocean has been explored in detail".' },
-            { type: 'info', q: 'Which paragraph describes animals producing their own light?', options: ['Paragraph A', 'Paragraph B', 'Paragraph C', 'Paragraph D', 'Paragraph E'], answer: 1, explain: 'Paragraph B: "Many produce their own light, a process called bioluminescence".' },
-            { type: 'mcq', q: 'How deep does sunlight reach?', options: ['20 metres', '200 metres', '2,000 metres', '4,000 metres'], answer: 1, explain: 'Paragraph A: "Sunlight reaches only the top 200 metres".' },
-            { type: 'mcq', q: 'What is bioluminescence?', options: ['Animals producing their own light', 'Animals growing huge eyes', 'Animals sleeping in winter', 'Animals eating plants'], answer: 0, explain: 'Paragraph B: "produce their own light, a process called bioluminescence".' },
-            { type: 'mcq', q: 'What is the pressure at 4,000 metres compared to sea level?', options: ['About 4 times', 'About 40 times', 'About 400 times', 'About 4,000 times'], answer: 2, explain: 'Paragraph C: "about 400 times the pressure at sea level".' },
-            { type: 'mcq', q: 'What do scientists say is urgent?', options: ['Building more submersibles', 'Protecting the deep ocean', 'Catching giant squid', 'Stopping all fishing'], answer: 1, explain: 'Paragraph E: "protecting it is urgent".' },
-            { type: 'complete', q: 'Complete the sentence: The giant squid can grow to _____ metres.', accepted: ['13'], explain: 'Paragraph B: "can grow to 13 metres".' },
-            { type: 'complete', q: 'Complete the sentence: The pressure at 4,000 metres is enough to crush most _____.', accepted: ['machines'], explain: 'Paragraph C: "enough to crush most machines".' },
-            { type: 'complete', q: 'Complete the sentence: The deep ocean stores huge amounts of carbon _____.', accepted: ['dioxide'], explain: 'Paragraph D: "stores huge amounts of carbon dioxide".' },
-            { type: 'complete', q: 'Complete the sentence: Less than _____% of the deep ocean has been explored in detail.', accepted: ['5', 'five'], explain: 'Paragraph E: "less than 5% of the deep ocean has been explored".' }
-          ] }
-        ] },
-        general: { passages: [
-          { title: 'Section 1 · Notices and Advertisements', paragraphs: [
-            'Text 1 — Notice: Riverside Library Summer Hours. From 1 July to 31 August, the Riverside Library will open at 9 a.m. and close at 6 p.m., Monday to Saturday. On Sundays, the library will be closed. The children\'s story session will move to Wednesday mornings at 10 a.m. during the summer. Book returns can be made at any time through the return box outside the main entrance.',
-            'Text 2 — Advert: Weekend Cooking Course. Learn to cook Italian food in a friendly weekend course. Classes run on Saturday mornings from 10 a.m. to 1 p.m. for six weeks, starting on 5 July. The course costs 900 taka, including all ingredients. To book a place, call 01700-123456 or visit the community centre. Places are limited to 12 students per course.'
-          ], questions: [
-            { type: 'tfng', q: 'In summer, the library opens at 9 a.m.', answer: 0, explain: 'Text 1: "will open at 9 a.m.".' },
-            { type: 'tfng', q: 'The library is open on Sundays in summer.', answer: 1, explain: 'Text 1: "On Sundays, the library will be closed."' },
-            { type: 'tfng', q: 'The children\'s story session moves to Wednesday mornings.', answer: 0, explain: 'Text 1: "will move to Wednesday mornings at 10 a.m."' },
-            { type: 'tfng', q: 'The cooking course runs on Sunday mornings.', answer: 1, explain: 'Text 2: "Classes run on Saturday mornings".' },
-            { type: 'tfng', q: 'The cooking course costs 900 taka including ingredients.', answer: 0, explain: 'Text 2: "costs 900 taka, including all ingredients".' },
-            { type: 'tfng', q: 'You must book the cooking course online.', answer: 2, explain: 'Text 2 mentions calling or visiting — online booking is not mentioned.' },
-            { type: 'mcq', q: 'How many students can join each cooking course?', options: ['6', '10', '12', '20'], answer: 2, explain: 'Text 2: "limited to 12 students per course".' },
-            { type: 'mcq', q: 'How can you book the cooking course?', options: ['By email only', 'By calling or visiting the community centre', 'At the library', 'Through the return box'], answer: 1, explain: 'Text 2: "call 01700-123456 or visit the community centre".' },
-            { type: 'mcq', q: 'When does the cooking course start?', options: ['1 July', '5 July', '31 August', '1 September'], answer: 1, explain: 'Text 2: "starting on 5 July".' },
-            { type: 'complete', q: 'Complete the sentence: In summer, the library closes at _____ p.m.', accepted: ['6', 'six'], explain: 'Text 1: "close at 6 p.m."' },
-            { type: 'complete', q: 'Complete the sentence: Book returns can be made through the _____ outside the main entrance.', accepted: ['return box'], explain: 'Text 1: "through the return box outside the main entrance".' },
-            { type: 'complete', q: 'Complete the sentence: Cooking classes run from 10 a.m. to _____ p.m.', accepted: ['1', 'one'], explain: 'Text 2: "from 10 a.m. to 1 p.m."' },
-            { type: 'complete', q: 'Complete the sentence: To book the course, call _____.', accepted: ['01700-123456', '01700123456'], explain: 'Text 2: "call 01700-123456".' }
-          ] },
-          { title: 'Section 2 · Workplace Texts', paragraphs: [
-            'Text 1 — Staff Handbook: Safety Rules. All staff must wear safety shoes in the warehouse at all times. If you see a spill on the floor, clean it immediately or report it to your supervisor. In case of fire, leave the building by the nearest exit and go to the assembly point in the car park. Do not use the lifts during a fire. All accidents, however small, must be reported to the health and safety officer within 24 hours.',
-            'Text 2 — Email: Office Relocation. Dear all, As you know, our office will move to the new building on Green Road on 1 September. Please pack your personal items by 29 August. The IT team will move all computers on 30 August. There will be no internet access in the old office on 31 August. If you have any questions, please contact Farhana in Administration. Thank you, Rahim, Office Manager.'
-          ], questions: [
-            { type: 'ynng', q: 'The writer says staff must wear safety shoes in the warehouse.', answer: 0, explain: 'Text 1: "All staff must wear safety shoes in the warehouse at all times."' },
-            { type: 'ynng', q: 'The writer says staff should use the lifts during a fire.', answer: 1, explain: 'Text 1: "Do not use the lifts during a fire."' },
-            { type: 'ynng', q: 'The writer says accidents must be reported within 48 hours.', answer: 1, explain: 'Text 1: "within 24 hours".' },
-            { type: 'ynng', q: 'The writer says the office will move on 1 September.', answer: 0, explain: 'Text 2: "our office will move to the new building on Green Road on 1 September".' },
-            { type: 'ynng', q: 'The writer says there will be no electricity in the old office on 31 August.', answer: 2, explain: 'Text 2 mentions no internet access — electricity is not mentioned.' },
-            { type: 'info', q: 'Which text mentions what to do about a spill?', options: ['Text 1', 'Text 2'], answer: 0, explain: 'Text 1: "If you see a spill on the floor, clean it immediately".' },
-            { type: 'info', q: 'Which text mentions packing personal items?', options: ['Text 1', 'Text 2'], answer: 1, explain: 'Text 2: "Please pack your personal items by 29 August."' },
-            { type: 'info', q: 'Which text mentions an assembly point?', options: ['Text 1', 'Text 2'], answer: 0, explain: 'Text 1: "go to the assembly point in the car park".' },
-            { type: 'info', q: 'Which text mentions contacting someone with questions?', options: ['Text 1', 'Text 2'], answer: 1, explain: 'Text 2: "please contact Farhana in Administration".' },
-            { type: 'mcq', q: 'Where should staff go during a fire?', options: ['To the lifts', 'To the warehouse', 'To the assembly point in the car park', 'To the supervisor\'s office'], answer: 2, explain: 'Text 1: "go to the assembly point in the car park".' },
-            { type: 'mcq', q: 'When will the IT team move the computers?', options: ['29 August', '30 August', '31 August', '1 September'], answer: 1, explain: 'Text 2: "The IT team will move all computers on 30 August."' },
-            { type: 'mcq', q: 'Who should staff contact with questions about the move?', options: ['Rahim', 'Farhana', 'The health and safety officer', 'The IT team'], answer: 1, explain: 'Text 2: "please contact Farhana in Administration".' },
-            { type: 'mcq', q: 'What must be reported within 24 hours?', options: ['Spills only', 'Fires only', 'All accidents', 'Late arrivals'], answer: 2, explain: 'Text 1: "All accidents, however small, must be reported … within 24 hours".' }
-          ] },
-          { title: 'Section 3 · Volunteering Abroad', paragraphs: [
-            'A. Every year, thousands of young people travel abroad to volunteer. They teach English, help build schools, or work in wildlife parks. For many, it is their first experience of living in another country, and they return home with new skills and more confidence.',
-            'B. However, volunteering abroad is not always helpful. Some projects are poorly organised, and volunteers arrive to find no clear work to do. In other cases, volunteers take jobs that local people could do, which can harm the local economy. Experts say that the best projects are those run by local organisations, where volunteers support local workers rather than replacing them.',
-            'C. Before choosing a project, it is important to ask questions. How long has the organisation been working in the area? Where does the money go? What skills are really needed? A responsible organisation will answer these questions clearly. Volunteers should also think about their own reasons: the aim should be to help, not just to have an adventure.',
-            'D. If chosen carefully, volunteering abroad can be a powerful experience. Volunteers learn to adapt, to solve problems, and to understand different cultures. Many say that the experience changed how they see their own lives — and that they came home wanting to do more.'
-          ], questions: [
-            { type: 'tfng', q: 'Thousands of young people volunteer abroad every year.', answer: 0, explain: 'Paragraph A: "Every year, thousands of young people travel abroad to volunteer."' },
-            { type: 'tfng', q: 'All volunteering projects are well organised.', answer: 1, explain: 'Paragraph B: "Some projects are poorly organised."' },
-            { type: 'tfng', q: 'Some volunteers take jobs local people could do.', answer: 0, explain: 'Paragraph B: "volunteers take jobs that local people could do".' },
-            { type: 'tfng', q: 'The best projects are run by international companies.', answer: 1, explain: 'Paragraph B: "the best projects are those run by local organisations".' },
-            { type: 'tfng', q: 'Volunteers should ask where the money goes.', answer: 0, explain: 'Paragraph C: "Where does the money go?"' },
-            { type: 'tfng', q: 'Volunteering abroad never changes how people see their lives.', answer: 1, explain: 'Paragraph D: "the experience changed how they see their own lives".' },
-            { type: 'mcq', q: 'What do many young volunteers gain?', options: ['Money', 'New skills and more confidence', 'Free holidays', 'University degrees'], answer: 1, explain: 'Paragraph A: "they return home with new skills and more confidence".' },
-            { type: 'mcq', q: 'What can harm the local economy?', options: ['Volunteers learning the language', 'Volunteers taking jobs locals could do', 'Volunteers staying too long', 'Volunteers speaking English'], answer: 1, explain: 'Paragraph B: "volunteers take jobs that local people could do, which can harm the local economy".' },
-            { type: 'mcq', q: 'What should a responsible organisation do?', options: ['Hide its costs', 'Answer questions clearly', 'Refuse all questions', 'Charge no fees'], answer: 1, explain: 'Paragraph C: "A responsible organisation will answer these questions clearly."' },
-            { type: 'mcq', q: 'What is the main aim of volunteering, according to the passage?', options: ['To have an adventure', 'To help', 'To learn a language', 'To make money'], answer: 1, explain: 'Paragraph C: "the aim should be to help".' },
-            { type: 'complete', q: 'Complete the sentence: Volunteers may teach English, help build schools, or work in _____ parks.', accepted: ['wildlife'], explain: 'Paragraph A: "work in wildlife parks".' },
-            { type: 'complete', q: 'Complete the sentence: The best projects are run by _____ organisations.', accepted: ['local'], explain: 'Paragraph B: "run by local organisations".' },
-            { type: 'complete', q: 'Complete the sentence: Volunteers should ask how long the organisation has been working in the _____.', accepted: ['area'], explain: 'Paragraph C: "been working in the area".' },
-            { type: 'complete', q: 'Complete the sentence: Volunteers learn to adapt, to solve problems, and to understand different _____.', accepted: ['cultures'], explain: 'Paragraph D: "to understand different cultures".' }
-          ] }
-        ] }
-      };
-
       /* ---- Full Reading Mock engine ---- */
       var fullReadingState = { mode: 'academic', passageIndex: 0, answers: {} };
       var fullReadingConfirmSubmit = false;
-      function fullReadingPassages() { return READING_FULL[fullReadingState.mode].passages; }
+      var activeFullReadingTest = null; // fetched test (public view, no answer key)
+      var fullReadingAttemptId = null;
+      // Phase 5: server questions are flat (each carries .section = passage
+      // index). Re-attach per-passage question lists so the existing
+      // palette / offset / render code keeps working unchanged.
+      function fullReadingPassages() {
+        if (!activeFullReadingTest) return [];
+        return activeFullReadingTest.passages.map(function (p, pi) {
+          return { title: p.title, paragraphs: p.paragraphs,
+            questions: activeFullReadingTest.questions.filter(function (q) { return q.section === pi; }) };
+        });
+      }
       function fullReadingOffset(pi) {
         var n = 0;
         fullReadingPassages().slice(0, pi).forEach(function (p) { n += p.questions.length; });
         return n;
-      }
-      function fullReadingBand40(correct, mode) {
-        // Raw-score → band conversions published by IDP (ielts.idp.com, "IELTS
-        // Reading band scores"): Academic and General Training use DIFFERENT
-        // tables. Estimated practice band only — IDP notes actual marks may
-        // vary slightly between tests.
-        if (mode === 'general') {
-          if (correct >= 40) return '9.0';
-          if (correct >= 39) return '8.5';
-          if (correct >= 37) return '8.0';
-          if (correct >= 36) return '7.5';
-          if (correct >= 34) return '7.0';
-          if (correct >= 32) return '6.5';
-          if (correct >= 30) return '6.0';
-          if (correct >= 27) return '5.5';
-          if (correct >= 23) return '5.0';
-          if (correct >= 19) return '4.5';
-          if (correct >= 15) return '4.0';
-          if (correct >= 12) return '3.5';
-          if (correct >= 9) return '3.0';
-          if (correct >= 6) return '2.5';
-          return '2.0';
-        }
-        if (correct >= 39) return '9.0';
-        if (correct >= 37) return '8.5';
-        if (correct >= 35) return '8.0';
-        if (correct >= 33) return '7.5';
-        if (correct >= 30) return '7.0';
-        if (correct >= 27) return '6.5';
-        if (correct >= 23) return '6.0';
-        if (correct >= 19) return '5.5';
-        if (correct >= 15) return '5.0';
-        if (correct >= 13) return '4.5';
-        if (correct >= 10) return '4.0';
-        if (correct >= 8) return '3.5';
-        if (correct >= 6) return '3.0';
-        if (correct >= 4) return '2.5';
-        return '2.0';
       }
       function fullReadingConversionText() {
         if (fullReadingState.mode === 'general')
@@ -3683,10 +3301,20 @@
         stopExamTimers();
         fullReadingState = { mode: examMode, passageIndex: 0, answers: {} };
         fullReadingConfirmSubmit = false;
+        fullReadingAttemptId = P4.newAttemptId();
         showExamView('examFullReading');
         document.getElementById('fullReadingModeBadge').textContent = 'Mode: ' + examModeLabel() + ' · ';
-        examCountdown(document.getElementById('fullReadingTimer'), 60 * 60);
-        renderFullReading();
+        document.getElementById('fullReadingQuestions').innerHTML = '<p>Loading test…</p>';
+        // Phase 5: fetch the full 40-question test from the server
+        // (questions WITHOUT the answer key).
+        fetchTest('reading-full-' + examMode).then(function (test) {
+          activeFullReadingTest = test;
+          examCountdown(document.getElementById('fullReadingTimer'), 60 * 60);
+          renderFullReading();
+        }).catch(function (err) {
+          document.getElementById('fullReadingQuestions').innerHTML = '<p>' + escapeHtml(err.message) + '</p><div class="exam-actions"><button class="exam-primary" id="fullReadingRetryBtn" type="button">Retry</button></div>';
+          document.getElementById('fullReadingRetryBtn').addEventListener('click', function () { startFullReading(); });
+        });
       }
       function renderFullReadingPalette() {
         var pal = document.getElementById('fullReadingPalette');
@@ -3734,7 +3362,7 @@
           var qDiv = document.createElement('div');
           qDiv.className = 'exam-q';
           var qText = document.createElement('p');
-          qText.textContent = 'Q' + (globalQi + 1) + '. ' + item.q;
+          qText.textContent = 'Q' + (globalQi + 1) + '. ' + item.prompt;
           qDiv.appendChild(qText);
           if (item.type === 'complete') {
             var input = document.createElement('input');
@@ -3751,7 +3379,7 @@
           } else {
             var opts = document.createElement('div');
             opts.className = 'exam-options';
-            var choices = item.type === 'tfng' ? ['True', 'False', 'Not Given'] : item.type === 'ynng' ? ['Yes', 'No', 'Not Given'] : item.options;
+            var choices = item.options;
             choices.forEach(function (opt, oi) {
               var label = document.createElement('label');
               var radio = document.createElement('input');
@@ -3800,27 +3428,34 @@
           return;
         }
         stopExamTimers();
-        var correct = 0, review = '';
-        var qNum = 0;
-        fullReadingPassages().forEach(function (part) {
-          review += '<h3 style="margin:18px 0 6px">' + escapeHtml(part.title) + '</h3>';
-          part.questions.forEach(function (item) {
-            var qi = qNum++;
-            var ok = false;
-            if (item.type === 'complete') {
-              var given = String(fullReadingState.answers[qi] || '').trim().toLowerCase();
-              ok = item.accepted.some(function (a) { return a.toLowerCase() === given; });
-            } else {
-              ok = fullReadingState.answers[qi] === item.answer;
-            }
-            if (ok) correct += 1;
-            review += '<div class="exam-result-box"><h3>Q' + (qi + 1) + ' — ' + (ok ? '✅ Correct' : '❌ Incorrect') + '</h3><p>' + escapeHtml(item.q) + '</p><p>' + escapeHtml(item.explain) + '</p></div>';
+        // Phase 5: the score + band are computed on the SERVER from the
+        // protected answer key. Review (correct flag + explanation) comes
+        // back with the server's response.
+        var test = activeFullReadingTest;
+        if (!test) { showToast('Test data is missing — reload the test and try again.'); return; }
+        submitAnswers(buildSubmitPayload(fullReadingAttemptId, test, fullReadingState.mode, 'practice', allIndexes(test), fullReadingState.answers))
+          .then(function (result) {
+            var correct = result.score, total = result.total;
+            var pct = Math.round(correct / total * 100);
+            var band40 = result.band != null ? result.band.toFixed(1) : '—';
+            var review = '';
+            var qNum = 0;
+            fullReadingPassages().forEach(function (part) {
+              review += '<h3 style="margin:18px 0 6px">' + escapeHtml(part.title) + '</h3>';
+              part.questions.forEach(function (item) {
+                var qi = qNum++;
+                var per = null;
+                for (var i = 0; i < result.perQuestion.length; i++) if (result.perQuestion[i].id === item.id) { per = result.perQuestion[i]; break; }
+                var ok = per ? per.correct : false;
+                review += '<div class="exam-result-box"><h3>Q' + (qi + 1) + ' — ' + (ok ? '✅ Correct' : '❌ Incorrect') + '</h3><p>' + escapeHtml(item.prompt) + '</p><p>' + escapeHtml(per ? per.explanation : '') + '</p></div>';
+              });
+            });
+            var conversion = '<div class="exam-result-box"><h3>How the band was estimated</h3><p>Raw score <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong> → estimated band <strong>' + band40 + '</strong> using the ' + examModeLabel() + ' raw-to-band conversion published by IDP: ' + fullReadingConversionText() + '</p><p class="exam-disclaimer">This is an ESTIMATED practice band. IDP notes actual marks may vary slightly between tests. It is NOT an official IELTS score and does not guarantee any official result.</p></div>';
+            showExamResult('Full Reading Mock · ' + examModeLabel(), '≈ ' + band40 + ' (est.)', 'Raw score: ' + correct + ' / ' + total + ' correct · ' + pct + '%', conversion + review);
+          })
+          .catch(function (err) {
+            showToast('Score unavailable — ' + err.message + ' Your answers are saved; press Submit again to retry.');
           });
-        });
-        var pct = Math.round(correct / total * 100);
-        var band40 = fullReadingBand40(correct, fullReadingState.mode);
-        var conversion = '<div class="exam-result-box"><h3>How the band was estimated</h3><p>Raw score <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong> → estimated band <strong>' + band40 + '</strong> using the ' + examModeLabel() + ' raw-to-band conversion published by IDP: ' + fullReadingConversionText() + '</p><p class="exam-disclaimer">This is an ESTIMATED practice band. IDP notes actual marks may vary slightly between tests. It is NOT an official IELTS score and does not guarantee any official result.</p></div>';
-        showExamResult('Full Reading Mock · ' + examModeLabel(), '≈ ' + band40 + ' (est.)', 'Raw score: ' + correct + ' / ' + total + ' correct · ' + pct + '%', conversion + review);
       });
 
       /* ---- Phase 3: Writing question bank — 2 essay prompts, 2 GT letters ---- */
@@ -4011,7 +3646,7 @@
       var fullMock = { stage: 0, listening: 0, reading: 0, readingAnswers: {}, mockMode: 'academic', writingBand: null, speakingBand: null, speakingText: '' };
       function startFullMock() {
         // Snapshot the mode so a mid-mock mode change cannot mix formats.
-        fullMock = { stage: 0, listening: 0, reading: 0, readingAnswers: {}, mockMode: examMode, writingBand: null, speakingBand: null, speakingText: '' };
+        fullMock = { stage: 0, listening: 0, reading: 0, readingAnswers: {}, mockMode: examMode, writingBand: null, speakingBand: null, speakingText: '', attemptId: P4.newAttemptId() };
         showExamView('examFullMock');
         renderFullMockStage();
       }
@@ -4022,104 +3657,127 @@
         stopExamTimers();
         if (fullMock.stage === 0) {
           label.textContent = 'Stage 1 of 4 · Listening (Part 1)';
-          var part = LISTENING_PARTS[0];
-          var html = '<div class="exam-part">' + part.title + '</div>' +
-            '<div style="margin:10px 0"><button class="exam-play" id="fmPlayBtn" type="button">▶ Play audio</button></div>' +
-            '<div id="fmQuestions"></div>' +
-            '<div class="exam-actions"><button class="exam-primary" id="fmNextBtn" type="button">Next → Reading</button></div>';
-          body.innerHTML = html;
-          var qBox = document.getElementById('fmQuestions');
-          part.questions.forEach(function (item, qi) {
-            var qDiv = document.createElement('div');
-            qDiv.className = 'exam-q';
-            var qText = document.createElement('p');
-            qText.textContent = 'Q' + (qi + 1) + '. ' + item.q;
-            qDiv.appendChild(qText);
-            var opts = document.createElement('div');
-            opts.className = 'exam-options';
-            item.options.forEach(function (opt, oi) {
-              var lab = document.createElement('label');
-              var radio = document.createElement('input');
-              radio.type = 'radio'; radio.name = 'fm-q' + qi; radio.value = oi;
-              radio.addEventListener('change', function () { fullMock['fm' + qi] = oi; });
-              var span = document.createElement('span');
-              span.textContent = opt;
-              lab.appendChild(radio); lab.appendChild(span); opts.appendChild(lab);
+          body.innerHTML = '<p>Loading test…</p>';
+          // Phase 5: Part 1 comes from the server (listening-set1, section 0).
+          // The stage score is computed by POST /api/submit (context 'mock':
+          // aggregates only, no review) — never in the browser.
+          fetchTest('listening-set1').then(function (test) {
+            var part = test.parts[0];
+            var stageQs = test.questions.filter(function (q) { return q.section === 0; });
+            var stageIndexes = stageQs.map(function (q) { return test.questions.indexOf(q); });
+            var html = '<div class="exam-part">' + part.title + '</div>' +
+              '<div style="margin:10px 0"><button class="exam-play" id="fmPlayBtn" type="button">▶ Play audio</button></div>' +
+              '<div id="fmQuestions"></div>' +
+              '<div class="exam-actions"><button class="exam-primary" id="fmNextBtn" type="button">Next → Reading</button></div>';
+            body.innerHTML = html;
+            var qBox = document.getElementById('fmQuestions');
+            stageQs.forEach(function (item, qi) {
+              var qDiv = document.createElement('div');
+              qDiv.className = 'exam-q';
+              var qText = document.createElement('p');
+              qText.textContent = 'Q' + (qi + 1) + '. ' + item.prompt;
+              qDiv.appendChild(qText);
+              var opts = document.createElement('div');
+              opts.className = 'exam-options';
+              item.options.forEach(function (opt, oi) {
+                var lab = document.createElement('label');
+                var radio = document.createElement('input');
+                radio.type = 'radio'; radio.name = 'fm-q' + qi; radio.value = oi;
+                radio.addEventListener('change', function () { fullMock['fm' + qi] = oi; });
+                var span = document.createElement('span');
+                span.textContent = opt;
+                lab.appendChild(radio); lab.appendChild(span); opts.appendChild(lab);
+              });
+              qDiv.appendChild(opts);
+              qBox.appendChild(qDiv);
             });
-            qDiv.appendChild(opts);
-            qBox.appendChild(qDiv);
-          });
-          document.getElementById('fmPlayBtn').addEventListener('click', function () {
-            var btn = this;
-            btn.disabled = true; btn.textContent = 'Playing…';
-            playListeningScript(part.script, function (success) {
-              btn.textContent = success ? '▶ Played' : '↻ Retry audio';
-              btn.disabled = !success;
+            document.getElementById('fmPlayBtn').addEventListener('click', function () {
+              var btn = this;
+              btn.disabled = true; btn.textContent = 'Playing…';
+              playListeningScript(part.script, function (success) {
+                btn.textContent = success ? '▶ Played' : '↻ Retry audio';
+                btn.disabled = !success;
+              });
             });
-          });
-          document.getElementById('fmNextBtn').addEventListener('click', function () {
-            var correct = 0;
-            part.questions.forEach(function (item, qi) {
-              if (fullMock['fm' + qi] === item.answer) correct += 1;
+            document.getElementById('fmNextBtn').addEventListener('click', function () {
+              var btn = this;
+              btn.disabled = true; btn.textContent = 'Scoring…';
+              var answersByIndex = {};
+              stageIndexes.forEach(function (ti, qi) { answersByIndex[ti] = fullMock['fm' + qi]; });
+              submitAnswers(buildSubmitPayload(fullMock.attemptId, test, fullMock.mockMode, 'mock', stageIndexes, answersByIndex))
+                .then(function (result) {
+                  fullMock.listening = result.score;
+                  fullMock.stage = 1;
+                  renderFullMockStage();
+                })
+                .catch(function (err) {
+                  btn.disabled = false; btn.textContent = 'Next → Reading';
+                  showToast('Score unavailable — ' + err.message + ' Press Next again to retry.');
+                });
             });
-            fullMock.listening = correct;
-            fullMock.stage = 1;
-            renderFullMockStage();
+          }).catch(function (err) {
+            body.innerHTML = '<p>' + escapeHtml(err.message) + '</p><div class="exam-actions"><button class="exam-primary" id="fmRetryBtn" type="button">Retry</button></div>';
+            document.getElementById('fmRetryBtn').addEventListener('click', function () { renderFullMockStage(); });
           });
         } else if (fullMock.stage === 1) {
           // Reading stage: the 10-question practice passage in the mock's
           // snapshotted mode. Short-form: raw score only, no band.
+          // Phase 5: questions come from the server; the stage score is
+          // computed by POST /api/submit (context 'mock').
           label.textContent = 'Stage 2 of 4 · Reading';
-          var readingSet = fullMock.mockMode === 'general' ? READING_GT : READING;
-          body.innerHTML = '<div class="exam-part">Reading · 10 questions · ' + (fullMock.mockMode === 'general' ? 'General Training' : 'Academic') + '</div>' +
-            '<div class="exam-result-box"><h3>' + escapeHtml(readingSet.title) + '</h3><div style="max-height:260px;overflow-y:auto;line-height:1.75;font-size:.93rem">' + readingSet.paragraphs.map(function (p) { return '<p style="margin:0 0 12px">' + escapeHtml(p) + '</p>'; }).join('') + '</div></div>' +
-            '<div id="fmReadingQuestions"></div>' +
-            '<div class="exam-actions"><button class="exam-primary" id="fmReadNextBtn" type="button">Next → Writing</button></div>';
-          var fmReadBox = document.getElementById('fmReadingQuestions');
-          readingSet.questions.forEach(function (item, qi) {
-            var qDiv = document.createElement('div');
-            qDiv.className = 'exam-q';
-            var qText = document.createElement('p');
-            qText.textContent = 'Q' + (qi + 1) + '. ' + item.q;
-            qDiv.appendChild(qText);
-            if (item.type === 'complete') {
-              var input = document.createElement('input');
-              input.type = 'text'; input.className = 'text-input'; input.placeholder = 'Type your answer…'; input.style.width = '100%';
-              if (fullMock.readingAnswers[qi] != null) input.value = fullMock.readingAnswers[qi];
-              input.addEventListener('input', function () { fullMock.readingAnswers[qi] = this.value; });
-              qDiv.appendChild(input);
-            } else {
-              var opts = document.createElement('div');
-              opts.className = 'exam-options';
-              var choices = item.type === 'tfng' ? ['True', 'False', 'Not Given'] : item.type === 'ynng' ? ['Yes', 'No', 'Not Given'] : item.options;
-              choices.forEach(function (opt, oi) {
-                var lab = document.createElement('label');
-                var radio = document.createElement('input');
-                radio.type = 'radio'; radio.name = 'fm-read-q' + qi; radio.value = oi;
-                if (fullMock.readingAnswers[qi] === oi) radio.checked = true;
-                radio.addEventListener('change', function () { fullMock.readingAnswers[qi] = oi; });
-                var span = document.createElement('span'); span.textContent = opt;
-                lab.appendChild(radio); lab.appendChild(span); opts.appendChild(lab);
-              });
-              qDiv.appendChild(opts);
-            }
-            fmReadBox.appendChild(qDiv);
-          });
-          document.getElementById('fmReadNextBtn').addEventListener('click', function () {
-            var correct = 0;
-            readingSet.questions.forEach(function (item, qi) {
-              var ok = false;
+          body.innerHTML = '<p>Loading test…</p>';
+          fetchTest('reading-' + fullMock.mockMode + '-1').then(function (test) {
+            var passage = test.passages[0];
+            body.innerHTML = '<div class="exam-part">Reading · 10 questions · ' + (fullMock.mockMode === 'general' ? 'General Training' : 'Academic') + '</div>' +
+              '<div class="exam-result-box"><h3>' + escapeHtml(passage.title) + '</h3><div style="max-height:260px;overflow-y:auto;line-height:1.75;font-size:.93rem">' + passage.paragraphs.map(function (p) { return '<p style="margin:0 0 12px">' + escapeHtml(p) + '</p>'; }).join('') + '</div></div>' +
+              '<div id="fmReadingQuestions"></div>' +
+              '<div class="exam-actions"><button class="exam-primary" id="fmReadNextBtn" type="button">Next → Writing</button></div>';
+            var fmReadBox = document.getElementById('fmReadingQuestions');
+            test.questions.forEach(function (item, qi) {
+              var qDiv = document.createElement('div');
+              qDiv.className = 'exam-q';
+              var qText = document.createElement('p');
+              qText.textContent = 'Q' + (qi + 1) + '. ' + item.prompt;
+              qDiv.appendChild(qText);
               if (item.type === 'complete') {
-                var given = String(fullMock.readingAnswers[qi] || '').trim().toLowerCase();
-                ok = item.accepted.some(function (a) { return a.toLowerCase() === given; });
+                var input = document.createElement('input');
+                input.type = 'text'; input.className = 'text-input'; input.placeholder = 'Type your answer…'; input.style.width = '100%';
+                if (fullMock.readingAnswers[qi] != null) input.value = fullMock.readingAnswers[qi];
+                input.addEventListener('input', function () { fullMock.readingAnswers[qi] = this.value; });
+                qDiv.appendChild(input);
               } else {
-                ok = fullMock.readingAnswers[qi] === item.answer;
+                var opts = document.createElement('div');
+                opts.className = 'exam-options';
+                item.options.forEach(function (opt, oi) {
+                  var lab = document.createElement('label');
+                  var radio = document.createElement('input');
+                  radio.type = 'radio'; radio.name = 'fm-read-q' + qi; radio.value = oi;
+                  if (fullMock.readingAnswers[qi] === oi) radio.checked = true;
+                  radio.addEventListener('change', function () { fullMock.readingAnswers[qi] = oi; });
+                  var span = document.createElement('span'); span.textContent = opt;
+                  lab.appendChild(radio); lab.appendChild(span); opts.appendChild(lab);
+                });
+                qDiv.appendChild(opts);
               }
-              if (ok) correct += 1;
+              fmReadBox.appendChild(qDiv);
             });
-            fullMock.reading = correct;
-            fullMock.stage = 2;
-            renderFullMockStage();
+            document.getElementById('fmReadNextBtn').addEventListener('click', function () {
+              var btn = this;
+              btn.disabled = true; btn.textContent = 'Scoring…';
+              submitAnswers(buildSubmitPayload(fullMock.attemptId, test, fullMock.mockMode, 'mock', allIndexes(test), fullMock.readingAnswers))
+                .then(function (result) {
+                  fullMock.reading = result.score;
+                  fullMock.stage = 2;
+                  renderFullMockStage();
+                })
+                .catch(function (err) {
+                  btn.disabled = false; btn.textContent = 'Next → Writing';
+                  showToast('Score unavailable — ' + err.message + ' Press Next again to retry.');
+                });
+            });
+          }).catch(function (err) {
+            body.innerHTML = '<p>' + escapeHtml(err.message) + '</p><div class="exam-actions"><button class="exam-primary" id="fmRetryBtn" type="button">Retry</button></div>';
+            document.getElementById('fmRetryBtn').addEventListener('click', function () { renderFullMockStage(); });
           });
         } else if (fullMock.stage === 2) {
           label.textContent = 'Stage 3 of 4 · Writing (Task 2)';
