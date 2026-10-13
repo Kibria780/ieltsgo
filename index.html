@@ -1312,7 +1312,7 @@
       }
 
       function normalizeCoachResult(data) {
-        var corrections = Array.isArray(data.corrections) ? data.corrections.slice(0, 6).map(function (item) {
+        var corrections = Array.isArray(data.corrections) ? data.corrections.slice(0, 3).map(function (item) {
           return {
             original: String(item.original || ''),
             corrected: String(item.corrected || ''),
@@ -1335,7 +1335,7 @@
           'You are IELTSgo, a real-time English speaking coach for Bengali learners.',
           'The learner level is ' + levelSelect.value + ' and the topic is ' + selectedTopic + '.',
           'Analyse the learner’s latest English text carefully, including grammar, tense, articles, prepositions, word choice, word order and naturalness.',
-          'Identify every meaningful error you can find, up to six. Never invent an error. Keep the English reply friendly, concise, and continue the conversation with one natural follow-up question.',
+          'Identify every meaningful error you can find, up to three. Never invent an error. Keep the English reply friendly, concise, and continue the conversation with one natural follow-up question.',
           'Return ONLY valid JSON with exactly these keys: reply (English string), corrections (array of objects with original, corrected, explanation_bn), score (integer 0-100 for grammar and clarity), encouragement_bn (Bengali string).',
           'Each original must quote the learner’s exact problematic words. Each corrected must show the improved wording. Each explanation_bn must clearly explain the rule in Bengali. If there is no meaningful error, return an empty corrections array.'
         ].join(' ');
