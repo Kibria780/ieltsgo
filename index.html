@@ -1374,6 +1374,11 @@
           <p>প্রশ্নগুলো দেখে নিন, তারপর ▶ Play চাপুন। Audio একবারই বাজবে — আসল পরীক্ষার মতো।</p>
         </div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px">
+          <span style="align-self:center;font-size:.85rem;opacity:.8">Length:</span>
+          <button class="exam-secondary" type="button" data-listening-length="0" style="min-height:36px;padding:0 12px">Short practice (12Q)</button>
+          <button class="exam-secondary" type="button" data-listening-length="1" style="min-height:36px;padding:0 12px">Full mock (40Q)</button>
+        </div>
+        <div id="listeningSetRow" style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px">
           <span style="align-self:center;font-size:.85rem;opacity:.8">Question set:</span>
           <button class="exam-secondary" type="button" data-listening-set="0" style="min-height:36px;padding:0 12px">Set 1</button>
           <button class="exam-secondary" type="button" data-listening-set="1" style="min-height:36px;padding:0 12px">Set 2</button>
@@ -2715,6 +2720,129 @@
       var LISTENING_SETS = [LISTENING_PARTS, LISTENING_PARTS_2];
       var listeningSetIndex = 0;
       var activeListeningParts = LISTENING_PARTS;
+      /* ---- Phase 3: Full-length Listening Mock (40Q) — IDP-published conversion ---- */
+      var LISTENING_FULL_PARTS = [
+        { title: 'Part 1 · Booking a holiday cottage', intro: 'A caller is booking a holiday cottage.',
+          script: [
+            { s: 'A', t: 'Good morning, Hilltop Cottages. How can I help you?' },
+            { s: 'B', t: 'Hello, I would like to book a cottage for a holiday in July, please.' },
+            { s: 'A', t: 'Of course. How many people will be staying?' },
+            { s: 'B', t: 'There will be four of us: two adults and two children.' },
+            { s: 'A', t: 'And how many nights would you like to stay?' },
+            { s: 'B', t: 'We would like to stay for five nights, from Monday the seventh of July.' },
+            { s: 'A', t: 'We have a cottage with two bedrooms and a garden. It costs ninety pounds per night.' },
+            { s: 'B', t: 'That sounds good. Does the cottage have internet?' },
+            { s: 'A', t: 'Yes, it has free internet, and there is a car park next to the cottage.' },
+            { s: 'B', t: 'Perfect. Can we bring our dog?' },
+            { s: 'A', t: 'Yes, dogs are welcome. There is a small extra charge of ten pounds.' },
+            { s: 'B', t: 'That is fine. Please book it for us.' }
+          ],
+          questions: [
+            { q: 'How many people will be staying?', options: ['Two', 'Three', 'Four', 'Five'], answer: 2 },
+            { q: 'How many nights will they stay?', options: ['Three', 'Four', 'Five', 'Seven'], answer: 2 },
+            { q: 'On which day do they arrive?', options: ['Friday', 'Saturday', 'Sunday', 'Monday'], answer: 3 },
+            { q: 'In which month is the holiday?', options: ['June', 'July', 'August', 'September'], answer: 1 },
+            { q: 'How many bedrooms does the cottage have?', options: ['One', 'Two', 'Three', 'Four'], answer: 1 },
+            { q: 'How much does the cottage cost per night?', options: ['Seventy pounds', 'Eighty pounds', 'Ninety pounds', 'One hundred pounds'], answer: 2 },
+            { q: 'Does the cottage have internet?', options: ['No internet', 'Free internet', 'Paid internet', 'Internet only in the office'], answer: 1 },
+            { q: 'Where is the car park?', options: ['Next to the cottage', 'In the town centre', 'Behind the shop', 'Two miles away'], answer: 0 },
+            { q: 'Can they bring their dog?', options: ['No', 'Yes, free', 'Yes, for ten pounds', 'Only small dogs'], answer: 2 },
+            { q: 'How many children are in the group?', options: ['One', 'Two', 'Three', 'None'], answer: 1 }
+          ] },
+        { title: 'Part 2 · A talk about the new sports centre', intro: 'A manager is describing a new sports centre.',
+          script: [
+            { s: 'A', t: 'Good morning, everyone. Today I will tell you about our new sports centre, which opens next Monday.' },
+            { s: 'A', t: 'The centre is on Green Street, next to the library.' },
+            { s: 'A', t: 'On the ground floor, there is a swimming pool and a gym.' },
+            { s: 'A', t: 'On the first floor, there are two badminton courts and a dance studio.' },
+            { s: 'A', t: 'The centre opens at six in the morning and closes at ten at night.' },
+            { s: 'A', t: 'Membership costs twenty pounds a month for adults and twelve pounds a month for students.' },
+            { s: 'A', t: 'Swimming lessons are on Tuesday and Thursday afternoons.' },
+            { s: 'A', t: 'The gym has twenty-five exercise machines and five trainers.' },
+            { s: 'A', t: 'There is a cafe on the ground floor that serves drinks and sandwiches.' },
+            { s: 'A', t: 'On the opening day, Saturday, all activities are free.' }
+          ],
+          questions: [
+            { q: 'When does the centre open?', options: ['This Friday', 'Next Monday', 'Next Tuesday', 'Next Saturday'], answer: 1 },
+            { q: 'Where is the centre?', options: ['On Green Street', 'On Park Street', 'On High Street', 'On School Road'], answer: 0 },
+            { q: 'What is on the ground floor?', options: ['A swimming pool and a gym', 'Two badminton courts', 'A dance studio', 'A cinema'], answer: 0 },
+            { q: 'What is on the first floor?', options: ['A swimming pool', 'A cafe', 'Two badminton courts and a dance studio', 'A library'], answer: 2 },
+            { q: 'When does the centre close?', options: ['At 8 p.m.', 'At 9 p.m.', 'At 10 p.m.', 'At 11 p.m.'], answer: 2 },
+            { q: 'How much is adult membership per month?', options: ['Twelve pounds', 'Fifteen pounds', 'Twenty pounds', 'Twenty-five pounds'], answer: 2 },
+            { q: 'How much is student membership per month?', options: ['Ten pounds', 'Twelve pounds', 'Fifteen pounds', 'Twenty pounds'], answer: 1 },
+            { q: 'When are the swimming lessons?', options: ['Monday and Wednesday', 'Tuesday and Thursday', 'Friday and Saturday', 'Saturday and Sunday'], answer: 1 },
+            { q: 'How many exercise machines are in the gym?', options: ['Fifteen', 'Twenty', 'Twenty-five', 'Thirty'], answer: 2 },
+            { q: 'What does the cafe serve?', options: ['Drinks and sandwiches', 'Only coffee', 'Hot meals only', 'Fruit only'], answer: 0 }
+          ] },
+        { title: 'Part 3 · Two students discuss a survey', intro: 'Two students are discussing a survey for their psychology class.',
+          script: [
+            { s: 'A', t: 'Hi, Emma. Have you finished our survey for the psychology class?' },
+            { s: 'B', t: 'Almost. I asked fifty students about their study habits.' },
+            { s: 'A', t: 'What did you find?' },
+            { s: 'B', t: 'Thirty students said they study in the library, and twenty said they study at home.' },
+            { s: 'A', t: 'Interesting. What about study time?' },
+            { s: 'B', t: 'Most students study for two hours a day. Only five students study for more than four hours.' },
+            { s: 'A', t: 'Did you ask about music while studying?' },
+            { s: 'B', t: 'Yes. Forty students listen to music while they study, and ten prefer silence.' },
+            { s: 'A', t: 'We need to write the report by Friday.' },
+            { s: 'B', t: 'Yes. I will write the first part, and you can write the second part.' },
+            { s: 'A', t: 'Good. Let us meet in the library on Wednesday to check it.' }
+          ],
+          questions: [
+            { q: 'How many students were surveyed?', options: ['Thirty', 'Forty', 'Fifty', 'Sixty'], answer: 2 },
+            { q: 'How many students study in the library?', options: ['Ten', 'Twenty', 'Thirty', 'Forty'], answer: 2 },
+            { q: 'How many students study at home?', options: ['Ten', 'Twenty', 'Thirty', 'Forty'], answer: 1 },
+            { q: 'How long do most students study a day?', options: ['One hour', 'Two hours', 'Three hours', 'Four hours'], answer: 1 },
+            { q: 'How many students study for more than four hours?', options: ['Three', 'Five', 'Ten', 'Fifteen'], answer: 1 },
+            { q: 'How many students listen to music while studying?', options: ['Ten', 'Twenty', 'Thirty', 'Forty'], answer: 3 },
+            { q: 'How many students prefer silence?', options: ['Five', 'Ten', 'Fifteen', 'Twenty'], answer: 1 },
+            { q: 'When is the report due?', options: ['Wednesday', 'Thursday', 'Friday', 'Monday'], answer: 2 },
+            { q: 'Who will write the first part of the report?', options: ['Emma', 'The other student', 'The teacher', 'Both together'], answer: 0 },
+            { q: 'When will they meet to check the report?', options: ['Monday', 'Tuesday', 'Wednesday', 'Thursday'], answer: 2 }
+          ] },
+        { title: 'Part 4 · A lecture about penguins', intro: 'A lecturer is talking about penguins.',
+          script: [
+            { s: 'A', t: 'Today, I will talk about penguins, one of the most interesting birds in the world.' },
+            { s: 'A', t: 'There are eighteen species of penguins in the world.' },
+            { s: 'A', t: 'Most penguins live in the Southern Hemisphere, and many live in Antarctica.' },
+            { s: 'A', t: 'The largest penguin is the Emperor penguin, which can be up to one hundred and twenty centimetres tall.' },
+            { s: 'A', t: 'The smallest penguin is the Little Blue penguin, which is about forty centimetres tall.' },
+            { s: 'A', t: 'Penguins cannot fly, but they are excellent swimmers. They can swim up to thirty-five kilometres per hour.' },
+            { s: 'A', t: 'Penguins eat fish, squid, and krill.' },
+            { s: 'A', t: 'The Emperor penguin can stay underwater for more than twenty minutes.' },
+            { s: 'A', t: 'Penguins have thick feathers that keep them warm in cold weather.' },
+            { s: 'A', t: 'Sadly, the number of penguins is falling because of climate change and loss of sea ice.' }
+          ],
+          questions: [
+            { q: 'How many species of penguins are there?', options: ['Eight', 'Twelve', 'Eighteen', 'Twenty'], answer: 2 },
+            { q: 'Where do most penguins live?', options: ['The Northern Hemisphere', 'The Southern Hemisphere', 'Africa only', 'Asia only'], answer: 1 },
+            { q: 'Which is the largest penguin?', options: ['The King penguin', 'The Emperor penguin', 'The Little Blue penguin', 'The Rockhopper penguin'], answer: 1 },
+            { q: 'How tall can the Emperor penguin be?', options: ['Up to eighty centimetres', 'Up to one hundred centimetres', 'Up to one hundred and twenty centimetres', 'Up to one hundred and fifty centimetres'], answer: 2 },
+            { q: 'Which is the smallest penguin?', options: ['The Emperor penguin', 'The King penguin', 'The Little Blue penguin', 'The Gentoo penguin'], answer: 2 },
+            { q: 'How tall is the Little Blue penguin?', options: ['About twenty centimetres', 'About thirty centimetres', 'About forty centimetres', 'About fifty centimetres'], answer: 2 },
+            { q: 'How fast can penguins swim?', options: ['Up to fifteen km per hour', 'Up to twenty-five km per hour', 'Up to thirty-five km per hour', 'Up to forty-five km per hour'], answer: 2 },
+            { q: 'What do penguins eat?', options: ['Fish, squid, and krill', 'Only fish', 'Plants and seeds', 'Insects and worms'], answer: 0 },
+            { q: 'How long can the Emperor penguin stay underwater?', options: ['More than five minutes', 'More than ten minutes', 'More than twenty minutes', 'More than thirty minutes'], answer: 2 },
+            { q: 'Why are penguin numbers falling?', options: ['Too many zoos', 'Climate change and loss of sea ice', 'Too much rain', 'Hunting by farmers'], answer: 1 }
+          ] }
+      ];
+      var listeningFullMock = false;
+      function listening40Band(correct) {
+        // IDP-published average conversion for a 40-question Listening test.
+        // Actual marks can vary slightly between tests.
+        if (correct >= 39) return 9.0;
+        if (correct >= 37) return 8.5;
+        if (correct >= 35) return 8.0;
+        if (correct >= 32) return 7.5;
+        if (correct >= 30) return 7.0;
+        if (correct >= 26) return 6.5;
+        if (correct >= 23) return 6.0;
+        if (correct >= 18) return 5.5;
+        if (correct >= 16) return 5.0;
+        if (correct >= 13) return 4.5;
+        if (correct >= 11) return 4.0;
+        return null; // below 4.0: no estimate
+      }
       var listeningPartIndex = 0;
       var listeningAnswers = {};
       var listeningPlayed = {};
@@ -2770,6 +2898,13 @@
         if (onState) onState('waiting');
         playNext();
       }
+      // Question-key offset for a part: parts may hold different question
+      // counts (3 in short practice, 10 in the full 40Q mock).
+      function listeningPartOffset(pi) {
+        var n = 0;
+        for (var i = 0; i < pi; i++) n += activeListeningParts[i].questions.length;
+        return n;
+      }
       function renderListeningPart() {
         var part = activeListeningParts[listeningPartIndex];
         document.getElementById('listeningPartLabel').textContent = part.title + ' · ' + part.intro;
@@ -2780,7 +2915,7 @@
         var box = document.getElementById('listeningQuestions');
         box.innerHTML = '';
         part.questions.forEach(function (item, qi) {
-          var globalQi = listeningPartIndex * 3 + qi;
+          var globalQi = listeningPartOffset(listeningPartIndex) + qi;
           var qDiv = document.createElement('div');
           qDiv.className = 'exam-q';
           var qText = document.createElement('p');
@@ -2816,15 +2951,26 @@
       // IDP notes actual marks may vary slightly between tests.
       function finishListening() {
         stopListeningAudio();
-        var total = 12, correct = 0;
-        activeListeningParts.forEach(function (part, pi) {
-          part.questions.forEach(function (item, qi) {
-            if (listeningAnswers[pi * 3 + qi] === item.answer) correct += 1;
+        var total = 0, correct = 0;
+        activeListeningParts.forEach(function (part) {
+          part.questions.forEach(function (item) {
+            if (listeningAnswers[total] === item.answer) correct += 1;
+            total += 1;
           });
         });
+        var pct = Math.round(correct / total * 1000) / 10;
+        if (listeningFullMock) {
+          // Full 40Q mock: the IDP-published conversion applies.
+          var band = listening40Band(correct);
+          var bandLine = band !== null
+            ? '<p>Estimated band: <strong>≈' + band.toFixed(1) + ' (est.)</strong></p>'
+            : '<p>Estimated band: <strong>below 4.0 — no estimate</strong></p>';
+          var detail = '<div class="exam-result-box"><h3>Listening score</h3><p>Raw score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p>' + bandLine + '<p class="exam-disclaimer">Based on the IDP-published average conversion for a 40-question Listening test. Actual marks can vary slightly between tests, so this is an estimate, not an official score.</p></div>';
+          showExamResult('Listening Result', correct + ' / ' + total + ' correct · ' + pct + '%', 'Full-length Listening Mock (40Q) · Estimated band', detail, 'Score');
+          return;
+        }
         // No band estimate for a short 12-question practice test: no
         // reliable conversion exists for 12 questions. Raw score only.
-        var pct = Math.round(correct / total * 1000) / 10;
         var detail = '<div class="exam-result-box"><h3>Listening score</h3><p>Raw score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p><p class="exam-disclaimer">No band estimate is shown for this short 12-question practice test — a short test cannot estimate a band reliably. The full IELTS Listening test has 40 questions; its IDP-published band conversion applies only to a full-length test.</p></div>';
         showExamResult('Listening Result', correct + ' / ' + total + ' correct · ' + pct + '%', 'Short practice test · No band estimate', detail, 'Score');
       }
@@ -2832,9 +2978,16 @@
         listeningPartIndex = 0;
         listeningAnswers = {};
         listeningPlayed = {};
-        // Snapshot the selected bank set at test start.
-        activeListeningParts = LISTENING_SETS[listeningSetIndex];
+        // Snapshot the selected bank set / full mock at test start.
+        activeListeningParts = listeningFullMock ? LISTENING_FULL_PARTS : LISTENING_SETS[listeningSetIndex];
         showExamView('examListening');
+        document.getElementById('listeningSetRow').style.display = listeningFullMock ? 'none' : 'flex';
+        document.querySelectorAll('[data-listening-length]').forEach(function (btn) {
+          var idx = parseInt(btn.getAttribute('data-listening-length'), 10);
+          var on = (idx === 1) === listeningFullMock;
+          btn.style.fontWeight = on ? '700' : '400';
+          btn.setAttribute('aria-pressed', String(on));
+        });
         document.querySelectorAll('[data-listening-set]').forEach(function (btn) {
           var idx = parseInt(btn.getAttribute('data-listening-set'), 10);
           var on = idx === listeningSetIndex;
@@ -2843,6 +2996,12 @@
         });
         renderListeningPart();
       }
+      document.querySelectorAll('[data-listening-length]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          listeningFullMock = parseInt(this.getAttribute('data-listening-length'), 10) === 1;
+          startListening();
+        });
+      });
       document.querySelectorAll('[data-listening-set]').forEach(function (btn) {
         btn.addEventListener('click', function () {
           listeningSetIndex = parseInt(this.getAttribute('data-listening-set'), 10);
