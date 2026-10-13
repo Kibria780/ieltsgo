@@ -1393,6 +1393,13 @@
         </div>
         <div class="exam-result-box" id="writingTask1Academic">
           <div class="exam-part">Task 1 · Academic · 20 minutes · at least 150 words</div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0">
+            <button class="exam-secondary" type="button" data-task1-type="chart" style="min-height:36px;padding:0 12px">Chart</button>
+            <button class="exam-secondary" type="button" data-task1-type="table" style="min-height:36px;padding:0 12px">Table</button>
+            <button class="exam-secondary" type="button" data-task1-type="map" style="min-height:36px;padding:0 12px">Map</button>
+            <button class="exam-secondary" type="button" data-task1-type="process" style="min-height:36px;padding:0 12px">Process</button>
+          </div>
+          <div id="task1Chart">
           <h3 style="margin-top:8px">Internet access at home</h3>
           <p>The chart below shows the percentage of households with internet access in four countries in 2010 and 2020. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.</p>
           <div class="chart-bars" aria-hidden="true">
@@ -1403,6 +1410,22 @@
           </div>
           <div class="chart-legend"><span><i></i> 2010</span><span><i class="b"></i> 2020</span></div>
           <p>Data: USA 74% → 88% · UK 70% → 92% · Bangladesh 12% → 38% · Japan 78% → 91%</p>
+          </div>
+          <div id="task1Table" hidden>
+            <h3 style="margin-top:8px">Museum visitors</h3>
+            <p>The table below shows the number of visitors to three museums in 2019 and 2023. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.</p>
+            <p>Art Museum: 120,000 (2019) → 180,000 (2023) · Science Museum: 200,000 → 240,000 · History Museum: 90,000 → 110,000</p>
+          </div>
+          <div id="task1Map" hidden>
+            <h3 style="margin-top:8px">Changes in Millfield</h3>
+            <p>The maps below show the changes in the town of Millfield between 2000 and 2020. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.</p>
+            <p>2000: a small town with a park in the centre, a school in the west, and farmland in the east.<br>2020: a shopping centre built in the east, a new railway station in the north, the central park replaced by housing, and the school expanded.</p>
+          </div>
+          <div id="task1Process" hidden>
+            <h3 style="margin-top:8px">How coffee is produced</h3>
+            <p>The diagram below shows how coffee is produced. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.</p>
+            <p>Stages: coffee cherries are picked → dried in the sun → beans are roasted → beans are ground → coffee is packed and sent to shops.</p>
+          </div>
           <textarea class="exam-textarea" id="writingTask1" placeholder="Write at least 150 words describing the chart…"></textarea>
           <div class="exam-wordcount" id="writingTask1Count">0 words</div>
           <div style="margin-top:8px">Time left: <span class="exam-timer" id="writingTask1Timer">20:00</span></div>
@@ -2915,9 +2938,28 @@
         fullReadingPassages().slice(0, pi).forEach(function (p) { n += p.questions.length; });
         return n;
       }
-      function fullReadingBand40(correct) {
-        // Approximate raw-score → band conversion commonly published in IELTS
-        // practice materials (out of 40). Estimated practice band only.
+      function fullReadingBand40(correct, mode) {
+        // Raw-score → band conversions published by IDP (ielts.idp.com, "IELTS
+        // Reading band scores"): Academic and General Training use DIFFERENT
+        // tables. Estimated practice band only — IDP notes actual marks may
+        // vary slightly between tests.
+        if (mode === 'general') {
+          if (correct >= 40) return '9.0';
+          if (correct >= 39) return '8.5';
+          if (correct >= 37) return '8.0';
+          if (correct >= 36) return '7.5';
+          if (correct >= 34) return '7.0';
+          if (correct >= 32) return '6.5';
+          if (correct >= 30) return '6.0';
+          if (correct >= 27) return '5.5';
+          if (correct >= 23) return '5.0';
+          if (correct >= 19) return '4.5';
+          if (correct >= 15) return '4.0';
+          if (correct >= 12) return '3.5';
+          if (correct >= 9) return '3.0';
+          if (correct >= 6) return '2.5';
+          return '2.0';
+        }
         if (correct >= 39) return '9.0';
         if (correct >= 37) return '8.5';
         if (correct >= 35) return '8.0';
@@ -2933,6 +2975,11 @@
         if (correct >= 6) return '3.0';
         if (correct >= 4) return '2.5';
         return '2.0';
+      }
+      function fullReadingConversionText() {
+        if (fullReadingState.mode === 'general')
+          return '40→9.0, 39→8.5, 37–38→8.0, 36→7.5, 34–35→7.0, 32–33→6.5, 30–31→6.0, 27–29→5.5, 23–26→5.0, 19–22→4.5, 15–18→4.0, 12–14→3.5, 9–11→3.0, 6–8→2.5.';
+        return '39–40→9.0, 37–38→8.5, 35–36→8.0, 33–34→7.5, 30–32→7.0, 27–29→6.5, 23–26→6.0, 19–22→5.5, 15–18→5.0, 13–14→4.5, 10–12→4.0, 8–9→3.5, 6–7→3.0, 4–5→2.5.';
       }
       function startFullReading() {
         stopExamTimers();
@@ -3073,17 +3120,31 @@
           });
         });
         var pct = Math.round(correct / total * 100);
-        var conversion = '<div class="exam-result-box"><h3>How the band was estimated</h3><p>Raw score <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong> → estimated band <strong>' + fullReadingBand40(correct) + '</strong> using the approximate raw-to-band conversion commonly published in IELTS practice materials: 39–40→9.0, 37–38→8.5, 35–36→8.0, 33–34→7.5, 30–32→7.0, 27–29→6.5, 23–26→6.0, 19–22→5.5, 15–18→5.0, 13–14→4.5, 10–12→4.0, 8–9→3.5, 6–7→3.0, 4–5→2.5.</p><p class="exam-disclaimer">This is an ESTIMATED practice band. It is NOT an official IELTS score and does not guarantee any official result.</p></div>';
-        showExamResult('Full Reading Mock · ' + examModeLabel(), '≈ ' + fullReadingBand40(correct) + ' (est.)', 'Raw score: ' + correct + ' / ' + total + ' correct · ' + pct + '%', conversion + review);
+        var band40 = fullReadingBand40(correct, fullReadingState.mode);
+        var conversion = '<div class="exam-result-box"><h3>How the band was estimated</h3><p>Raw score <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong> → estimated band <strong>' + band40 + '</strong> using the ' + examModeLabel() + ' raw-to-band conversion published by IDP: ' + fullReadingConversionText() + '</p><p class="exam-disclaimer">This is an ESTIMATED practice band. IDP notes actual marks may vary slightly between tests. It is NOT an official IELTS score and does not guarantee any official result.</p></div>';
+        showExamResult('Full Reading Mock · ' + examModeLabel(), '≈ ' + band40 + ' (est.)', 'Raw score: ' + correct + ' / ' + total + ' correct · ' + pct + '%', conversion + review);
       });
 
       /* ---- Writing: Task 1 + Task 2, AI band feedback ---- */
       var writingMode = 'academic';
+      var writingTask1Type = 'chart';
+      document.querySelectorAll('[data-task1-type]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          writingTask1Type = this.getAttribute('data-task1-type');
+          ['chart', 'table', 'map', 'process'].forEach(function (t) {
+            document.getElementById('task1' + t.charAt(0).toUpperCase() + t.slice(1)).hidden = t !== writingTask1Type;
+          });
+        });
+      });
       function startWriting() {
         stopExamTimers();
         // Snapshot the mode at test start so a mid-test mode change cannot
         // mix the other format's Task 1 into this test.
         writingMode = examMode;
+        writingTask1Type = 'chart';
+        ['chart', 'table', 'map', 'process'].forEach(function (t) {
+          document.getElementById('task1' + t.charAt(0).toUpperCase() + t.slice(1)).hidden = t !== 'chart';
+        });
         showExamView('examWriting');
         document.getElementById('writingModeBadge').textContent = 'Mode: ' + examModeLabel() + ' · ';
         document.getElementById('writingTask1Academic').hidden = writingMode !== 'academic';
@@ -3118,7 +3179,7 @@
         btn.textContent = 'Checking…';
         stopExamTimers();
         try {
-          var task1Desc = writingMode === 'general' ? 'TASK 1 (General Training letter)' : 'TASK 1 (Academic chart description)';
+          var task1Desc = writingMode === 'general' ? 'TASK 1 (General Training letter)' : 'TASK 1 (Academic ' + writingTask1Type + ' description)';
           var data = await requestAI(
             'You are an IELTS Writing examiner (' + examModeLabel() + ' mode). Assess the learner writing below on the four IELTS criteria: Task Achievement/Task Response, Coherence and Cohesion, Lexical Resource, Grammatical Range and Accuracy. Return ONLY valid JSON with exactly these keys: band (number 1-9, one decimal allowed), task1_feedback (short English string), task2_feedback (short English string), criteria (object with task_achievement, coherence, lexical, grammar — each a short English string), corrections (array of up to 4 objects with original, corrected, explanation_bn). Never invent errors.',
             task1Desc + ':\n' + t1 + '\n\nTASK 2 (essay):\n' + t2
