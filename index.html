@@ -1360,8 +1360,8 @@
           </button>
           <button class="exam-card" type="button" data-exam="fullmock">
             <h3>🏆 Full Mock Test</h3>
-            <p>Listening + Writing + Speaking — তিনটা অংশ একসাথে। শেষে combined band score। আসল পরীক্ষার আগে full rehearsal।</p>
-            <div class="exam-meta">COMPACT VERSION · ~30 MIN</div>
+            <p>Listening + Reading + Writing + Speaking — চারটা দক্ষতা একসাথে। Compact practice mock — overall band নেই, প্রতিটা section-এর আলাদা score।</p>
+            <div class="exam-meta">COMPACT VERSION · ~40 MIN</div>
           </button>
         </div>
       </div>
@@ -2577,16 +2577,40 @@
       var listeningAnswers = {};
       var listeningPlayed = {};
       var listeningAudio = null;
+      var listeningStallTimer = null;
+      function clearListeningStall() { if (listeningStallTimer) { clearTimeout(listeningStallTimer); listeningStallTimer = null; } }
 
       function stopListeningAudio() {
+        clearListeningStall();
         if (listeningAudio) { try { listeningAudio.pause(); } catch (e) {} listeningAudio = null; }
         stopVoicePlayback();
       }
-      function playListeningScript(lines, onDone) {
+      // Plays one TTS line at a time, in order.
+      // onState(state): 'waiting' | 'playing' | 'played' | 'failed' — so the UI
+      // can show Play / Playing / Played / Retry states instead of hanging.
+      // onDone(success): true only when at least one line actually played.
+      // A 20s stall timer (reset on every playback-progress event) reports
+      // failure instead of hanging forever when the browser media chain stalls.
+      function playListeningScript(lines, onDone, onState) {
         stopListeningAudio();
-        var i = 0;
+        var i = 0, started = false;
+        function armStall() {
+          clearListeningStall();
+          listeningStallTimer = setTimeout(function () {
+            stopListeningAudio();
+            if (onState) onState('failed');
+            if (onDone) onDone(false);
+          }, 20000);
+        }
         function playNext() {
-          if (i >= lines.length) { listeningAudio = null; if (onDone) onDone(); return; }
+          if (i >= lines.length) {
+            clearListeningStall();
+            listeningAudio = null;
+            var ok = started || lines.length === 0;
+            if (onState) onState(ok ? 'played' : 'failed');
+            if (onDone) onDone(ok);
+            return;
+          }
           var line = lines[i++];
           var gender = line.s === 'B' ? 'male' : 'female';
           var url = TTS_ENDPOINT + '?text=' + encodeURIComponent(line.t) +
@@ -2594,10 +2618,14 @@
           listeningAudio = new Audio();
           listeningAudio.playbackRate = 1.0;
           listeningAudio.src = url;
+          listeningAudio.onplaying = function () { started = true; armStall(); if (onState) onState('playing'); };
+          listeningAudio.ontimeupdate = function () { armStall(); };
           listeningAudio.onended = playNext;
-          listeningAudio.onerror = playNext;
-          listeningAudio.play().catch(playNext);
+          listeningAudio.onerror = function () { playNext(); };
+          listeningAudio.play().catch(function () { playNext(); });
+          armStall();
         }
+        if (onState) onState('waiting');
         playNext();
       }
       function renderListeningPart() {
@@ -2638,14 +2666,12 @@
         document.getElementById('listeningNextBtn').textContent =
           listeningPartIndex < LISTENING_PARTS.length - 1 ? 'Next part →' : 'Finish listening → See result';
       }
-      function listeningBand(correct, total) {
-        if (correct >= 12) return '9.0';
-        if (correct >= 10) return '8.0';
-        if (correct >= 8) return '7.0';
-        if (correct >= 6) return '6.0';
-        if (correct >= 4) return '5.0';
-        return '4.0';
-      }
+      // Verified 40-question IELTS Listening conversion (IDP-published) — for a
+      // FUTURE full-length Listening Mock only. NEVER apply it to short
+      // practice: a 12-question test cannot use a 40-question conversion.
+      // 39-40→9.0, 37-38→8.5, 35-36→8.0, 32-34→7.5, 30-31→7.0, 26-29→6.5,
+      // 23-25→6.0, 18-22→5.5, 16-17→5.0, 13-15→4.5, 11-12→4.0.
+      // IDP notes actual marks may vary slightly between tests.
       function finishListening() {
         stopListeningAudio();
         var total = 12, correct = 0;
@@ -2654,10 +2680,11 @@
             if (listeningAnswers[pi * 3 + qi] === item.answer) correct += 1;
           });
         });
-        var band = listeningBand(correct, total);
-        var detail = '<div class="exam-result-box"><h3>Listening score</h3><p>You answered <strong>' + correct + ' / ' + total + '</strong> correctly.</p>' +
-          '<p class="bn">আসল IELTS-এ ৪০টা প্রশ্ন থাকে। এখানে ১২টা practice প্রশ্ন দিয়ে আপনার band অনুমান করা হয়েছে।</p></div>';
-        showExamResult('Listening Result', band, correct + ' / ' + total + ' correct', detail);
+        // No band estimate for a short 12-question practice test: no
+        // reliable conversion exists for 12 questions. Raw score only.
+        var pct = Math.round(correct / total * 1000) / 10;
+        var detail = '<div class="exam-result-box"><h3>Listening score</h3><p>Raw score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p><p class="exam-disclaimer">No band estimate is shown for this short 12-question practice test — a short test cannot estimate a band reliably. The full IELTS Listening test has 40 questions; its IDP-published band conversion applies only to a full-length test.</p></div>';
+        showExamResult('Listening Result', correct + ' / ' + total + ' correct · ' + pct + '%', 'Short practice test · No band estimate', detail, 'Score');
       }
       function startListening() {
         listeningPartIndex = 0;
@@ -2668,12 +2695,23 @@
       }
       document.getElementById('listeningPlayBtn').addEventListener('click', function () {
         var btn = this;
+        var partIndex = listeningPartIndex;
+        var noteEl = document.getElementById('listeningPlayNote');
         btn.disabled = true;
         btn.textContent = 'Playing…';
-        listeningPlayed[listeningPartIndex] = true;
-        playListeningScript(LISTENING_PARTS[listeningPartIndex].script, function () {
-          btn.textContent = '▶ Played';
-          document.getElementById('listeningPlayNote').textContent = 'Played — answer from memory, like the real test.';
+        noteEl.textContent = 'Starting audio…';
+        playListeningScript(LISTENING_PARTS[partIndex].script, function (success) {
+          if (success) {
+            listeningPlayed[partIndex] = true;
+            btn.textContent = '▶ Played';
+            noteEl.textContent = 'Played — answer from memory, like the real test.';
+          } else {
+            btn.disabled = false;
+            btn.textContent = '↻ Retry audio';
+            noteEl.textContent = 'Audio did not play — press Retry, or check your speaker/volume.';
+          }
+        }, function (state) {
+          if (state === 'playing') noteEl.textContent = 'Playing audio…';
         });
       });
       document.getElementById('listeningNextBtn').addEventListener('click', function () {
@@ -3219,9 +3257,10 @@
       });
 
       /* ---- Full Mock: Listening (Part 1) → Writing (Task 2) → Speaking (Part 2) ---- */
-      var fullMock = { stage: 0, listening: 0, writingBand: null, speakingBand: null, speakingText: '' };
+      var fullMock = { stage: 0, listening: 0, reading: 0, readingAnswers: {}, mockMode: 'academic', writingBand: null, speakingBand: null, speakingText: '' };
       function startFullMock() {
-        fullMock = { stage: 0, listening: 0, writingBand: null, speakingBand: null, speakingText: '' };
+        // Snapshot the mode so a mid-mock mode change cannot mix formats.
+        fullMock = { stage: 0, listening: 0, reading: 0, readingAnswers: {}, mockMode: examMode, writingBand: null, speakingBand: null, speakingText: '' };
         showExamView('examFullMock');
         renderFullMockStage();
       }
@@ -3231,12 +3270,12 @@
         stopListeningAudio();
         stopExamTimers();
         if (fullMock.stage === 0) {
-          label.textContent = 'Stage 1 of 3 · Listening (Part 1)';
+          label.textContent = 'Stage 1 of 4 · Listening (Part 1)';
           var part = LISTENING_PARTS[0];
           var html = '<div class="exam-part">' + part.title + '</div>' +
             '<div style="margin:10px 0"><button class="exam-play" id="fmPlayBtn" type="button">▶ Play audio</button></div>' +
             '<div id="fmQuestions"></div>' +
-            '<div class="exam-actions"><button class="exam-primary" id="fmNextBtn" type="button">Next → Writing</button></div>';
+            '<div class="exam-actions"><button class="exam-primary" id="fmNextBtn" type="button">Next → Reading</button></div>';
           body.innerHTML = html;
           var qBox = document.getElementById('fmQuestions');
           part.questions.forEach(function (item, qi) {
@@ -3260,8 +3299,12 @@
             qBox.appendChild(qDiv);
           });
           document.getElementById('fmPlayBtn').addEventListener('click', function () {
-            this.disabled = true; this.textContent = 'Playing…';
-            playListeningScript(part.script, function () {});
+            var btn = this;
+            btn.disabled = true; btn.textContent = 'Playing…';
+            playListeningScript(part.script, function (success) {
+              btn.textContent = success ? '▶ Played' : '↻ Retry audio';
+              btn.disabled = !success;
+            });
           });
           document.getElementById('fmNextBtn').addEventListener('click', function () {
             var correct = 0;
@@ -3273,7 +3316,62 @@
             renderFullMockStage();
           });
         } else if (fullMock.stage === 1) {
-          label.textContent = 'Stage 2 of 3 · Writing (Task 2)';
+          // Reading stage: the 10-question practice passage in the mock's
+          // snapshotted mode. Short-form: raw score only, no band.
+          label.textContent = 'Stage 2 of 4 · Reading';
+          var readingSet = fullMock.mockMode === 'general' ? READING_GT : READING;
+          body.innerHTML = '<div class="exam-part">Reading · 10 questions · ' + (fullMock.mockMode === 'general' ? 'General Training' : 'Academic') + '</div>' +
+            '<div class="exam-result-box"><h3>' + escapeHtml(readingSet.title) + '</h3><div style="max-height:260px;overflow-y:auto;line-height:1.75;font-size:.93rem">' + readingSet.paragraphs.map(function (p) { return '<p style="margin:0 0 12px">' + escapeHtml(p) + '</p>'; }).join('') + '</div></div>' +
+            '<div id="fmReadingQuestions"></div>' +
+            '<div class="exam-actions"><button class="exam-primary" id="fmReadNextBtn" type="button">Next → Writing</button></div>';
+          var fmReadBox = document.getElementById('fmReadingQuestions');
+          readingSet.questions.forEach(function (item, qi) {
+            var qDiv = document.createElement('div');
+            qDiv.className = 'exam-q';
+            var qText = document.createElement('p');
+            qText.textContent = 'Q' + (qi + 1) + '. ' + item.q;
+            qDiv.appendChild(qText);
+            if (item.type === 'complete') {
+              var input = document.createElement('input');
+              input.type = 'text'; input.className = 'text-input'; input.placeholder = 'Type your answer…'; input.style.width = '100%';
+              if (fullMock.readingAnswers[qi] != null) input.value = fullMock.readingAnswers[qi];
+              input.addEventListener('input', function () { fullMock.readingAnswers[qi] = this.value; });
+              qDiv.appendChild(input);
+            } else {
+              var opts = document.createElement('div');
+              opts.className = 'exam-options';
+              var choices = item.type === 'tfng' ? ['True', 'False', 'Not Given'] : item.type === 'ynng' ? ['Yes', 'No', 'Not Given'] : item.options;
+              choices.forEach(function (opt, oi) {
+                var lab = document.createElement('label');
+                var radio = document.createElement('input');
+                radio.type = 'radio'; radio.name = 'fm-read-q' + qi; radio.value = oi;
+                if (fullMock.readingAnswers[qi] === oi) radio.checked = true;
+                radio.addEventListener('change', function () { fullMock.readingAnswers[qi] = oi; });
+                var span = document.createElement('span'); span.textContent = opt;
+                lab.appendChild(radio); lab.appendChild(span); opts.appendChild(lab);
+              });
+              qDiv.appendChild(opts);
+            }
+            fmReadBox.appendChild(qDiv);
+          });
+          document.getElementById('fmReadNextBtn').addEventListener('click', function () {
+            var correct = 0;
+            readingSet.questions.forEach(function (item, qi) {
+              var ok = false;
+              if (item.type === 'complete') {
+                var given = String(fullMock.readingAnswers[qi] || '').trim().toLowerCase();
+                ok = item.accepted.some(function (a) { return a.toLowerCase() === given; });
+              } else {
+                ok = fullMock.readingAnswers[qi] === item.answer;
+              }
+              if (ok) correct += 1;
+            });
+            fullMock.reading = correct;
+            fullMock.stage = 2;
+            renderFullMockStage();
+          });
+        } else if (fullMock.stage === 2) {
+          label.textContent = 'Stage 3 of 4 · Writing (Task 2)';
           body.innerHTML = '<div class="exam-part">Task 2 · Essay · at least 250 words</div>' +
             '<p style="margin:10px 0">Some people think that the best way to learn English is to live in an English-speaking country. Others believe it is possible to learn well at home. Discuss both views and give your own opinion.</p>' +
             '<textarea class="exam-textarea" id="fmWriting" placeholder="Write at least 250 words…"></textarea>' +
@@ -3296,15 +3394,16 @@
               );
               fullMock.writingBand = Number(data.band) || null;
               fullMock.writingFeedback = data.feedback || '';
-              fullMock.stage = 2;
+              fullMock.stage = 3;
               renderFullMockStage();
             } catch (error) {
-              showToast('AI examiner-এর সঙ্গে সংযোগ পাওয়া যায়নি—আবার চেষ্টা করুন।');
+              console.error('Full Mock Writing evaluation failed:', error);
+              showToast('AI examiner error: ' + (error && error.message ? error.message : 'connection failed') + ' — আবার চেষ্টা করুন।');
               this.disabled = false; this.textContent = 'Submit writing → Speaking';
             }
           });
-        } else if (fullMock.stage === 2) {
-          label.textContent = 'Stage 3 of 3 · Speaking (Part 2)';
+        } else if (fullMock.stage === 3) {
+          label.textContent = 'Stage 4 of 4 · Speaking (Part 2)';
           body.innerHTML = '<div class="exam-part">Part 2 · Cue card · 1 min prep + 2 min talk</div>' +
             '<div class="exam-result-box"><h3>Describe a place you like to visit.</h3><p>You should say: where it is, who you go with, what you do there, and explain why you like it.</p></div>' +
             '<p class="bn">প্রস্তুতি: <span class="exam-timer" id="fmPrepTimer">60</span> সেকেন্ড &nbsp;·&nbsp; কথা বলা: <span class="exam-timer" id="fmTalkTimer">120</span> সেকেন্ড</p>' +
@@ -3362,14 +3461,23 @@
                 sFeedback = sData.feedback || '';
               }
               fullMock.speakingBand = sBand;
-              var bands = [fullMock.listening === 3 ? 9 : fullMock.listening === 2 ? 7 : fullMock.listening === 1 ? 5.5 : 4, fullMock.writingBand, sBand].filter(function (b) { return typeof b === 'number'; });
-              var overall = bands.length ? (bands.reduce(function (a, b) { return a + b; }, 0) / bands.length).toFixed(1) : '—';
-              var detail = '<div class="exam-result-box"><h3>Listening</h3><p>' + fullMock.listening + ' / 3 correct</p></div>' +
-                '<div class="exam-result-box"><h3>Writing</h3><p>Band ' + (fullMock.writingBand != null ? fullMock.writingBand : '—') + (fullMock.writingFeedback ? ' — ' + escapeHtml(fullMock.writingFeedback) : '') + '</p></div>' +
-                '<div class="exam-result-box"><h3>Speaking</h3><p>Band ' + (sBand != null ? sBand : '—') + (sFeedback ? ' — ' + escapeHtml(sFeedback) : '') + '</p></div>';
-              showExamResult('Full Mock Result', overall, 'Listening + Writing + Speaking combined', detail);
+              // NO Overall Band: Listening (3Q) and Reading (10Q) are
+              // short-form and cannot yield a band by any reliable method;
+              // Writing/Speaking are AI estimates. An overall band is shown
+              // only when every section has an appropriately determined
+              // score — not the case for this compact mock. Each section is
+              // reported separately with its own state: Completed or, for
+              // Speaking with no captured speech, Not evaluated.
+              var readPct = Math.round(fullMock.reading / 10 * 100);
+              var detail = '<div class="exam-result-box"><h3>About this result</h3><p class="exam-disclaimer">No overall band is shown: Listening (3 questions) and Reading (10 questions) are short-form — raw scores only. Writing and Speaking are AI estimates. This is NOT an official IELTS score.</p></div>' +
+                '<div class="exam-result-box"><h3>Listening — Completed</h3><p>Raw score: <strong>' + fullMock.listening + ' / 3 correct</strong> (no band for short-form).</p></div>' +
+                '<div class="exam-result-box"><h3>Reading — Completed</h3><p>Raw score: <strong>' + fullMock.reading + ' / 10 correct · ' + readPct + '%</strong> (no band for short-form).</p></div>' +
+                '<div class="exam-result-box"><h3>Writing — ' + (fullMock.writingBand != null ? 'Completed' : 'Not evaluated') + '</h3><p>' + (fullMock.writingBand != null ? 'Band <strong>' + fullMock.writingBand + ' (est.)</strong>' + (fullMock.writingFeedback ? ' — ' + escapeHtml(fullMock.writingFeedback) : '') : 'Score unavailable — AI evaluation did not return a score.') + '</p></div>' +
+                '<div class="exam-result-box"><h3>Speaking — ' + (sBand != null ? 'Completed' : 'Not evaluated') + '</h3><p>' + (sBand != null ? 'Band <strong>' + sBand + ' (est.)</strong>' + (sFeedback ? ' — ' + escapeHtml(sFeedback) : '') : 'No speech was captured — score unavailable.') + '</p></div>';
+              showExamResult('Full Mock Result', '—', 'All 4 skills · No overall band (see sections)', detail, 'Overall band');
             } catch (error) {
-              showToast('Result তৈরি করা যায়নি—আবার চেষ্টা করুন।');
+              console.error('Full Mock result failed:', error);
+              showToast('Result error: ' + (error && error.message ? error.message : 'could not prepare result') + ' — আবার চেষ্টা করুন।');
               btn.disabled = false; btn.textContent = 'Finish mock → See result';
             }
           });
