@@ -1612,17 +1612,25 @@
         var controller = new AbortController();
         var timeout = setTimeout(function () { controller.abort(); }, 60000);
         try {
-          var response = await fetch(AI_ENDPOINT, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              messages: [
-                { role: 'system', content: systemPrompt },
-                { role: 'user', content: userPrompt }
-              ]
-            }),
-            signal: controller.signal
-          });
+          var response;
+          try {
+            response = await fetch(AI_ENDPOINT, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                messages: [
+                  { role: 'system', content: systemPrompt },
+                  { role: 'user', content: userPrompt }
+                ]
+              }),
+              signal: controller.signal
+            });
+          } catch (fetchError) {
+            // Surface a readable reason instead of a generic "connection" error:
+            // an abort here means our own 60s timeout fired, not a dead server.
+            if (fetchError && fetchError.name === 'AbortError') throw new Error('AI took too long (60s timeout)');
+            throw fetchError;
+          }
           if (response.status === 429) throw new Error('ai-rate-limit');
           if (!response.ok) throw new Error('AI service returned ' + response.status);
           var payload = await response.json();
@@ -3203,7 +3211,8 @@
           detail += '<p class="exam-disclaimer">This is an ESTIMATED AI band. It is NOT an official IELTS score and does not guarantee any official result.</p>';
           showExamResult('Writing Result · ' + examModeLabel(), band + ' (est.)', 'Task 1: ' + countWords(t1) + ' words · Task 2: ' + countWords(t2) + ' words', detail);
         } catch (error) {
-          showToast('AI examiner-এর সঙ্গে সংযোগ পাওয়া যায়নি—আবার চেষ্টা করুন।');
+          console.error('Writing evaluation failed:', error);
+          showToast('AI examiner error: ' + (error && error.message ? error.message : 'connection failed') + ' — আবার চেষ্টা করুন।');
         } finally {
           btn.disabled = false;
           btn.textContent = 'Submit writing → Get band score';
