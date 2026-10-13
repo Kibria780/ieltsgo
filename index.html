@@ -1511,7 +1511,7 @@
         <button class="exam-back" type="button" data-exam-back>← All exams</button>
         <div class="exam-head"><h2 id="examResultTitle">Result</h2></div>
         <div class="exam-result-box" style="text-align:center">
-          <div class="exam-part">Estimated band score</div>
+          <div class="exam-part" id="examResultBandLabel">Estimated band score</div>
           <div class="exam-band" id="examResultBand">—</div>
           <p id="examResultSub"></p>
         </div>
@@ -2484,8 +2484,9 @@
           if (el) el.hidden = v !== id;
         });
       }
-      function showExamResult(title, band, sub, detailHtml) {
+      function showExamResult(title, band, sub, detailHtml, bandLabel) {
         document.getElementById('examResultTitle').textContent = title;
+        document.getElementById('examResultBandLabel').textContent = bandLabel || 'Estimated band score';
         document.getElementById('examResultBand').textContent = band;
         document.getElementById('examResultSub').textContent = sub || '';
         document.getElementById('examResultDetail').innerHTML = detailHtml || '';
@@ -2804,7 +2805,7 @@
         // (The Full Reading Mock, 40 questions, uses the IDP-published
         // raw-to-band conversion and is the only place a band is estimated.)
         var disclaimer = '<div class="exam-result-box"><h3>About this score</h3><p>Raw practice score: <strong>' + correct + ' / ' + total + ' (' + pct + '%)</strong>.</p><p class="exam-disclaimer">No band estimate is shown for this short 10-question practice test — a short test cannot estimate a band reliably. For a band estimate, take the Full Reading Mock (40 questions). This is NOT an official IELTS score.</p></div>';
-        showExamResult('Reading Result · ' + examModeLabel(), correct + ' / ' + total + ' correct · ' + pct + '%', 'Short practice test · No band estimate', disclaimer + review);
+        showExamResult('Reading Result · ' + examModeLabel(), correct + ' / ' + total + ' correct · ' + pct + '%', 'Short practice test · No band estimate', disclaimer + review, 'Score');
       });
 
       /* ---- Phase 2: Full Reading Mock (40 questions, 60 min) ---- */
