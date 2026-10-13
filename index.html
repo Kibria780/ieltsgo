@@ -2513,9 +2513,11 @@
           // After a completed test ("Try another test"), return to the
           // pre-test screen so the Speaking set picker is visible.
           // (mockStarted is already false by then — completion resets it —
-          // so the completed-test check is the question index alone.)
+          // so the completed-test check is the question index alone.
+          // Call prepareMockTest() directly: switchMode('mock') would
+          // early-return because we are already in mock mode.)
           // Mid-test "Restart test" still restarts immediately.
-          if (mockQuestionIndex >= activeMockQuestions.length) { switchMode('mock'); return; }
+          if (mockQuestionIndex >= activeMockQuestions.length) { prepareMockTest(); return; }
           startMockTest();
         }
         else startPracticeSession();
