@@ -1323,6 +1323,11 @@
             <p>Part 1 introduction, Part 2 cue card (1 min prep + 2 min talk), Part 3 discussion। AI band score সহ।</p>
             <div class="exam-meta">11–14 MIN · MOCK TEST</div>
           </button>
+          <button class="exam-card" type="button" data-exam="reading">
+            <h3>📖 Reading Test</h3>
+            <p>1 passage + 10 questions · True/False/Not Given, Multiple choice, Matching headings, Sentence completion। 20 মিনিট।</p>
+            <div class="exam-meta">PRACTICE VERSION · 20 MIN</div>
+          </button>
           <button class="exam-card" type="button" data-exam="fullmock">
             <h3>🏆 Full Mock Test</h3>
             <p>Listening + Writing + Speaking — তিনটা অংশ একসাথে। শেষে combined band score। আসল পরীক্ষার আগে full rehearsal।</p>
@@ -1382,6 +1387,23 @@
         </div>
         <div class="exam-actions">
           <button class="exam-primary" id="writingSubmitBtn" type="button">Submit writing → Get band score</button>
+        </div>
+      </div>
+
+      <!-- Reading -->
+      <div id="examReading" hidden>
+        <button class="exam-back" type="button" data-exam-back>← All exams</button>
+        <div class="exam-head">
+          <h2>Reading Test</h2>
+          <p>Passage পড়ে প্রশ্নগুলোর উত্তর দিন। Time left: <span class="exam-timer" id="readingTimer">20:00</span></p>
+        </div>
+        <div class="exam-result-box">
+          <h3 id="readingPassageTitle"></h3>
+          <div id="readingPassage" style="max-height:320px;overflow-y:auto;line-height:1.75;font-size:.93rem"></div>
+        </div>
+        <div id="readingQuestions"></div>
+        <div class="exam-actions">
+          <button class="exam-primary" id="readingSubmitBtn" type="button">Submit reading → See result</button>
         </div>
       </div>
 
@@ -2351,7 +2373,7 @@
         return String(text || '').trim() ? words.length : 0;
       }
       function showExamHub() {
-        ['examHub', 'examListening', 'examWriting', 'examFullMock', 'examResult'].forEach(function (id) {
+        ['examHub', 'examListening', 'examReading', 'examWriting', 'examFullMock', 'examResult'].forEach(function (id) {
           var el = document.getElementById(id);
           if (el) el.hidden = id !== 'examHub';
         });
@@ -2359,7 +2381,7 @@
         stopExamTimers();
       }
       function showExamView(id) {
-        ['examHub', 'examListening', 'examWriting', 'examFullMock', 'examResult'].forEach(function (v) {
+        ['examHub', 'examListening', 'examReading', 'examWriting', 'examFullMock', 'examResult'].forEach(function (v) {
           var el = document.getElementById(v);
           if (el) el.hidden = v !== id;
         });
@@ -2539,6 +2561,97 @@
         } else {
           finishListening();
         }
+      });
+
+      /* ---- Reading: 1 passage + 10 questions (T/F/NG, MCQ, headings, completion) ---- */
+      var READING = {
+        title: 'The Rise of Urban Farming',
+        paragraphs: [
+          'A. In many large cities, a quiet revolution is taking place on rooftops, balconies and empty plots of land. Urban farming — the practice of growing food inside or near a city — has grown from a hobby for a few enthusiasts into a serious part of how some cities feed themselves. Supporters argue that it shortens the distance food travels, reduces waste, and reconnects city dwellers with where their food comes from.',
+          'B. One of the most striking forms of urban farming is the vertical farm. Instead of spreading crops across wide fields, vertical farms grow plants in stacked layers inside buildings, often using LED light and nutrient-rich water instead of soil. Because the environment is controlled, crops can be harvested all year round. However, vertical farms use large amounts of electricity, and critics question whether they can ever compete with traditional farms on cost.',
+          'C. A simpler and older idea is the community garden, where local residents share a piece of land and grow vegetables together. Studies have found that community gardens do more than produce food: they strengthen neighbourhood relationships, give children a place to learn about nature, and provide gentle exercise for older people. In several cities, waiting lists for garden plots are now years long.',
+          'D. Despite the enthusiasm, urban farming faces real limits. City land is expensive, water can be scarce, and most urban farms produce only a small fraction of what a city eats. Few experts believe cities will ever feed themselves entirely. The more realistic hope is that urban farming becomes one useful part of a wider food system — supplying fresh herbs, salads and soft fruits, while staple crops continue to come from the countryside.'
+        ],
+        questions: [
+          { type: 'tfng', q: 'Urban farming is a completely new idea that started in the last five years.', answer: 1, explain: 'The passage says it grew "from a hobby" into something bigger — it is not completely new.' },
+          { type: 'tfng', q: 'Vertical farms can produce crops throughout the year.', answer: 0, explain: 'Paragraph B: "crops can be harvested all year round" because the environment is controlled.' },
+          { type: 'tfng', q: 'Community gardens are only useful for producing food.', answer: 1, explain: 'Paragraph C lists other benefits: relationships, learning, exercise.' },
+          { type: 'mcq', q: 'What is a disadvantage of vertical farms mentioned in the passage?', options: ['They need a lot of land', 'They use large amounts of electricity', 'They only grow in summer', 'They need no water at all'], answer: 1, explain: 'Paragraph B: "vertical farms use large amounts of electricity".' },
+          { type: 'mcq', q: 'Why do some cities have long waiting lists for garden plots?', options: ['Because plots are free', 'Because community gardens are popular', 'Because gardens produce all city food', 'Because the land is cheap'], answer: 1, explain: 'Paragraph C: waiting lists are "years long" — gardens are in high demand.' },
+          { type: 'mcq', q: 'What do most experts believe about cities feeding themselves?', options: ['Cities will soon be fully self-sufficient', 'Urban farms will replace countryside farms', 'Cities will never feed themselves entirely', 'Staple crops will come from rooftops'], answer: 2, explain: 'Paragraph D: "Few experts believe cities will ever feed themselves entirely."' },
+          { type: 'heading', q: 'Which heading best fits paragraph B?', options: ['A hobby becomes serious', 'Growing upwards: the vertical farm', 'Gardens that build communities', 'The limits of city farming'], answer: 1, explain: 'Paragraph B is entirely about vertical farms.' },
+          { type: 'heading', q: 'Which heading best fits paragraph D?', options: ['A hobby becomes serious', 'Growing upwards: the vertical farm', 'Gardens that build communities', 'The limits of city farming'], answer: 3, explain: 'Paragraph D discusses the real limits of urban farming.' },
+          { type: 'complete', q: 'Complete the sentence: Vertical farms grow plants in stacked layers, often using LED light and nutrient-rich water instead of _____.', accepted: ['soil'], explain: 'Paragraph B: "instead of soil".' },
+          { type: 'complete', q: 'Complete the sentence: Urban farming shortens the distance food _____.', accepted: ['travels'], explain: 'Paragraph A: "it shortens the distance food travels".' }
+        ]
+      };
+      var readingAnswers = {};
+      function startReading() {
+        stopExamTimers();
+        readingAnswers = {};
+        showExamView('examReading');
+        document.getElementById('readingPassageTitle').textContent = READING.title;
+        document.getElementById('readingPassage').innerHTML = READING.paragraphs.map(function (p) {
+          return '<p style="margin:0 0 12px">' + escapeHtml(p) + '</p>';
+        }).join('');
+        var box = document.getElementById('readingQuestions');
+        box.innerHTML = '';
+        READING.questions.forEach(function (item, qi) {
+          var qDiv = document.createElement('div');
+          qDiv.className = 'exam-q';
+          var qText = document.createElement('p');
+          qText.textContent = 'Q' + (qi + 1) + '. ' + item.q;
+          qDiv.appendChild(qText);
+          if (item.type === 'complete') {
+            var input = document.createElement('input');
+            input.type = 'text';
+            input.className = 'text-input';
+            input.placeholder = 'Type your answer…';
+            input.style.width = '100%';
+            if (readingAnswers[qi] != null) input.value = readingAnswers[qi];
+            input.addEventListener('input', function () { readingAnswers[qi] = this.value; });
+            qDiv.appendChild(input);
+          } else {
+            var opts = document.createElement('div');
+            opts.className = 'exam-options';
+            var choices = item.type === 'tfng' ? ['True', 'False', 'Not Given'] : item.options;
+            choices.forEach(function (opt, oi) {
+              var label = document.createElement('label');
+              var radio = document.createElement('input');
+              radio.type = 'radio';
+              radio.name = 'read-q' + qi;
+              radio.value = oi;
+              if (readingAnswers[qi] === oi) radio.checked = true;
+              radio.addEventListener('change', function () { readingAnswers[qi] = oi; });
+              var span = document.createElement('span');
+              span.textContent = opt;
+              label.appendChild(radio);
+              label.appendChild(span);
+              opts.appendChild(label);
+            });
+            qDiv.appendChild(opts);
+          }
+          box.appendChild(qDiv);
+        });
+        examCountdown(document.getElementById('readingTimer'), 20 * 60);
+      }
+      document.getElementById('readingSubmitBtn').addEventListener('click', function () {
+        stopExamTimers();
+        var total = READING.questions.length, correct = 0;
+        var review = '';
+        READING.questions.forEach(function (item, qi) {
+          var ok = false;
+          if (item.type === 'complete') {
+            var given = String(readingAnswers[qi] || '').trim().toLowerCase();
+            ok = item.accepted.some(function (a) { return a.toLowerCase() === given; });
+          } else {
+            ok = readingAnswers[qi] === item.answer;
+          }
+          if (ok) correct += 1;
+          review += '<div class="exam-result-box"><h3>Q' + (qi + 1) + ' — ' + (ok ? '✅ Correct' : '❌ Incorrect') + '</h3><p>' + escapeHtml(item.q) + '</p><p>' + escapeHtml(item.explain) + '</p></div>';
+        });
+        var band = correct >= 9 ? '8.0' : correct >= 7 ? '7.0' : correct >= 5 ? '6.0' : correct >= 3 ? '5.0' : '4.0';
+        showExamResult('Reading Result', band, correct + ' / ' + total + ' correct', review);
       });
 
       /* ---- Writing: Task 1 + Task 2, AI band feedback ---- */
@@ -2756,6 +2869,7 @@
         if (!card) return;
         var which = card.dataset.exam;
         if (which === 'listening') startListening();
+        else if (which === 'reading') startReading();
         else if (which === 'writing') startWriting();
         else if (which === 'speaking') switchMode('mock');
         else if (which === 'fullmock') startFullMock();
