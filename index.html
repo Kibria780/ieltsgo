@@ -1373,6 +1373,11 @@
           <h2>Listening Test</h2>
           <p>প্রশ্নগুলো দেখে নিন, তারপর ▶ Play চাপুন। Audio একবারই বাজবে — আসল পরীক্ষার মতো।</p>
         </div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;margin:0 0 10px">
+          <span style="align-self:center;font-size:.85rem;opacity:.8">Question set:</span>
+          <button class="exam-secondary" type="button" data-listening-set="0" style="min-height:36px;padding:0 12px">Set 1</button>
+          <button class="exam-secondary" type="button" data-listening-set="1" style="min-height:36px;padding:0 12px">Set 2</button>
+        </div>
         <div class="exam-part" id="listeningPartLabel"></div>
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
           <button class="exam-play" id="listeningPlayBtn" type="button">▶ Play audio</button>
@@ -2578,6 +2583,70 @@
             { q: 'Which action do scientists suggest?', options: ['Plant more wildflowers', 'Keep bees indoors', 'Use more pesticides', 'Stop eating honey'], answer: 0 }
           ] }
       ];
+      /* ---- Phase 3: Listening question bank — Set 2 ---- */
+      var LISTENING_PARTS_2 = [
+        { title: 'Part 1 · Booking a taxi', intro: 'A caller is booking a taxi to the airport.',
+          script: [
+            { s: 'A', t: 'Good morning, City Taxis. How can I help you?' },
+            { s: 'B', t: 'Hello, I would like to book a taxi to the airport, please.' },
+            { s: 'A', t: 'Of course. What time do you need the taxi?' },
+            { s: 'B', t: 'My flight is at ten, so I need to leave home at seven thirty.' },
+            { s: 'A', t: 'And what is your address?' },
+            { s: 'B', t: 'It is 24 Park Street. How much will it cost?' },
+            { s: 'A', t: 'It will be about twenty-five pounds.' },
+            { s: 'B', t: 'That is fine. See you at seven thirty.' }
+          ],
+          questions: [
+            { q: 'Where does the caller want to go?', options: ['To the airport', 'To the station', 'To the hospital', 'To the school'], answer: 0 },
+            { q: 'What time will the taxi arrive?', options: ['At 7:00', 'At 7:30', 'At 8:00', 'At 10:00'], answer: 1 },
+            { q: 'How much will the taxi cost?', options: ['Fifteen pounds', 'Twenty pounds', 'Twenty-five pounds', 'Thirty pounds'], answer: 2 }
+          ] },
+        { title: 'Part 2 · A talk about the school trip', intro: 'A teacher is telling students about a school trip.',
+          script: [
+            { s: 'A', t: 'Good morning, everyone. I want to tell you about our school trip next month.' },
+            { s: 'A', t: 'We will visit the Science Museum in London on Friday, the fifteenth of May.' },
+            { s: 'A', t: 'The bus will leave school at eight in the morning, so please arrive by half past seven.' },
+            { s: 'A', t: 'You should bring a packed lunch and a water bottle. You do not need to bring money.' },
+            { s: 'A', t: 'We will return to school at five in the afternoon.' }
+          ],
+          questions: [
+            { q: 'Where will the students visit?', options: ['The History Museum', 'The Science Museum', 'The Art Gallery', 'The Zoo'], answer: 1 },
+            { q: 'What time should students arrive?', options: ['By 7:30', 'By 8:00', 'By 9:00', 'By 10:00'], answer: 0 },
+            { q: 'What should students bring?', options: ['Money and a camera', 'A packed lunch and a water bottle', 'Books and pens', 'Sports clothes'], answer: 1 }
+          ] },
+        { title: 'Part 3 · Two friends discuss a project', intro: 'Two students are planning a history project.',
+          script: [
+            { s: 'A', t: 'Hi, Sara. Have you started our history project yet?' },
+            { s: 'B', t: 'Not yet. I was thinking we could write about the Roman Empire.' },
+            { s: 'A', t: 'Good idea. We need to finish it by next Thursday.' },
+            { s: 'B', t: 'Okay. I can do the research, and you can write the report.' },
+            { s: 'A', t: 'That works for me. Let us meet in the library on Monday.' },
+            { s: 'B', t: 'Perfect. See you on Monday.' }
+          ],
+          questions: [
+            { q: 'What is the project about?', options: ['The Roman Empire', 'The Greek Empire', 'The British Empire', 'The French Empire'], answer: 0 },
+            { q: 'When must the project be finished?', options: ['By Monday', 'By Tuesday', 'By Thursday', 'By Friday'], answer: 2 },
+            { q: 'What will Sara do?', options: ['Write the report', 'Do the research', 'Give a presentation', 'Draw pictures'], answer: 1 }
+          ] },
+        { title: 'Part 4 · A lecture about the water cycle', intro: 'A lecturer is explaining the water cycle.',
+          script: [
+            { s: 'A', t: 'Today, we will look at the water cycle.' },
+            { s: 'A', t: 'First, water from oceans, lakes, and rivers evaporates into the air.' },
+            { s: 'A', t: 'Then, the water vapour cools and forms clouds. This is called condensation.' },
+            { s: 'A', t: 'Finally, the water falls back to the Earth as rain or snow. This is called precipitation.' },
+            { s: 'A', t: 'About seventy percent of the Earth\u2019s surface is covered by water.' }
+          ],
+          questions: [
+            { q: 'What is the first stage of the water cycle?', options: ['Condensation', 'Precipitation', 'Evaporation', 'Collection'], answer: 2 },
+            { q: 'What is precipitation?', options: ['Water falling as rain or snow', 'Water turning into clouds', 'Water heating in the sun', 'Water flowing into rivers'], answer: 0 },
+            { q: 'How much of the Earth\u2019s surface is covered by water?', options: ['About fifty percent', 'About sixty percent', 'About seventy percent', 'About eighty percent'], answer: 2 }
+          ] }
+      ];
+      // Listening bank: the standalone Listening test loads the selected set.
+      // (The Full Mock always uses Set 1 Part 1 — it is a fixed compact flow.)
+      var LISTENING_SETS = [LISTENING_PARTS, LISTENING_PARTS_2];
+      var listeningSetIndex = 0;
+      var activeListeningParts = LISTENING_PARTS;
       var listeningPartIndex = 0;
       var listeningAnswers = {};
       var listeningPlayed = {};
@@ -2634,7 +2703,7 @@
         playNext();
       }
       function renderListeningPart() {
-        var part = LISTENING_PARTS[listeningPartIndex];
+        var part = activeListeningParts[listeningPartIndex];
         document.getElementById('listeningPartLabel').textContent = part.title + ' · ' + part.intro;
         var playBtn = document.getElementById('listeningPlayBtn');
         playBtn.disabled = false;
@@ -2669,7 +2738,7 @@
           box.appendChild(qDiv);
         });
         document.getElementById('listeningNextBtn').textContent =
-          listeningPartIndex < LISTENING_PARTS.length - 1 ? 'Next part →' : 'Finish listening → See result';
+          listeningPartIndex < activeListeningParts.length - 1 ? 'Next part →' : 'Finish listening → See result';
       }
       // Verified 40-question IELTS Listening conversion (IDP-published) — for a
       // FUTURE full-length Listening Mock only. NEVER apply it to short
@@ -2680,7 +2749,7 @@
       function finishListening() {
         stopListeningAudio();
         var total = 12, correct = 0;
-        LISTENING_PARTS.forEach(function (part, pi) {
+        activeListeningParts.forEach(function (part, pi) {
           part.questions.forEach(function (item, qi) {
             if (listeningAnswers[pi * 3 + qi] === item.answer) correct += 1;
           });
@@ -2695,9 +2764,23 @@
         listeningPartIndex = 0;
         listeningAnswers = {};
         listeningPlayed = {};
+        // Snapshot the selected bank set at test start.
+        activeListeningParts = LISTENING_SETS[listeningSetIndex];
         showExamView('examListening');
+        document.querySelectorAll('[data-listening-set]').forEach(function (btn) {
+          var idx = parseInt(btn.getAttribute('data-listening-set'), 10);
+          var on = idx === listeningSetIndex;
+          btn.style.fontWeight = on ? '700' : '400';
+          btn.setAttribute('aria-pressed', String(on));
+        });
         renderListeningPart();
       }
+      document.querySelectorAll('[data-listening-set]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          listeningSetIndex = parseInt(this.getAttribute('data-listening-set'), 10);
+          startListening();
+        });
+      });
       document.getElementById('listeningPlayBtn').addEventListener('click', function () {
         var btn = this;
         var partIndex = listeningPartIndex;
@@ -2705,7 +2788,7 @@
         btn.disabled = true;
         btn.textContent = 'Playing…';
         noteEl.textContent = 'Starting audio…';
-        playListeningScript(LISTENING_PARTS[partIndex].script, function (success) {
+        playListeningScript(activeListeningParts[partIndex].script, function (success) {
           if (success) {
             listeningPlayed[partIndex] = true;
             btn.textContent = '▶ Played';
@@ -2721,7 +2804,7 @@
       });
       document.getElementById('listeningNextBtn').addEventListener('click', function () {
         stopListeningAudio();
-        if (listeningPartIndex < LISTENING_PARTS.length - 1) {
+        if (listeningPartIndex < activeListeningParts.length - 1) {
           listeningPartIndex += 1;
           renderListeningPart();
         } else {
