@@ -3215,6 +3215,33 @@
         }
         return { load: load, save: save, remove: remove, markSaved: markSaved, refreshNotes: refreshNotes, newAttemptId: newAttemptId, getSubmitted: getSubmitted, recordSubmission: recordSubmission, renderHistory: renderHistory };
       })();
+      // Cross-mode draft preservation (Phase 6E fix): standalone
+      // Reading/Writing progress is stored as a MAP keyed by mode
+      // ({ academic: save, general: save }) so a mode switch can never
+      // overwrite the other mode's draft. Legacy single-save values
+      // (with attemptId) migrate in-memory to their mode's slot.
+      function p4NormalizeModeMap(raw) {
+        if (!raw || typeof raw !== 'object') return {};
+        if (raw.attemptId) {
+          var m = (raw.mode === 'general' || raw.mode === 'academic') ? raw.mode : 'academic';
+          var out = {}; out[m] = raw; return out;
+        }
+        return raw;
+      }
+      function p4LoadModeSlot(key, mode) {
+        var map = p4NormalizeModeMap(P4.load(key, null));
+        return (map && map[mode]) || null;
+      }
+      function p4SaveModeSlot(key, mode, save) {
+        var map = p4NormalizeModeMap(P4.load(key, null));
+        map[mode] = save;
+        P4.save(key, map);
+      }
+      function p4ClearModeSlot(key, mode) {
+        var map = p4NormalizeModeMap(P4.load(key, null));
+        if (map && map[mode]) delete map[mode];
+        if (map && Object.keys(map).length) P4.save(key, map); else P4.remove(key);
+      }
       // Per-test attempt state (restored from saved progress on open).
       var readingAttemptId = null, readingEndsAt = 0;
       var listeningAttemptId = null;
@@ -3226,13 +3253,14 @@
         if (el) el.textContent = text;
       }
       function p4SaveReading() {
-        P4.save('progress_reading', { attemptId: readingAttemptId, mode: examMode, setIndex: readingSetIndex[examMode], answers: readingAnswers, endsAt: readingEndsAt, updatedAt: Date.now() });
+        p4SaveModeSlot('progress_reading', examMode, { attemptId: readingAttemptId, mode: examMode, setIndex: readingSetIndex[examMode], answers: readingAnswers, endsAt: readingEndsAt, updatedAt: Date.now() });
       }
       function p4SaveListening() {
         P4.save('progress_listening', { attemptId: listeningAttemptId, fullMock: listeningFullMock, setIndex: listeningSetIndex, answers: listeningAnswers, partIndex: listeningPartIndex, played: listeningPlayed, updatedAt: Date.now() });
       }
       function p4SaveWriting() {
-        P4.save('progress_writing', { attemptId: writingAttemptId, mode: writingMode, letterIndex: writingLetterIndex, essayIndex: writingEssayIndex, task1Type: writingTask1Type, task1: document.getElementById('writingTask1').value, task1GT: document.getElementById('writingTask1GT').value, task2: document.getElementById('writingTask2').value, task1EndsAt: writingTask1EndsAt, task2EndsAt: writingTask2EndsAt, updatedAt: Date.now() });
+        syncWritingDraftMaps();
+        p4SaveModeSlot('progress_writing', writingMode, { attemptId: writingAttemptId, mode: writingMode, letterIndex: writingLetterIndex, essayIndex: writingEssayIndex, task1Type: writingTask1Type, task1: document.getElementById('writingTask1').value, task1GT: document.getElementById('writingTask1GT').value, task2: document.getElementById('writingTask2').value, task1Drafts: writingTask1Drafts, letterDrafts: writingLetterDrafts, essayDrafts: writingEssayDrafts, task1EndsAt: writingTask1EndsAt, task2EndsAt: writingTask2EndsAt, updatedAt: Date.now() });
       }
       function p4SaveWritingSoon() {
         clearTimeout(writingSaveTimer);
@@ -3242,7 +3270,7 @@
         P4.save('progress_speaking', { attemptId: speakingAttemptId, set: mockSetIndex, transcript: transcript, mockQuestionIndex: mockQuestionIndex, mockStartedAt: mockStartedAt, updatedAt: Date.now() });
       }
       function openReading() {
-        var saved = P4.load('progress_reading', null);
+        var saved = p4LoadModeSlot('progress_reading', examMode);
         // Phase 6E 3-bug fix: only auto-resume when the saved attempt is
         // in the currently selected hub mode. A stale other-mode save
         // must never flip the hub mode or load the wrong format's
@@ -3255,7 +3283,7 @@
         if (saved && saved.attemptId) startListening(saved); else startListening(null);
       }
       function openWriting() {
-        var saved = P4.load('progress_writing', null);
+        var saved = p4LoadModeSlot('progress_writing', examMode);
         // Phase 6E 3-bug fix: same mode-match rule as openReading —
         // never let a stale other-mode save flip the hub selection.
         if (saved && saved.attemptId && savedModeMatches(saved)) startWriting(saved); else startWriting(null);
@@ -3263,10 +3291,11 @@
       document.querySelectorAll('[data-p4-fresh]').forEach(function (btn) {
         btn.addEventListener('click', function () {
           var test = this.getAttribute('data-p4-fresh');
-          P4.remove('progress_' + test);
-          if (test === 'reading') startReading(null);
-          else if (test === 'listening') startListening(null);
-          else if (test === 'writing') startWriting(null);
+          // Start-fresh clears ONLY the current mode's slot — the other
+          // mode's saved draft stays intact.
+          if (test === 'reading') { p4ClearModeSlot('progress_reading', examMode); startReading(null); }
+          else if (test === 'listening') { P4.remove('progress_listening'); startListening(null); }
+          else if (test === 'writing') { p4ClearModeSlot('progress_writing', examMode); startWriting(null); }
         });
       });
       document.getElementById('p4ClearHistory').addEventListener('click', function () {
@@ -3667,7 +3696,7 @@
             var readingResult = { title: 'Reading Result · ' + examModeLabel(), headline: correct + ' / ' + total + ' correct · ' + pct + '%', sub: 'Short practice test · No band estimate', detail: disclaimer + review, label: 'Score' };
             showExamResult(readingResult.title, readingResult.headline, readingResult.sub, readingResult.detail, readingResult.label);
             P4.recordSubmission(readingAttemptId, readingResult, { attemptId: readingAttemptId, test: 'Reading', mode: examModeLabel(), set: 'Set ' + (readingSetIndex[examMode] + 1), score: correct + ' / ' + total, pct: pct, band: null, at: Date.now() });
-            P4.remove('progress_reading');
+            p4ClearModeSlot('progress_reading', examMode);
           })
           .catch(function (err) {
             // Do NOT clear progress or record anything: the answers stay
@@ -4227,26 +4256,73 @@
       }
       document.querySelectorAll('[data-writing-letter]').forEach(function (btn) {
         btn.addEventListener('click', function () {
+          stashWritingDraftMaps();
           writingLetterIndex = parseInt(this.getAttribute('data-writing-letter'), 10);
           renderWritingLetter();
+          refillWritingTask1GT();
+          p4SaveWriting();
         });
       });
       document.querySelectorAll('[data-writing-essay]').forEach(function (btn) {
         btn.addEventListener('click', function () {
+          stashWritingDraftMaps();
           writingEssayIndex = parseInt(this.getAttribute('data-writing-essay'), 10);
           renderWritingEssay();
+          refillWritingTask2();
+          p4SaveWriting();
         });
       });
 
       /* ---- Writing: Task 1 + Task 2, AI band feedback ---- */
       var writingMode = 'academic';
       var writingTask1Type = 'chart';
+      // Cross-mode draft preservation: per-prompt draft texts, kept in
+      // memory and persisted inside the mode's save slot. Academic
+      // Task 1 Chart/Table/Map/Process drafts, General Letter drafts,
+      // and Task 2 Essay drafts never mix — switching prompts stashes
+      // the current text and refills the target prompt's text.
+      var writingTask1Drafts = { chart: '', table: '', map: '', process: '' };
+      var writingLetterDrafts = { '0': '', '1': '' };
+      var writingEssayDrafts = { '0': '', '1': '' };
+      function normalizeDraftMap(input, keys) {
+        var out = {};
+        keys.forEach(function (k) {
+          out[k] = (input && typeof input[k] === 'string') ? input[k] : '';
+        });
+        return out;
+      }
+      function stashWritingDraftMaps() {
+        // Capture the live textarea values into the current prompt's
+        // slots. Called before any render that clears a textarea, and
+        // by p4SaveWriting as a safety net (idempotent).
+        writingTask1Drafts[writingTask1Type] = document.getElementById('writingTask1').value;
+        writingLetterDrafts[String(writingLetterIndex)] = document.getElementById('writingTask1GT').value;
+        writingEssayDrafts[String(writingEssayIndex)] = document.getElementById('writingTask2').value;
+      }
+      function syncWritingDraftMaps() { stashWritingDraftMaps(); }
+      function refillWritingTask1() {
+        var el = document.getElementById('writingTask1');
+        el.value = writingTask1Drafts[writingTask1Type] || '';
+        document.getElementById('writingTask1Count').textContent = countWords(el.value) + ' words';
+      }
+      function refillWritingTask1GT() {
+        var el = document.getElementById('writingTask1GT');
+        el.value = writingLetterDrafts[String(writingLetterIndex)] || '';
+        document.getElementById('writingTask1GTCount').textContent = countWords(el.value) + ' words';
+      }
+      function refillWritingTask2() {
+        var el = document.getElementById('writingTask2');
+        el.value = writingEssayDrafts[String(writingEssayIndex)] || '';
+        document.getElementById('writingTask2Count').textContent = countWords(el.value) + ' words';
+      }
       document.querySelectorAll('[data-task1-type]').forEach(function (btn) {
         btn.addEventListener('click', function () {
+          stashWritingDraftMaps();
           writingTask1Type = this.getAttribute('data-task1-type');
           ['chart', 'table', 'map', 'process'].forEach(function (t) {
             document.getElementById('task1' + t.charAt(0).toUpperCase() + t.slice(1)).hidden = t !== writingTask1Type;
           });
+          refillWritingTask1();
           p4SaveWriting();
         });
       });
@@ -4262,14 +4338,23 @@
           // 3-bug fix: only a valid saved mode may apply (see startReading).
           if (restore.mode === 'general' || restore.mode === 'academic') setExamMode(restore.mode);
           writingMode = examMode;
-          writingLetterIndex = restore.letterIndex;
-          writingEssayIndex = restore.essayIndex;
-          writingTask1Type = restore.task1Type || 'chart';
+          writingLetterIndex = (restore.letterIndex === 1) ? 1 : 0;
+          writingEssayIndex = (restore.essayIndex === 1) ? 1 : 0;
+          writingTask1Type = (['chart', 'table', 'map', 'process'].indexOf(restore.task1Type) !== -1) ? restore.task1Type : 'chart';
           writingAttemptId = restore.attemptId;
           // Phase 6E: resume the saved timer deadlines (pre-6E saves have
           // none — those restart once, then persist).
           writingTask1EndsAt = restore.task1EndsAt || (Date.now() + 20 * 60 * 1000);
           writingTask2EndsAt = restore.task2EndsAt || (Date.now() + 40 * 60 * 1000);
+          // Cross-mode fix: restore the per-prompt draft maps; seed the
+          // current prompt's slot from the legacy fields so pre-map
+          // saves still restore their text.
+          writingTask1Drafts = normalizeDraftMap(restore.task1Drafts, ['chart', 'table', 'map', 'process']);
+          writingLetterDrafts = normalizeDraftMap(restore.letterDrafts, ['0', '1']);
+          writingEssayDrafts = normalizeDraftMap(restore.essayDrafts, ['0', '1']);
+          if (writingTask1Drafts[writingTask1Type] === '') writingTask1Drafts[writingTask1Type] = restore.task1 || '';
+          if (writingLetterDrafts[String(writingLetterIndex)] === '') writingLetterDrafts[String(writingLetterIndex)] = restore.task1GT || '';
+          if (writingEssayDrafts[String(writingEssayIndex)] === '') writingEssayDrafts[String(writingEssayIndex)] = restore.task2 || '';
         } else {
           // Snapshot the mode at test start so a mid-test mode change cannot
           // mix the other format's Task 1 into this test.
@@ -4278,6 +4363,9 @@
           writingAttemptId = P4.newAttemptId();
           writingTask1EndsAt = Date.now() + 20 * 60 * 1000;
           writingTask2EndsAt = Date.now() + 40 * 60 * 1000;
+          writingTask1Drafts = { chart: '', table: '', map: '', process: '' };
+          writingLetterDrafts = { '0': '', '1': '' };
+          writingEssayDrafts = { '0': '', '1': '' };
         }
         ['chart', 'table', 'map', 'process'].forEach(function (t) {
           document.getElementById('task1' + t.charAt(0).toUpperCase() + t.slice(1)).hidden = t !== writingTask1Type;
@@ -4287,24 +4375,12 @@
         document.getElementById('writingTask1Academic').hidden = writingMode !== 'academic';
         document.getElementById('writingTask1General').hidden = writingMode !== 'general';
         // Render the bank prompts (these clear the task textareas), then
-        // refill the saved text on resume.
+        // refill each textarea from its per-prompt draft slot.
         renderWritingLetter();
         renderWritingEssay();
-        if (restore) {
-          document.getElementById('writingTask1').value = restore.task1 || '';
-          document.getElementById('writingTask1GT').value = restore.task1GT || '';
-          document.getElementById('writingTask2').value = restore.task2 || '';
-          document.getElementById('writingTask1Count').textContent = countWords(restore.task1 || '') + ' words';
-          document.getElementById('writingTask1GTCount').textContent = countWords(restore.task1GT || '') + ' words';
-          document.getElementById('writingTask2Count').textContent = countWords(restore.task2 || '') + ' words';
-        } else {
-          document.getElementById('writingTask1').value = '';
-          document.getElementById('writingTask1GT').value = '';
-          document.getElementById('writingTask2').value = '';
-          document.getElementById('writingTask1Count').textContent = '0 words';
-          document.getElementById('writingTask1GTCount').textContent = '0 words';
-          document.getElementById('writingTask2Count').textContent = '0 words';
-        }
+        refillWritingTask1();
+        refillWritingTask1GT();
+        refillWritingTask2();
         // Phase 6E: countdown to the persisted deadlines — a refresh
         // resumes the remaining time instead of restarting the timers.
         examCountdownUntil(document.getElementById(writingMode === 'general' ? 'writingTask1GTTimer' : 'writingTask1Timer'), writingTask1EndsAt);
@@ -4349,7 +4425,7 @@
         // unsaved draft. A failed save aborts the evaluation.
         clearTimeout(writingSaveTimer);
         p4SaveWriting();
-        var savedDraft = P4.load('progress_writing', null);
+        var savedDraft = p4LoadModeSlot('progress_writing', writingMode);
         var savedTask1 = writingMode === 'general' ? (savedDraft && savedDraft.task1GT) : (savedDraft && savedDraft.task1);
         if (!savedDraft || savedDraft.attemptId !== writingAttemptId ||
             String(savedTask1 || '').trim() !== t1 ||
@@ -4421,7 +4497,7 @@
           var writingResult = { title: 'Writing Result · ' + examModeLabel(), headline: band + ' (est.)', sub: 'Task 1: ' + t1Count + ' words · Task 2: ' + t2Count + ' words', detail: detail, label: undefined, wordCounts: { task1: t1Count, task2: t2Count } };
           showExamResult(writingResult.title, writingResult.headline, writingResult.sub, writingResult.detail, writingResult.label);
           P4.recordSubmission(writingAttemptId, writingResult, { attemptId: writingAttemptId, test: 'Writing', mode: examModeLabel(), set: null, score: band + ' (est.)', pct: null, band: data.band != null ? Number(data.band) : null, at: Date.now(), wordCounts: { task1: t1Count, task2: t2Count } });
-          P4.remove('progress_writing');
+          p4ClearModeSlot('progress_writing', writingMode);
         } catch (error) {
           console.error('Writing evaluation failed:', error);
           // State stays intact: texts were never cleared, so Retry
