@@ -1768,6 +1768,23 @@
         if (typeof serverNowValue === 'number') serverTimeOffsetMs = serverNowValue - Date.now();
       }
       function serverNow() { return Date.now() + serverTimeOffsetMs; }
+      // Phase 6E fix: per-tab identity for cross-tab attribution.
+      // sessionStorage is per-tab, so a refresh keeps the same id while
+      // a genuinely different tab gets a different one. The id is a
+      // random token, never a user identifier, and is never used for
+      // authentication. The server stores it as lastWriterTabId so a
+      // 409 caused by this tab's own earlier write can be told apart
+      // from a genuine other-tab write.
+      var tabId = (function () {
+        try {
+          var t = sessionStorage.getItem('ieltsgo_tab_id');
+          if (!t) {
+            t = 'tab_' + Date.now().toString(36) + '_' + Math.random().toString(36).slice(2, 8);
+            sessionStorage.setItem('ieltsgo_tab_id', t);
+          }
+          return t;
+        } catch (e) { return 'tab_fallback'; }
+      })();
       function fetchContent(skill) {
         return fetch(CONTENT_ENDPOINT + '?skill=' + encodeURIComponent(skill))
           .then(function (r) {
@@ -1778,6 +1795,9 @@
           .catch(function () { return []; });
       }
       function attemptApi(body) {
+        // Stamp save/start-skill calls with this tab's id so the server
+        // can attribute the write (see tabId above).
+        if (body && (body.action === 'save' || body.action === 'start-skill')) body.writerTabId = tabId;
         return fetch(ATTEMPTS_ENDPOINT, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -1823,19 +1843,25 @@
         }, 1000);
         examTimers.push(timer);
       }
-      // Throttled autosave: at most one save per 15 s, plus an immediate
-      // save on explicit calls with force=true. Failures warn + retry once.
+      // Autosave: debounced (2 s) so an answer is on the server shortly
+      // after it is given, plus an immediate save on explicit calls
+      // with force=true (stage transitions). Failures warn + retry once.
+      // Phase 6E fix: the queue NEVER drops a pending save while one is
+      // in flight (the old code discarded it), and pending saves are
+      // flushed when the tab is hidden or the page is left, so a quick
+      // refresh after answering cannot lose answers.
       var attemptSaveQueue = { timer: null, pending: null, saving: false };
       function queueAttemptSave(doSave, force) {
         attemptSaveQueue.pending = doSave;
         if (force) flushAttemptSave();
-        else if (!attemptSaveQueue.timer) attemptSaveQueue.timer = setTimeout(flushAttemptSave, 15000);
+        else if (!attemptSaveQueue.timer) attemptSaveQueue.timer = setTimeout(flushAttemptSave, 2000);
       }
       function flushAttemptSave() {
         if (attemptSaveQueue.timer) { clearTimeout(attemptSaveQueue.timer); attemptSaveQueue.timer = null; }
+        if (attemptSaveQueue.saving) return; // pending stays queued; .finally re-flushes.
         var doSave = attemptSaveQueue.pending;
         attemptSaveQueue.pending = null;
-        if (!doSave || attemptSaveQueue.saving) return;
+        if (!doSave) return;
         attemptSaveQueue.saving = true;
         Promise.resolve()
           .then(doSave)
@@ -1850,7 +1876,57 @@
               });
             }, 3000);
           })
-          .finally(function () { attemptSaveQueue.saving = false; });
+          .finally(function () {
+            attemptSaveQueue.saving = false;
+            if (attemptSaveQueue.pending) flushAttemptSave();
+          });
+      }
+      document.addEventListener('visibilitychange', function () {
+        if (document.hidden) flushAttemptSave();
+      });
+      window.addEventListener('pagehide', function () { flushAttemptSave(); });
+      function clearAttemptSaveQueue() {
+        if (attemptSaveQueue.timer) { clearTimeout(attemptSaveQueue.timer); attemptSaveQueue.timer = null; }
+        attemptSaveQueue.pending = null;
+      }
+      // Wait until the save queue is empty (in-flight + pending saves
+      // settled), so a submit uses a fresh version. Bounded: gives up
+      // after ~5 s and lets the caller proceed (its 409 path handles it).
+      function drainAttemptSaveQueue() {
+        return new Promise(function (resolve) {
+          flushAttemptSave();
+          var tries = 0;
+          (function check() {
+            if (!attemptSaveQueue.pending && !attemptSaveQueue.saving) return resolve();
+            if (++tries > 50) return resolve();
+            setTimeout(check, 100);
+          })();
+        });
+      }
+      // Shared 409 resolution for Full Reading / Full Mock saves.
+      // A 409 from THIS tab's own earlier write (same writerTabId) is
+      // retried silently once with the fresh version — it is not
+      // another tab. A 409 caused by a DIFFERENT tab's newer write
+      // reloads the UI from the server doc (newest valid revision wins)
+      // and warns. Returns 'retried' | 'reloaded' | 'failed'.
+      function resolveSaveConflict(attemptId, which, retryWithVersion) {
+        return getAttempt(attemptId).then(function (attempt) {
+          if (attempt.submitted) return 'failed'; // Already submitted: the save is moot; never reload or toast.
+          if (which === 'fullreading') fullReadingServer.version = attempt.version;
+          else fullMockServer.version = attempt.version;
+          if (attempt.lastWriterTabId && attempt.lastWriterTabId !== tabId) {
+            if (which === 'fullreading') resumeFullReadingFromAttempt(attempt);
+            else resumeFullMockFromAttempt(attempt);
+            showToast('Another tab saved newer answers — reloaded the latest version.');
+            return 'reloaded';
+          }
+          return retryWithVersion(attempt.version).then(function () { return 'retried'; }).catch(function () {
+            if (which === 'fullreading') resumeFullReadingFromAttempt(attempt);
+            else resumeFullMockFromAttempt(attempt);
+            showToast('Another tab saved newer answers — reloaded the latest version.');
+            return 'reloaded';
+          });
+        }).catch(function () { return 'failed'; });
       }
 
       function extractJsonObject(raw) {
@@ -3476,35 +3552,42 @@
       function frSave(force) {
         if (!fullReadingServer.attemptId || fullReadingServer.offline) return;
         var attemptId = fullReadingServer.attemptId;
-        var versionAtQueue = fullReadingServer.version;
         queueAttemptSave(function () {
-          return attemptApi({ action: 'save', attemptId: attemptId, expectedVersion: versionAtQueue, patch: frAnswersPatch() })
+          // expectedVersion is read at EXECUTION time, not queue time:
+          // a version captured seconds ago is already stale after the
+          // previous save, and that self-409 was the false "another
+          // tab" warning. The patch is rebuilt from current UI state,
+          // so a conflict retry below re-saves the latest answers.
+          return attemptApi({ action: 'save', attemptId: attemptId, expectedVersion: fullReadingServer.version, patch: frAnswersPatch() })
             .then(function (data) { if (data && data.attempt) fullReadingServer.version = data.attempt.version; frCacheSave(); })
             .catch(function (err) {
-              if (err && err.status === 409) { frReloadFromServer(); return; }
+              if (err && err.status === 409) {
+                return resolveSaveConflict(attemptId, 'fullreading', function (freshVersion) {
+                  return attemptApi({ action: 'save', attemptId: attemptId, expectedVersion: freshVersion, patch: frAnswersPatch() })
+                    .then(function (data) { if (data && data.attempt) fullReadingServer.version = data.attempt.version; frCacheSave(); });
+                });
+              }
               throw err;
             });
         }, force);
       }
-      function frReloadFromServer() {
-        if (!fullReadingServer.attemptId) return;
-        getAttempt(fullReadingServer.attemptId).then(function (attempt) {
-          resumeFullReadingFromAttempt(attempt);
-          showToast('Another tab saved newer answers — reloaded the latest version.');
-        }).catch(function (err) {
-          console.error('Full Reading reload failed:', err);
-          showToast('Could not reload the latest saved version — your answers on this page are still here.');
-        });
-      }
       function frStartSkill() {
         if (!fullReadingServer.attemptId || fullReadingServer.offline) return Promise.resolve(null);
-        return attemptApi({ action: 'start-skill', attemptId: fullReadingServer.attemptId, expectedVersion: fullReadingServer.version, skill: 'reading' })
-          .then(function (data) { if (data && data.attempt) fullReadingServer.version = data.attempt.version; return data.attempt; })
-          .catch(function (err) {
-            if (err && err.status === 409) frReloadFromServer();
-            else console.error('Full Reading start-skill failed:', err);
-            return null;
-          });
+        function doStart(expectedVersion) {
+          return attemptApi({ action: 'start-skill', attemptId: fullReadingServer.attemptId, expectedVersion: expectedVersion, skill: 'reading' })
+            .then(function (data) { if (data && data.attempt) fullReadingServer.version = data.attempt.version; return data.attempt; });
+        }
+        // A 409 here is NOT reloaded blindly (the old code reloaded the
+        // whole UI, which reverted the stage): adopt the fresh version,
+        // reuse the deadline if one is already set, else retry once.
+        return doStart(fullReadingServer.version).catch(function (err) {
+          if (!err || err.status !== 409) { console.error('Full Reading start-skill failed:', err); return null; }
+          return getAttempt(fullReadingServer.attemptId).then(function (attempt) {
+            fullReadingServer.version = attempt.version;
+            if (attempt.deadlines && attempt.deadlines.reading) return attempt;
+            return doStart(attempt.version).catch(function () { return null; });
+          }).catch(function () { return null; });
+        });
       }
       function resumeFullReadingFromAttempt(attempt) {
         fullReadingState = { mode: attempt.mode, passageIndex: 0, answers: {} };
@@ -3527,10 +3610,48 @@
           renderFullReading();
           var dl = (attempt.deadlines && attempt.deadlines.reading) || 0;
           if (dl) examCountdownUntil(document.getElementById('fullReadingTimer'), dl);
-          else examCountdown(document.getElementById('fullReadingTimer'), 60 * 60);
+          else frStartSkill().then(function (a) {
+            // No deadline yet (refresh landed before start-skill ran):
+            // ask the SERVER for one — never fabricate a fresh local
+            // 60:00 timer, which would grant extra time.
+            var d2 = (a && a.deadlines && a.deadlines.reading) || 0;
+            if (d2) examCountdownUntil(document.getElementById('fullReadingTimer'), d2);
+            else { examCountdown(document.getElementById('fullReadingTimer'), 60 * 60); showToast('Timer could not sync with the server — this mock uses a local timer and will NOT survive a refresh.'); }
+          });
           showToast('Resumed your Full Reading Mock.');
         }).catch(function (err) {
           document.getElementById('fullReadingQuestions').innerHTML = '<p>' + escapeHtml(err.message) + '</p>';
+        });
+      }
+      // In-page resume prompt (Phase 6E fix). The old window.confirm()
+      // is auto-dismissed by headless/automated browsers (confirm
+      // returns false), which silently "chose" Start fresh and made
+      // resume look broken. An in-page modal works everywhere and
+      // lets the student actually choose.
+      function askResumePrompt(title, detail) {
+        return new Promise(function (resolve) {
+          var overlay = document.createElement('div');
+          overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+          var box = document.createElement('div');
+          box.style.cssText = 'background:#fff;border-radius:12px;max-width:460px;width:100%;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.25)';
+          var h = document.createElement('h3');
+          h.style.margin = '0 0 8px';
+          h.textContent = title;
+          var p = document.createElement('p');
+          p.style.margin = '0';
+          p.textContent = detail;
+          var row = document.createElement('div');
+          row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;margin-top:16px';
+          var freshBtn = document.createElement('button');
+          freshBtn.type = 'button'; freshBtn.className = 'exam-secondary'; freshBtn.textContent = 'Start fresh';
+          var resumeBtn = document.createElement('button');
+          resumeBtn.type = 'button'; resumeBtn.className = 'exam-primary'; resumeBtn.textContent = 'Resume';
+          row.appendChild(freshBtn); row.appendChild(resumeBtn);
+          box.appendChild(h); box.appendChild(p); box.appendChild(row);
+          overlay.appendChild(box);
+          document.body.appendChild(overlay);
+          freshBtn.addEventListener('click', function () { document.body.removeChild(overlay); resolve(false); });
+          resumeBtn.addEventListener('click', function () { document.body.removeChild(overlay); resolve(true); });
         });
       }
       function openFullReading() {
@@ -3538,9 +3659,10 @@
         if (cached && cached.attemptId) {
           getAttempt(cached.attemptId).then(function (attempt) {
             if (attempt.submitted) { frCacheClear(); startFullReading(); return; }
-            if (window.confirm('You have an unfinished Full Reading Mock. Resume it? OK = Resume, Cancel = Start fresh.')) {
-              resumeFullReadingFromAttempt(attempt);
-            } else { frCacheClear(); startFullReading(); }
+            askResumePrompt('Unfinished Full Reading Mock', 'You have an unfinished Full Reading Mock (' + (attempt.mode === 'general' ? 'General Training' : 'Academic') + '). Resume it or start fresh?').then(function (resume) {
+              if (resume) resumeFullReadingFromAttempt(attempt);
+              else { frCacheClear(); startFullReading(); }
+            });
           }).catch(function () { startFullReading(); });
         } else startFullReading();
       }
@@ -3735,6 +3857,9 @@
             // immutable). A repeat submit replays the stored result.
             if (fullReadingServer.attemptId && !fullReadingServer.offline) {
               try {
+                // Drain pending autosaves first so the submit carries a
+                // fresh version instead of racing an in-flight save.
+                await drainAttemptSaveQueue();
                 var sub = await attemptApi({ action: 'submit', attemptId: fullReadingServer.attemptId, expectedVersion: fullReadingServer.version, stageResults: { reading: { testId: test.id, context: 'practice' } } });
                 fullReadingServer.version = sub.attempt.version;
                 showFullReadingResult(result, sub.attempt.result.overTime && sub.attempt.result.overTime.reading);
@@ -3743,13 +3868,29 @@
               } catch (submitErr) {
                 if (submitErr && submitErr.status === 409) {
                   var att = await getAttempt(fullReadingServer.attemptId);
-                  showFullReadingResult(att.result.perSkill.reading, att.result.overTime && att.result.overTime.reading);
-                  frCacheClear();
-                  showToast('Already submitted — showing your saved result.');
-                  return;
+                  if (att.result) {
+                    showFullReadingResult(att.result.perSkill.reading, att.result.overTime && att.result.overTime.reading);
+                    frCacheClear();
+                    showToast('Already submitted — showing your saved result.');
+                    return;
+                  }
+                  // 409 was a version race, not an existing submission:
+                  // retry once with the fresh version.
+                  fullReadingServer.version = att.version;
+                  try {
+                    var sub2 = await attemptApi({ action: 'submit', attemptId: fullReadingServer.attemptId, expectedVersion: att.version, stageResults: { reading: { testId: test.id, context: 'practice' } } });
+                    fullReadingServer.version = sub2.attempt.version;
+                    showFullReadingResult(result, sub2.attempt.result.overTime && sub2.attempt.result.overTime.reading);
+                    frCacheClear();
+                    return;
+                  } catch (e2) {
+                    console.error('Full Reading server submit retry failed:', e2);
+                    showToast('Server save failed — showing your result from this page. Press Submit again to retry the server save.');
+                  }
+                } else {
+                  console.error('Full Reading server submit failed:', submitErr);
+                  showToast('Server save failed — showing your result from this page. Press Submit again to retry the server save.');
                 }
-                console.error('Full Reading server submit failed:', submitErr);
-                showToast('Server save failed — showing your result from this page. Press Submit again to retry the server save.');
               }
             }
             showFullReadingResult(result, false);
@@ -4056,25 +4197,22 @@
       function fmSyncServerVersion(data) {
         if (data && data.attempt && typeof data.attempt.version === 'number') fullMockServer.version = data.attempt.version;
       }
-      function fmReloadFromServer() {
-        if (!fullMockServer.attemptId) return;
-        getAttempt(fullMockServer.attemptId).then(function (attempt) {
-          resumeFullMockFromAttempt(attempt);
-          showToast('Another tab saved newer answers — reloaded the latest version.');
-        }).catch(function (err) {
-          console.error('Full Mock reload failed:', err);
-          showToast('Could not reload the latest saved version — your answers on this page are still here.');
-        });
-      }
-      function fmSave(patch, force) {
+      function fmSave(patchBuilder, force) {
+        // patchBuilder is a function returning a fresh patch: the patch
+        // must be built at EXECUTION time (and rebuilt on a conflict
+        // retry), never frozen at queue time.
         if (!fullMockServer.attemptId || fullMockServer.offline) return;
         var attemptId = fullMockServer.attemptId;
-        var versionAtQueue = fullMockServer.version;
         queueAttemptSave(function () {
-          return attemptApi({ action: 'save', attemptId: attemptId, expectedVersion: versionAtQueue, patch: patch })
+          return attemptApi({ action: 'save', attemptId: attemptId, expectedVersion: fullMockServer.version, patch: patchBuilder() })
             .then(function (data) { fmSyncServerVersion(data); fmCacheSave(); })
             .catch(function (err) {
-              if (err && err.status === 409) { fmReloadFromServer(); return; }
+              if (err && err.status === 409) {
+                return resolveSaveConflict(attemptId, 'fullmock', function (freshVersion) {
+                  return attemptApi({ action: 'save', attemptId: attemptId, expectedVersion: freshVersion, patch: patchBuilder() })
+                    .then(function (data) { fmSyncServerVersion(data); fmCacheSave(); });
+                });
+              }
               throw err;
             });
         }, force);
@@ -4100,38 +4238,77 @@
         return { skills: { reading: { status: done ? 'done' : 'in-progress', answers: answers, currentQuestion: answers.length } } };
       }
       function fmWritingPatch(done) {
-        var patch = { skills: { writing: { status: done ? 'done' : 'in-progress', task2: { promptId: fullMock.writingPromptId || undefined, text: fullMock.writingText || '' } } } };
+        // Phase 6E fix: Full Mock Writing is Task 1 AND Task 2 (it was
+        // Task 2 only). currentQuestion marks the sub-stage (0 = Task 1,
+        // 1 = Task 2) so a refresh returns to the right task.
+        var patch = { skills: { writing: { status: done ? 'done' : 'in-progress', currentQuestion: fullMock.writingSubStage === 'task2' ? 1 : 0, task1: { promptId: fullMock.writingTask1PromptId || undefined, text: fullMock.writingTask1Text || '' }, task2: { promptId: fullMock.writingPromptId || undefined, text: fullMock.writingText || '' } } } };
         if (done && fullMock.writingBand != null) patch.skills.writing.evaluation = { band: fullMock.writingBand, feedback: fullMock.writingFeedback || '' };
         return patch;
       }
+      function fmCombinedSpeakingTranscript() {
+        var t = fullMock.speakingTranscripts || {};
+        var parts = [];
+        if (t[1]) parts.push('Part 1:\n' + t[1]);
+        if (t[2]) parts.push('Part 2:\n' + t[2]);
+        if (t[3]) parts.push('Part 3:\n' + t[3]);
+        return parts.join('\n\n');
+      }
       function fmSpeakingPatch() {
-        return { skills: { speaking: { status: 'in-progress', part: 2, currentQuestion: 0, transcript: fullMock.speakingText || '' } } };
+        // Phase 6E fix: Speaking is Part 1 + Part 2 + Part 3 (it was
+        // Part 2 only). completedParts records only parts the student
+        // actually finished; an incomplete part never counts complete.
+        return { skills: { speaking: { status: 'in-progress', part: fullMock.speakingPart || 1, currentQuestion: fullMock.speakingQuestionIndex || 0, transcript: fmCombinedSpeakingTranscript(), transcripts: { 1: (fullMock.speakingTranscripts || {})[1] || '', 2: (fullMock.speakingTranscripts || {})[2] || '', 3: (fullMock.speakingTranscripts || {})[3] || '' }, completedParts: (fullMock.speakingCompletedParts || []).slice() } } };
       }
       function fmStartSkill(skill) {
         if (!fullMockServer.attemptId || fullMockServer.offline) return Promise.resolve(null);
-        return attemptApi({ action: 'start-skill', attemptId: fullMockServer.attemptId, expectedVersion: fullMockServer.version, skill: skill })
-          .then(function (data) { fmSyncServerVersion(data); return data.attempt; })
-          .catch(function (err) {
-            if (err && err.status === 409) fmReloadFromServer();
-            else console.error('Full Mock start-skill failed:', err);
-            return null;
-          });
+        function doStart(expectedVersion) {
+          return attemptApi({ action: 'start-skill', attemptId: fullMockServer.attemptId, expectedVersion: expectedVersion, skill: skill })
+            .then(function (data) { fmSyncServerVersion(data); return data.attempt; });
+        }
+        // A 409 here is NOT reloaded blindly (the old code reloaded the
+        // whole UI, which reverted the stage): adopt the fresh version,
+        // reuse the deadline if one is already set, else retry once.
+        return doStart(fullMockServer.version).catch(function (err) {
+          if (!err || err.status !== 409) { console.error('Full Mock start-skill failed:', err); return null; }
+          return getAttempt(fullMockServer.attemptId).then(function (attempt) {
+            fmSyncServerVersion({ attempt: attempt });
+            if (attempt.deadlines && attempt.deadlines[skill]) return attempt;
+            return doStart(attempt.version).catch(function () { return null; });
+          }).catch(function () { return null; });
+        });
       }
       function resumeFullMockFromAttempt(attempt) {
         fullMock = {
           stage: fmStageFromAttempt(attempt), listening: 0, reading: 0, readingAnswers: {},
           mockMode: attempt.mode, writingBand: null, speakingBand: null, speakingText: '',
-          attemptId: attempt.attemptId, writingText: '', writingPromptId: null
+          attemptId: attempt.attemptId, writingText: '', writingPromptId: null,
+          writingSubStage: 'task1', writingTask1Text: '', writingTask1PromptId: null,
+          speakingPart: 1, speakingQuestionIndex: 0, speakingTranscripts: { 1: '', 2: '', 3: '' }, speakingCompletedParts: []
         };
         fullMockServer = { attemptId: attempt.attemptId, version: attempt.version, offline: false };
         noteServerNow(attempt.serverNow);
         fullMock._savedListening = (attempt.skills.listening && attempt.skills.listening.answers) || [];
         fullMock._savedReading = (attempt.skills.reading && attempt.skills.reading.answers) || [];
-        fullMock.writingText = (attempt.skills.writing && attempt.skills.writing.task2 && attempt.skills.writing.task2.text) || '';
-        fullMock.writingPromptId = (attempt.skills.writing && attempt.skills.writing.task2 && attempt.skills.writing.task2.promptId) || null;
+        var wState = (attempt.skills.writing) || {};
+        fullMock.writingSubStage = (wState.currentQuestion === 1) ? 'task2' : 'task1';
+        fullMock.writingTask1Text = (wState.task1 && wState.task1.text) || '';
+        fullMock.writingTask1PromptId = (wState.task1 && wState.task1.promptId) || null;
+        fullMock.writingText = (wState.task2 && wState.task2.text) || '';
+        fullMock.writingPromptId = (wState.task2 && wState.task2.promptId) || null;
         var ev = attempt.skills.writing && attempt.skills.writing.evaluation;
         if (ev && typeof ev.band === 'number') { fullMock.writingBand = ev.band; fullMock.writingFeedback = ev.feedback || ''; }
-        fullMock.speakingText = (attempt.skills.speaking && attempt.skills.speaking.transcript) || '';
+        var sState = (attempt.skills.speaking) || {};
+        fullMock.speakingPart = (sState.part >= 1 && sState.part <= 3) ? sState.part : 1;
+        fullMock.speakingQuestionIndex = (typeof sState.currentQuestion === 'number' && sState.currentQuestion >= 0) ? sState.currentQuestion : 0;
+        // Legacy attempts (Part 2 only) stored a single transcript: it
+        // belongs to Part 2. New attempts store per-part transcripts.
+        if (sState.transcripts) {
+          fullMock.speakingTranscripts = { 1: sState.transcripts[1] || '', 2: sState.transcripts[2] || '', 3: sState.transcripts[3] || '' };
+        } else if (sState.transcript) {
+          fullMock.speakingTranscripts = { 1: '', 2: sState.transcript, 3: '' };
+        }
+        fullMock.speakingText = fmCombinedSpeakingTranscript();
+        fullMock.speakingCompletedParts = Array.isArray(sState.completedParts) ? sState.completedParts.slice() : [];
         fullMock._writingDeadline = (attempt.deadlines && attempt.deadlines.writing) || 0;
         showExamView('examFullMock');
         renderFullMockStage();
@@ -4142,9 +4319,10 @@
         if (cached && cached.attemptId) {
           getAttempt(cached.attemptId).then(function (attempt) {
             if (attempt.submitted) { fmCacheClear(); startFullMock(); return; }
-            if (window.confirm('You have an unfinished Full Mock (Stage ' + (fmStageFromAttempt(attempt) + 1) + ' of 4). Resume it? OK = Resume, Cancel = Start fresh.')) {
-              resumeFullMockFromAttempt(attempt);
-            } else { fmCacheClear(); startFullMock(); }
+            askResumePrompt('Unfinished Full Mock', 'You have an unfinished Full Mock (Stage ' + (fmStageFromAttempt(attempt) + 1) + ' of 4). Resume it or start fresh?').then(function (resume) {
+              if (resume) resumeFullMockFromAttempt(attempt);
+              else { fmCacheClear(); startFullMock(); }
+            });
           }).catch(function () { startFullMock(); });
         } else startFullMock();
       }
@@ -4153,7 +4331,7 @@
       var fullMock = { stage: 0, listening: 0, reading: 0, readingAnswers: {}, mockMode: 'academic', writingBand: null, speakingBand: null, speakingText: '' };
       function startFullMock() {
         // Snapshot the mode so a mid-mock mode change cannot mix formats.
-        fullMock = { stage: 0, listening: 0, reading: 0, readingAnswers: {}, mockMode: examMode, writingBand: null, speakingBand: null, speakingText: '', attemptId: P4.newAttemptId(), writingText: '', writingPromptId: null };
+        fullMock = { stage: 0, listening: 0, reading: 0, readingAnswers: {}, mockMode: examMode, writingBand: null, speakingBand: null, speakingText: '', attemptId: P4.newAttemptId(), writingText: '', writingPromptId: null, writingSubStage: 'task1', writingTask1Text: '', writingTask1PromptId: null, speakingPart: 1, speakingQuestionIndex: 0, speakingTranscripts: { 1: '', 2: '', 3: '' }, speakingCompletedParts: [] };
         fullMockServer = { attemptId: null, version: 0, offline: false };
         showExamView('examFullMock');
         // Phase 6E: create the server attempt (best-effort). On failure
@@ -4161,7 +4339,7 @@
         // will NOT survive a refresh.
         var essay = fullMockEssayPrompt();
         var contentRefs = essay.contentId ? { writing: { task2: { id: essay.contentId } } } : undefined;
-        attemptApi({ action: 'create', kind: 'full-mock', mode: examMode, testIds: { reading: 'reading-' + examMode + '-1', listening: 'listening-set1' }, durations: { reading: 60, listening: 30, writing: 40, speaking: 15 }, contentRefs: contentRefs })
+        attemptApi({ action: 'create', kind: 'full-mock', mode: examMode, testIds: { reading: 'reading-' + examMode + '-1', listening: 'listening-set1' }, durations: { reading: 60, listening: 30, writing: 60, speaking: 15 }, contentRefs: contentRefs })
           .then(function (data) {
             fullMockServer.attemptId = data.attempt.attemptId;
             fullMockServer.version = data.attempt.version;
@@ -4175,6 +4353,309 @@
             showToast('Server save unavailable — this Full Mock will NOT be saved across refresh. Your answers stay on this page.');
             renderFullMockStage();
           });
+      }
+      // ---- Phase 6E fix: Full Mock Writing Task 1 prompt ----
+      // Academic: first available backend Task 1 item (chart/table/map/
+      // process); General: first backend letter. Falls back to
+      // self-contained hardcoded prompts (no chart image needed).
+      function fullMockTask1Prompt() {
+        if (fullMock.mockMode === 'general') {
+          var l1 = writingContentByTask('task1-letter-1');
+          if (l1) return { title: l1.title, text: l1.prompt + (l1.guidance ? '\n' + l1.guidance : ''), contentId: l1.id };
+          return { title: 'A noisy neighbour', text: 'You have a problem with a neighbour who plays loud music late at night. Write a letter to the neighbour. In your letter: describe the problem, explain how it affects you, suggest what the neighbour should do.', contentId: null };
+        }
+        var item = writingContentByTask('task1-chart') || writingContentByTask('task1-table') || writingContentByTask('task1-map') || writingContentByTask('task1-process');
+        if (item) return { title: item.title, text: item.prompt + (item.guidance ? '\n' + item.guidance : ''), contentId: item.id };
+        return { title: 'Teenage time use', text: 'The table below shows how many hours per week teenagers in three countries spent on study, sport and screen time in 2023. Country A: study 22, sport 5, screen 18. Country B: study 26, sport 3, screen 14. Country C: study 19, sport 7, screen 21. Summarise the information by selecting and reporting the main features, and make comparisons where relevant.', contentId: null };
+      }
+      function attachFmWritingTimer() {
+        var tEl = document.getElementById('fmWritingTimer');
+        if (!tEl) return;
+        if (fullMock._writingDeadline) examCountdownUntil(tEl, fullMock._writingDeadline);
+        else if (!fullMockServer.attemptId || fullMockServer.offline) examCountdown(tEl, 60 * 60);
+      }
+      function renderFmWritingTask1() {
+        var body = document.getElementById('fullMockBody');
+        var t1 = fullMockTask1Prompt();
+        fullMock.writingTask1PromptId = t1.contentId;
+        body.innerHTML = '<div class="exam-part">Task 1 · ' + (fullMock.mockMode === 'general' ? 'Letter' : 'Chart / Table / Map / Process') + ' · at least 150 words</div>' +
+          '<p style="margin:10px 0">' + escapeHtml(t1.text) + '</p>' +
+          '<textarea class="exam-textarea" id="fmWritingTask1" placeholder="Write at least 150 words…"></textarea>' +
+          '<div class="exam-wordcount" id="fmWritingTask1Count">0 words</div>' +
+          '<div style="margin-top:8px">Time left (Writing): <span class="exam-timer" id="fmWritingTimer">60:00</span></div>' +
+          '<div class="exam-actions"><button class="exam-primary" id="fmWriteTask1NextBtn" type="button">Next → Task 2</button></div>';
+        attachFmWritingTimer();
+        var el = document.getElementById('fmWritingTask1');
+        if (fullMock.writingTask1Text) {
+          el.value = fullMock.writingTask1Text;
+          document.getElementById('fmWritingTask1Count').textContent = countWords(fullMock.writingTask1Text) + ' words';
+        }
+        el.addEventListener('input', function () {
+          document.getElementById('fmWritingTask1Count').textContent = countWords(this.value) + ' words';
+          fullMock.writingTask1Text = this.value;
+          fmSave(function () { return fmWritingPatch(false); }, false);
+        });
+        document.getElementById('fmWriteTask1NextBtn').addEventListener('click', function () {
+          var text = document.getElementById('fmWritingTask1').value.trim();
+          if (countWords(text) < 20) { showToast('অন্তত কিছু লিখুন, তারপর Next চাপুন।'); return; }
+          fullMock.writingTask1Text = text;
+          fullMock.writingSubStage = 'task2';
+          fmSave(function () { return fmWritingPatch(false); }, true);
+          renderFmWritingTask2();
+        });
+      }
+      function renderFmWritingTask2() {
+        var body = document.getElementById('fullMockBody');
+        var fmEssay = fullMockEssayPrompt();
+        fullMock.writingPromptId = fmEssay.contentId;
+        body.innerHTML = '<div class="exam-part">Task 2 · Essay · at least 250 words</div>' +
+          '<p style="margin:10px 0">' + escapeHtml(fmEssay.text) + '</p>' +
+          '<textarea class="exam-textarea" id="fmWriting" placeholder="Write at least 250 words…"></textarea>' +
+          '<div class="exam-wordcount" id="fmWritingCount">0 words</div>' +
+          '<div style="margin-top:8px">Time left (Writing): <span class="exam-timer" id="fmWritingTimer">60:00</span></div>' +
+          '<div class="exam-actions"><button class="exam-secondary" id="fmWriteBackBtn" type="button">← Back to Task 1</button> <button class="exam-primary" id="fmWriteNextBtn" type="button">Submit writing → Speaking</button></div>';
+        attachFmWritingTimer();
+        var fmWritingEl = document.getElementById('fmWriting');
+        if (fullMock.writingText) {
+          fmWritingEl.value = fullMock.writingText;
+          document.getElementById('fmWritingCount').textContent = countWords(fullMock.writingText) + ' words';
+        }
+        fmWritingEl.addEventListener('input', function () {
+          document.getElementById('fmWritingCount').textContent = countWords(this.value) + ' words';
+          fullMock.writingText = this.value;
+          fmSave(function () { return fmWritingPatch(false); }, false);
+        });
+        document.getElementById('fmWriteBackBtn').addEventListener('click', function () {
+          fullMock.writingText = document.getElementById('fmWriting').value;
+          fullMock.writingSubStage = 'task1';
+          fmSave(function () { return fmWritingPatch(false); }, true);
+          renderFmWritingTask1();
+        });
+        document.getElementById('fmWriteNextBtn').addEventListener('click', async function () {
+          var essay = document.getElementById('fmWriting').value.trim();
+          if (countWords(essay) < 20) { showToast('অন্তত কিছু লিখুন, তারপর Submit চাপুন।'); return; }
+          this.disabled = true; this.textContent = 'Checking…';
+          stopExamTimers();
+          try {
+            // One AI call assesses BOTH tasks (Task 1 + Task 2) and
+            // returns a single overall Writing band — same AI cost as
+            // the old Task 2-only evaluation.
+            var t1Text = (fullMock.writingTask1Text || '').trim();
+            var aiPrompt = t1Text
+              ? 'You are an IELTS Writing examiner. Assess the TWO tasks below (Task 1: task achievement, coherence, vocabulary, grammar; Task 2: task achievement, coherence, vocabulary, grammar). Return ONLY valid JSON with exactly: band (number 1-9, overall for both tasks), feedback (short English string covering both tasks).'
+              : 'You are an IELTS Writing examiner. Assess the Task 2 essay below (task achievement, coherence, vocabulary, grammar). Return ONLY valid JSON with exactly: band (number 1-9), feedback (short English string).';
+            var aiUser = t1Text
+              ? 'TASK 1 PROMPT:\n' + fullMockTask1Prompt().text + '\n\nTASK 1 ANSWER:\n' + t1Text + '\n\nTASK 2 ESSAY PROMPT:\n' + fmEssay.text + '\n\nTASK 2 ESSAY:\n' + essay
+              : 'TASK 2 ESSAY PROMPT:\n' + fmEssay.text + '\n\nYOUR ESSAY:\n' + essay;
+            var data = await requestAI(aiPrompt, aiUser);
+            fullMock.writingBand = Number(data.band) || null;
+            fullMock.writingFeedback = data.feedback || '';
+            fullMock.writingText = essay;
+            fmSave(function () { return fmWritingPatch(true); }, true);
+            fullMock.stage = 3;
+            renderFullMockStage();
+          } catch (error) {
+            console.error('Full Mock Writing evaluation failed:', error);
+            showToast('AI examiner error: ' + (error && error.message ? error.message : 'connection failed') + ' — আবার চেষ্টা করুন।');
+            this.disabled = false; this.textContent = 'Submit writing → Speaking';
+          }
+        });
+      }
+      // ---- Phase 6E fix: Full Mock Speaking Part 1 + Part 2 + Part 3 ----
+      function fmSpeakingQuestions(part) {
+        return (MOCK_QUESTION_SETS[mockSetIndex] || []).filter(function (q) { return q.part === part; });
+      }
+      function fmMarkSpeakingPartComplete(part) {
+        if (!fullMock.speakingCompletedParts) fullMock.speakingCompletedParts = [];
+        if (fullMock.speakingCompletedParts.indexOf(part) === -1) fullMock.speakingCompletedParts.push(part);
+      }
+      function renderFmSpeaking() {
+        stopExamTimers();
+        var body = document.getElementById('fullMockBody');
+        var label = document.getElementById('fullMockStageLabel');
+        var part = fullMock.speakingPart || 1;
+        var qs = fmSpeakingQuestions(part);
+        var qi = Math.min(fullMock.speakingQuestionIndex || 0, Math.max(0, qs.length - 1));
+        fullMock.speakingQuestionIndex = qi;
+        var q = qs[qi] || null;
+        label.textContent = 'Stage 4 of 4 · Speaking (Part ' + part + ' of 3)';
+        var statusHtml = [1, 2, 3].map(function (p) {
+          var done = (fullMock.speakingCompletedParts || []).indexOf(p) !== -1;
+          return '<span style="margin-right:10px">Part ' + p + ': ' + (done ? '✅ Done' : (p === part ? '⏳ Current' : '○ Not done')) + '</span>';
+        }).join('');
+        var qHtml;
+        if (part === 2) {
+          qHtml = '<div class="exam-result-box"><h3>' + escapeHtml(q ? q.text : 'Describe a place you like to visit.') + '</h3><p>' + escapeHtml(q ? (q.hint || '') : 'You should say: where it is, who you go with, what you do there, and explain why you like it.') + '</p></div>' +
+            '<p class="bn">প্রস্তুতি: <span class="exam-timer" id="fmPrepTimer">60</span> সেকেন্ড &nbsp;·&nbsp; কথা বলা: <span class="exam-timer" id="fmTalkTimer">120</span> সেকেন্ড</p>';
+        } else {
+          qHtml = '<div class="exam-result-box"><h3>' + escapeHtml(q ? q.text : '') + '</h3><p>' + escapeHtml(q ? (q.hint || '') : '') + '</p></div>' +
+            '<p class="bn">Question ' + (qi + 1) + ' of ' + qs.length + ' · সংক্ষেপে উত্তর দিন।</p>';
+        }
+        var saved = ((fullMock.speakingTranscripts || {})[part]) || '';
+        body.innerHTML = '<div class="exam-part">Part ' + part + (part === 2 ? ' · Cue card · 1 min prep + 2 min talk' : (part === 1 ? ' · Introduction & interview' : ' · Discussion')) + '</div>' +
+          '<p>' + statusHtml + '</p>' +
+          qHtml +
+          '<div class="exam-actions"><button class="exam-secondary" id="fmMicBtn" type="button">🎤 Start speaking</button></div>' +
+          '<p class="exam-meta" id="fmSpeakNote" style="margin-top:8px">মাইকে চাপ দিয়ে উত্তর বলুন। মাইক refresh-এর পর আবার চাপতে হবে — চলমান recording refresh-এ ফেরে না।</p>' +
+          (saved ? '<div class="exam-result-box"><h3>Saved transcript (Part ' + part + ')</h3><p>' + escapeHtml(saved.slice(0, 500)) + '</p></div>' : '') +
+          '<div class="exam-actions">' +
+            (qi < qs.length - 1 ? '<button class="exam-primary" id="fmSpeakNextQBtn" type="button">Next question →</button> ' : '') +
+            (part < 3 ? '<button class="exam-primary" id="fmSpeakNextPartBtn" type="button">Next → Part ' + (part + 1) + '</button> ' : '') +
+            '<button class="exam-primary" id="fmFinishBtn" type="button">Finish mock → See result</button></div>';
+        if (part === 2) {
+          var prepLeft = 60;
+          var prepTimer = setInterval(function () {
+            if (prepLeft <= 0) { clearInterval(prepTimer); return; }
+            prepLeft -= 1;
+            var el = document.getElementById('fmPrepTimer');
+            if (el) el.textContent = prepLeft;
+          }, 1000);
+          examTimers.push(prepTimer);
+        }
+        document.getElementById('fmMicBtn').addEventListener('click', function () {
+          var btn = this;
+          btn.disabled = true; btn.textContent = '🎤 Listening… (speak now)';
+          document.getElementById('fmSpeakNote').textContent = 'শুনছি… শেষ হলে mic বন্ধ হবে।';
+          if (part === 2) {
+            var talkLeft = 120;
+            var talkTimer = setInterval(function () {
+              if (talkLeft <= 0) { clearInterval(talkTimer); return; }
+              talkLeft -= 1;
+              var el = document.getElementById('fmTalkTimer');
+              if (el) el.textContent = talkLeft;
+            }, 1000);
+            examTimers.push(talkTimer);
+          }
+          if (recognition && !isListening) {
+            var savedOnEnd = recognition.onend;
+            recognition.onend = function () {
+              var captured = (input.value || '').trim();
+              if (captured) {
+                if (!fullMock.speakingTranscripts) fullMock.speakingTranscripts = { 1: '', 2: '', 3: '' };
+                var prev = fullMock.speakingTranscripts[part] || '';
+                fullMock.speakingTranscripts[part] = prev ? prev + ' ' + captured : captured;
+                fullMock.speakingText = fmCombinedSpeakingTranscript();
+                fmSave(function () { return fmSpeakingPatch(); }, false);
+              }
+              document.getElementById('fmSpeakNote').textContent = captured ? 'আপনার উত্তর নেওয়া হয়েছে: ' + captured.slice(0, 120) : 'কথা শোনা যায়নি—আবার চেষ্টা করুন।';
+              recognition.onend = savedOnEnd;
+              resetVoiceInputUi();
+            };
+            try { recognition.start(); } catch (e) {}
+          } else {
+            document.getElementById('fmSpeakNote').textContent = 'এই ব্রাউজারে voice input নেই — নিচে Finish চাপুন।';
+          }
+        });
+        var nextQBtn = document.getElementById('fmSpeakNextQBtn');
+        if (nextQBtn) nextQBtn.addEventListener('click', function () {
+          fullMock.speakingQuestionIndex = (fullMock.speakingQuestionIndex || 0) + 1;
+          fmSave(function () { return fmSpeakingPatch(); }, true);
+          renderFmSpeaking();
+        });
+        var nextPartBtn = document.getElementById('fmSpeakNextPartBtn');
+        if (nextPartBtn) nextPartBtn.addEventListener('click', function () {
+          // Advancing past a part marks it finished (answered or
+          // deliberately moved on). Parts never reached stay Not done
+          // and are never counted complete.
+          fmMarkSpeakingPartComplete(part);
+          fullMock.speakingPart = part + 1;
+          fullMock.speakingQuestionIndex = 0;
+          fmSave(function () { return fmSpeakingPatch(); }, true);
+          renderFmSpeaking();
+        });
+        document.getElementById('fmFinishBtn').addEventListener('click', function () { fmFinishMock(this); });
+      }
+      function fmFinishMock(btn) {
+        stopListeningAudio();
+        stopExamTimers();
+        btn.disabled = true; btn.textContent = 'Preparing result…';
+        (async function () {
+          try {
+            var spoken = fmCombinedSpeakingTranscript();
+            var sBand = null, sFeedback = '';
+            if (spoken) {
+              var sData = await requestAI(
+                'You are an IELTS Speaking examiner. Assess the Part 1 + Part 2 + Part 3 spoken answers below (fluency, vocabulary, grammar, pronunciation cannot be judged from text — judge the other three). Return ONLY valid JSON with exactly: band (number 1-9), feedback (short English string).',
+                'PART 1 + PART 2 + PART 3 ANSWERS (transcribed):\n' + spoken
+              );
+              sBand = Number(sData.band) || null;
+              sFeedback = sData.feedback || '';
+            }
+            fullMock.speakingBand = sBand;
+            // Phase 6E: final submission to the server attempt. The
+            // server re-reads the VERIFIED /api/submit stage results
+            // (never client-claimed scores); Writing/Speaking AI
+            // evaluations are stored labeled as client-reported.
+            // A repeat submit returns the original result (409 path).
+            var serverResult = null;
+            if (fullMockServer.attemptId && !fullMockServer.offline) {
+              try {
+                // Drain pending autosaves first so the submit carries a
+                // fresh version instead of racing an in-flight save.
+                await drainAttemptSaveQueue();
+                var sub = await attemptApi({ action: 'submit', attemptId: fullMockServer.attemptId, expectedVersion: fullMockServer.version, stageResults: { listening: { testId: 'listening-set1', context: 'mock' }, reading: { testId: 'reading-' + fullMock.mockMode + '-1', context: 'mock' } }, aiResults: { writing: { band: fullMock.writingBand, feedback: fullMock.writingFeedback || '' }, speaking: sBand != null ? { band: sBand, feedback: sFeedback, transcript: spoken } : null } });
+                serverResult = sub.attempt.result;
+                fmSyncServerVersion(sub);
+              } catch (submitErr) {
+                if (submitErr && submitErr.status === 409) {
+                  var att = await getAttempt(fullMockServer.attemptId);
+                  if (att.result) {
+                    serverResult = att.result;
+                    fmSyncServerVersion({ attempt: att });
+                    showToast('Already submitted — showing your saved result.');
+                  } else {
+                    // 409 was a version race, not an existing submission:
+                    // retry once with the fresh version.
+                    fmSyncServerVersion({ attempt: att });
+                    try {
+                      var sub2 = await attemptApi({ action: 'submit', attemptId: fullMockServer.attemptId, expectedVersion: att.version, stageResults: { listening: { testId: 'listening-set1', context: 'mock' }, reading: { testId: 'reading-' + fullMock.mockMode + '-1', context: 'mock' } }, aiResults: { writing: { band: fullMock.writingBand, feedback: fullMock.writingFeedback || '' }, speaking: sBand != null ? { band: sBand, feedback: sFeedback, transcript: spoken } : null } });
+                      serverResult = sub2.attempt.result;
+                      fmSyncServerVersion(sub2);
+                    } catch (e2) {
+                      console.error('Full Mock server submit retry failed:', e2);
+                      showToast('Server save failed — showing your result from this page. Press Finish again to retry the server save.');
+                    }
+                  }
+                } else {
+                  console.error('Full Mock server submit failed:', submitErr);
+                  showToast('Server save failed — showing your result from this page. Press Finish again to retry the server save.');
+                }
+              }
+            }
+            var ps = serverResult ? serverResult.perSkill : {};
+            var listenScore = (ps.listening && ps.listening.score != null) ? ps.listening.score : fullMock.listening;
+            var readScore = (ps.reading && ps.reading.score != null) ? ps.reading.score : fullMock.reading;
+            var wBand = (ps.writing && ps.writing.band != null) ? ps.writing.band : fullMock.writingBand;
+            var wFeedback = (ps.writing && ps.writing.feedback) ? ps.writing.feedback : (fullMock.writingFeedback || '');
+            var spBand = (ps.speaking && ps.speaking.band != null) ? ps.speaking.band : sBand;
+            var spFeedback = (ps.speaking && ps.speaking.feedback) ? ps.speaking.feedback : sFeedback;
+            // Phase 6E honesty: surface late submission instead of hiding it.
+            var lateSkills = serverResult ? Object.keys(serverResult.overTime || {}).filter(function (k) { return serverResult.overTime[k]; }) : [];
+            // NO Overall Band: Listening (3Q) and Reading (10Q) are
+            // short-form and cannot yield a band by any reliable method;
+            // Writing/Speaking are AI estimates. An overall band is shown
+            // only when every section has an appropriately determined
+            // score — not the case for this compact mock. Each section is
+            // reported separately with its own state: Completed or, for
+            // Speaking with no captured speech, Not evaluated.
+            var readPct = Math.round(readScore / 10 * 100);
+            var detail = '<div class="exam-result-box"><h3>About this result</h3><p class="exam-disclaimer">No overall band is shown: Listening (3 questions) and Reading (10 questions) are short-form — raw scores only. Writing and Speaking are AI estimates. This is NOT an official IELTS score.</p></div>' +
+              '<div class="exam-result-box"><h3>Listening — Completed</h3><p>Raw score: <strong>' + listenScore + ' / 3 correct</strong> (no band for short-form).</p></div>' +
+              '<div class="exam-result-box"><h3>Reading — Completed</h3><p>Raw score: <strong>' + readScore + ' / 10 correct · ' + readPct + '%</strong> (no band for short-form).</p></div>' +
+              '<div class="exam-result-box"><h3>Writing — ' + (wBand != null ? 'Completed' : 'Not evaluated') + '</h3><p>' + (wBand != null ? 'Band <strong>' + wBand + ' (est.)</strong>' + (wFeedback ? ' — ' + escapeHtml(wFeedback) : '') : 'Score unavailable — AI evaluation did not return a score.') + '</p></div>' +
+              '<div class="exam-result-box"><h3>Speaking — ' + (spBand != null ? 'Completed' : 'Not evaluated') + '</h3><p>' + (spBand != null ? 'Band <strong>' + spBand + ' (est.)</strong>' + (spFeedback ? ' — ' + escapeHtml(spFeedback) : '') : 'No speech was captured — score unavailable.') + '</p></div>';
+            if (lateSkills.length) detail = '<div class="exam-result-box"><h3>Time note</h3><p>These sections were submitted after the section time expired: ' + escapeHtml(lateSkills.join(', ')) + '. The scores above are still the scores your answers earned.</p></div>' + detail;
+            showExamResult('Full Mock Result', '—', 'All 4 skills · No overall band (see sections)', detail, 'Overall band');
+            // Phase 6E: record the result locally (history + duplicate
+            // protection) and clear the resume pointer.
+            P4.recordSubmission(fullMock.attemptId, { title: 'Full Mock Result', headline: '—', sub: 'All 4 skills · No overall band (see sections)', detail: detail, label: 'Overall band' }, { attemptId: fullMock.attemptId, test: 'Full Mock', mode: examModeLabel(), set: null, score: 'Listening ' + listenScore + '/3 · Reading ' + readScore + '/10', pct: null, band: null, at: Date.now() });
+            fmCacheClear();
+          } catch (error) {
+            console.error('Full Mock result failed:', error);
+            showToast('Result error: ' + (error && error.message ? error.message : 'could not prepare result') + ' — আবার চেষ্টা করুন।');
+            btn.disabled = false; btn.textContent = 'Finish mock → See result';
+          }
+        })();
       }
       function renderFullMockStage() {
         var body = document.getElementById('fullMockBody');
@@ -4219,7 +4700,7 @@
                 var radio = document.createElement('input');
                 radio.type = 'radio'; radio.name = 'fm-q' + qi; radio.value = oi;
                 if (fullMock['fm' + qi] === oi) radio.checked = true;
-                radio.addEventListener('change', function () { fullMock['fm' + qi] = oi; fmSave(fmListeningPatch(false), false); });
+                radio.addEventListener('change', function () { fullMock['fm' + qi] = oi; fmSave(function () { return fmListeningPatch(false); }, false); });
                 var span = document.createElement('span');
                 span.textContent = opt;
                 lab.appendChild(radio); lab.appendChild(span); opts.appendChild(lab);
@@ -4243,7 +4724,7 @@
               submitAnswers(buildSubmitPayload(fullMock.attemptId, test, fullMock.mockMode, 'mock', stageIndexes, answersByIndex))
                 .then(function (result) {
                   fullMock.listening = result.score;
-                  fmSave(fmListeningPatch(true), true);
+                  fmSave(function () { return fmListeningPatch(true); }, true);
                   fullMock.stage = 1;
                   renderFullMockStage();
                 })
@@ -4288,7 +4769,7 @@
                 var input = document.createElement('input');
                 input.type = 'text'; input.className = 'text-input'; input.placeholder = 'Type your answer…'; input.style.width = '100%';
                 if (fullMock.readingAnswers[qi] != null) input.value = fullMock.readingAnswers[qi];
-                input.addEventListener('input', function () { fullMock.readingAnswers[qi] = this.value; fmSave(fmReadingPatch(false), false); });
+                input.addEventListener('input', function () { fullMock.readingAnswers[qi] = this.value; fmSave(function () { return fmReadingPatch(false); }, false); });
                 qDiv.appendChild(input);
               } else {
                 var opts = document.createElement('div');
@@ -4298,7 +4779,7 @@
                   var radio = document.createElement('input');
                   radio.type = 'radio'; radio.name = 'fm-read-q' + qi; radio.value = oi;
                   if (fullMock.readingAnswers[qi] === oi) radio.checked = true;
-                  radio.addEventListener('change', function () { fullMock.readingAnswers[qi] = oi; fmSave(fmReadingPatch(false), false); });
+                  radio.addEventListener('change', function () { fullMock.readingAnswers[qi] = oi; fmSave(function () { return fmReadingPatch(false); }, false); });
                   var span = document.createElement('span'); span.textContent = opt;
                   lab.appendChild(radio); lab.appendChild(span); opts.appendChild(lab);
                 });
@@ -4312,7 +4793,7 @@
               submitAnswers(buildSubmitPayload(fullMock.attemptId, test, fullMock.mockMode, 'mock', allIndexes(test), fullMock.readingAnswers))
                 .then(function (result) {
                   fullMock.reading = result.score;
-                  fmSave(fmReadingPatch(true), true);
+                  fmSave(function () { return fmReadingPatch(true); }, true);
                   fullMock.stage = 2;
                   renderFullMockStage();
                 })
@@ -4326,188 +4807,37 @@
             document.getElementById('fmRetryBtn').addEventListener('click', function () { renderFullMockStage(); });
           });
         } else if (fullMock.stage === 2) {
-          label.textContent = 'Stage 3 of 4 · Writing (Task 2)';
-          // Phase 6E: Task 2 prompt from the backend content bank when
-          // loaded, otherwise the hardcoded prompt the mock always used.
-          var fmEssay = fullMockEssayPrompt();
-          fullMock.writingPromptId = fmEssay.contentId;
-          body.innerHTML = '<div class="exam-part">Task 2 · Essay · at least 250 words</div>' +
-            '<p style="margin:10px 0">' + escapeHtml(fmEssay.text) + '</p>' +
-            '<textarea class="exam-textarea" id="fmWriting" placeholder="Write at least 250 words…"></textarea>' +
-            '<div class="exam-wordcount" id="fmWritingCount">0 words</div>' +
-            '<div style="margin-top:8px">Time left: <span class="exam-timer" id="fmWritingTimer">40:00</span></div>' +
-            '<div class="exam-actions"><button class="exam-primary" id="fmWriteNextBtn" type="button">Submit writing → Speaking</button></div>';
-          // Phase 6E: countdown to the server-set deadline when a server
-          // attempt exists; a refresh resumes the remaining time.
+          // Phase 6E fix: Writing is Task 1 AND Task 2 (it was Task 2
+          // only). Both drafts persist; the 60-minute writing deadline
+          // is shared and server-set — switching tasks never resets it.
+          label.textContent = 'Stage 3 of 4 · Writing (Task 1 + Task 2)';
+          body.innerHTML = '<p>Loading…</p>';
           if (fullMockServer.attemptId && !fullMockServer.offline) {
             fmStartSkill('writing').then(function (attempt) {
-              var dl = (attempt && attempt.deadlines && attempt.deadlines.writing) || fullMock._writingDeadline || (Date.now() + 40 * 60 * 1000);
-              examCountdownUntil(document.getElementById('fmWritingTimer'), dl);
+              var dl = (attempt && attempt.deadlines && attempt.deadlines.writing) || fullMock._writingDeadline || 0;
+              if (dl) { fullMock._writingDeadline = dl; attachFmWritingTimer(); }
+              else {
+                var tEl = document.getElementById('fmWritingTimer');
+                if (tEl) { examCountdown(tEl, 60 * 60); showToast('Timer could not sync with the server — this mock uses a local timer and will NOT survive a refresh.'); }
+              }
             });
-          } else {
-            examCountdown(document.getElementById('fmWritingTimer'), 40 * 60);
           }
-          var fmWritingEl = document.getElementById('fmWriting');
-          if (fullMock.writingText) {
-            fmWritingEl.value = fullMock.writingText;
-            document.getElementById('fmWritingCount').textContent = countWords(fullMock.writingText) + ' words';
-          }
-          fmWritingEl.addEventListener('input', function () {
-            document.getElementById('fmWritingCount').textContent = countWords(this.value) + ' words';
-            fullMock.writingText = this.value;
-            fmSave(fmWritingPatch(false), false);
-          });
-          document.getElementById('fmWriteNextBtn').addEventListener('click', async function () {
-            var essay = document.getElementById('fmWriting').value.trim();
-            if (countWords(essay) < 20) { showToast('অন্তত কিছু লিখুন, তারপর Submit চাপুন।'); return; }
-            this.disabled = true; this.textContent = 'Checking…';
-            stopExamTimers();
-            try {
-              var data = await requestAI(
-                'You are an IELTS Writing examiner. Assess the Task 2 essay below (task achievement, coherence, vocabulary, grammar). Return ONLY valid JSON with exactly: band (number 1-9), feedback (short English string).',
-                'TASK 2 ESSAY PROMPT:\n' + fmEssay.text + '\n\nYOUR ESSAY:\n' + essay
-              );
-              fullMock.writingBand = Number(data.band) || null;
-              fullMock.writingFeedback = data.feedback || '';
-              fullMock.writingText = essay;
-              fmSave(fmWritingPatch(true), true);
-              fullMock.stage = 3;
-              renderFullMockStage();
-            } catch (error) {
-              console.error('Full Mock Writing evaluation failed:', error);
-              showToast('AI examiner error: ' + (error && error.message ? error.message : 'connection failed') + ' — আবার চেষ্টা করুন।');
-              this.disabled = false; this.textContent = 'Submit writing → Speaking';
-            }
-          });
+          if (fullMock.writingSubStage === 'task2') renderFmWritingTask2();
+          else renderFmWritingTask1();
+
         } else if (fullMock.stage === 3) {
-          label.textContent = 'Stage 4 of 4 · Speaking (Part 2)';
-          // Phase 6E: cue card from the selected Speaking set (backend
-          // content when loaded), otherwise the hardcoded cue.
-          var fmCue = (MOCK_QUESTION_SETS[mockSetIndex] && MOCK_QUESTION_SETS[mockSetIndex][3]) || null;
-          var fmCueHtml = fmCue
-            ? '<div class="exam-result-box"><h3>' + escapeHtml(fmCue.text) + '</h3><p>' + escapeHtml(fmCue.hint || '') + '</p></div>'
-            : '<div class="exam-result-box"><h3>Describe a place you like to visit.</h3><p>You should say: where it is, who you go with, what you do there, and explain why you like it.</p></div>';
-          body.innerHTML = '<div class="exam-part">Part 2 · Cue card · 1 min prep + 2 min talk</div>' +
-            fmCueHtml +
-            '<p class="bn">প্রস্তুতি: <span class="exam-timer" id="fmPrepTimer">60</span> সেকেন্ড &nbsp;·&nbsp; কথা বলা: <span class="exam-timer" id="fmTalkTimer">120</span> সেকেন্ড</p>' +
-            '<div class="exam-actions"><button class="exam-secondary" id="fmMicBtn" type="button">🎤 Start speaking</button></div>' +
-            '<p class="exam-meta" id="fmSpeakNote" style="margin-top:8px">মাইকে চাপ দিয়ে cue card নিয়ে বলুন।</p>' +
-            '<div class="exam-actions"><button class="exam-primary" id="fmFinishBtn" type="button">Finish mock → See result</button></div>';
+          // Phase 6E fix: Speaking is Part 1 + Part 2 + Part 3 in order
+          // (it was Part 2 only). Each part's transcript is saved
+          // separately; a part counts complete only when the student
+          // finishes it. The mic itself cannot survive a refresh —
+          // SpeechRecognition cannot resume a live utterance — so after
+          // a refresh the student re-taps the mic for the current part.
+          label.textContent = 'Stage 4 of 4 · Speaking (Part ' + (fullMock.speakingPart || 1) + ' of 3)';
+          body.innerHTML = '<p>Loading…</p>';
           fmStartSkill('speaking');
-          var prepLeft = 60, talkLeft = 120, prepTimer = null, talkTimer = null;
-          prepTimer = setInterval(function () {
-            if (prepLeft <= 0) { clearInterval(prepTimer); return; }
-            prepLeft -= 1;
-            document.getElementById('fmPrepTimer').textContent = prepLeft;
-          }, 1000);
-          examTimers.push(prepTimer);
-          document.getElementById('fmMicBtn').addEventListener('click', function () {
-            if (talkTimer) return;
-            this.disabled = true; this.textContent = '🎤 Listening… (speak now)';
-            document.getElementById('fmSpeakNote').textContent = 'শুনছি… শেষ হলে mic বন্ধ হবে।';
-            talkTimer = setInterval(function () {
-              if (talkLeft <= 0) { clearInterval(talkTimer); return; }
-              talkLeft -= 1;
-              document.getElementById('fmTalkTimer').textContent = talkLeft;
-            }, 1000);
-            examTimers.push(talkTimer);
-            if (recognition && !isListening) {
-              fullMock.speakingText = '';
-              // Temporarily capture the transcript for the mock. Save and
-              // restore the original onend handler so normal voice input
-              // keeps working after the mock ends.
-              var savedOnEnd = recognition.onend;
-              recognition.onend = function () {
-                fullMock.speakingText = (input.value || '').trim();
-                document.getElementById('fmSpeakNote').textContent = fullMock.speakingText ? 'আপনার উত্তর নেওয়া হয়েছে: ' + fullMock.speakingText.slice(0, 120) : 'কথা শোনা যায়নি—আবার চেষ্টা করুন।';
-                recognition.onend = savedOnEnd;
-                resetVoiceInputUi();
-                // Phase 6E: persist the transcript (a refresh after this
-                // point keeps the captured answer; the mic itself must
-                // be re-tapped after a refresh — SpeechRecognition
-                // cannot resume a live utterance).
-                fmSave(fmSpeakingPatch(), false);
-              };
-              try { recognition.start(); } catch (e) {}
-            } else {
-              document.getElementById('fmSpeakNote').textContent = 'এই ব্রাউজারে voice input নেই — নিচে Finish চাপুন।';
-            }
-          });
-          document.getElementById('fmFinishBtn').addEventListener('click', async function () {
-            stopListeningAudio();
-            stopExamTimers();
-            var btn = this;
-            btn.disabled = true; btn.textContent = 'Preparing result…';
-            try {
-              var spoken = fullMock.speakingText || '';
-              var sBand = null, sFeedback = '';
-              if (spoken) {
-                var sData = await requestAI(
-                  'You are an IELTS Speaking examiner. Assess the Part 2 spoken answer below (fluency, vocabulary, grammar, pronunciation cannot be judged from text — judge the other three). Return ONLY valid JSON with exactly: band (number 1-9), feedback (short English string).',
-                  'PART 2 ANSWER (transcribed):\n' + spoken
-                );
-                sBand = Number(sData.band) || null;
-                sFeedback = sData.feedback || '';
-              }
-              fullMock.speakingBand = sBand;
-              // Phase 6E: final submission to the server attempt. The
-              // server re-reads the VERIFIED /api/submit stage results
-              // (never client-claimed scores); Writing/Speaking AI
-              // evaluations are stored labeled as client-reported.
-              // A repeat submit returns the original result (409 path).
-              var serverResult = null;
-              if (fullMockServer.attemptId && !fullMockServer.offline) {
-                try {
-                  var sub = await attemptApi({ action: 'submit', attemptId: fullMockServer.attemptId, expectedVersion: fullMockServer.version, stageResults: { listening: { testId: 'listening-set1', context: 'mock' }, reading: { testId: 'reading-' + fullMock.mockMode + '-1', context: 'mock' } }, aiResults: { writing: { band: fullMock.writingBand, feedback: fullMock.writingFeedback || '' }, speaking: sBand != null ? { band: sBand, feedback: sFeedback, transcript: spoken } : null } });
-                  serverResult = sub.attempt.result;
-                  fmSyncServerVersion(sub);
-                } catch (submitErr) {
-                  if (submitErr && submitErr.status === 409) {
-                    var att = await getAttempt(fullMockServer.attemptId);
-                    serverResult = att.result;
-                    fmSyncServerVersion({ attempt: att });
-                    showToast('Already submitted — showing your saved result.');
-                  } else {
-                    console.error('Full Mock server submit failed:', submitErr);
-                    showToast('Server save failed — showing your result from this page. Press Finish again to retry the server save.');
-                  }
-                }
-              }
-              var ps = serverResult ? serverResult.perSkill : {};
-              var listenScore = (ps.listening && ps.listening.score != null) ? ps.listening.score : fullMock.listening;
-              var readScore = (ps.reading && ps.reading.score != null) ? ps.reading.score : fullMock.reading;
-              var wBand = (ps.writing && ps.writing.band != null) ? ps.writing.band : fullMock.writingBand;
-              var wFeedback = (ps.writing && ps.writing.feedback) ? ps.writing.feedback : (fullMock.writingFeedback || '');
-              var spBand = (ps.speaking && ps.speaking.band != null) ? ps.speaking.band : sBand;
-              var spFeedback = (ps.speaking && ps.speaking.feedback) ? ps.speaking.feedback : sFeedback;
-              // Phase 6E honesty: surface late submission instead of hiding it.
-              var lateSkills = serverResult ? Object.keys(serverResult.overTime || {}).filter(function (k) { return serverResult.overTime[k]; }) : [];
-              // NO Overall Band: Listening (3Q) and Reading (10Q) are
-              // short-form and cannot yield a band by any reliable method;
-              // Writing/Speaking are AI estimates. An overall band is shown
-              // only when every section has an appropriately determined
-              // score — not the case for this compact mock. Each section is
-              // reported separately with its own state: Completed or, for
-              // Speaking with no captured speech, Not evaluated.
-              var readPct = Math.round(readScore / 10 * 100);
-              var detail = '<div class="exam-result-box"><h3>About this result</h3><p class="exam-disclaimer">No overall band is shown: Listening (3 questions) and Reading (10 questions) are short-form — raw scores only. Writing and Speaking are AI estimates. This is NOT an official IELTS score.</p></div>' +
-                '<div class="exam-result-box"><h3>Listening — Completed</h3><p>Raw score: <strong>' + listenScore + ' / 3 correct</strong> (no band for short-form).</p></div>' +
-                '<div class="exam-result-box"><h3>Reading — Completed</h3><p>Raw score: <strong>' + readScore + ' / 10 correct · ' + readPct + '%</strong> (no band for short-form).</p></div>' +
-                '<div class="exam-result-box"><h3>Writing — ' + (wBand != null ? 'Completed' : 'Not evaluated') + '</h3><p>' + (wBand != null ? 'Band <strong>' + wBand + ' (est.)</strong>' + (wFeedback ? ' — ' + escapeHtml(wFeedback) : '') : 'Score unavailable — AI evaluation did not return a score.') + '</p></div>' +
-                '<div class="exam-result-box"><h3>Speaking — ' + (spBand != null ? 'Completed' : 'Not evaluated') + '</h3><p>' + (spBand != null ? 'Band <strong>' + spBand + ' (est.)</strong>' + (spFeedback ? ' — ' + escapeHtml(spFeedback) : '') : 'No speech was captured — score unavailable.') + '</p></div>';
-              if (lateSkills.length) detail = '<div class="exam-result-box"><h3>Time note</h3><p>These sections were submitted after the section time expired: ' + escapeHtml(lateSkills.join(', ')) + '. The scores above are still the scores your answers earned.</p></div>' + detail;
-              showExamResult('Full Mock Result', '—', 'All 4 skills · No overall band (see sections)', detail, 'Overall band');
-              // Phase 6E: record the result locally (history + duplicate
-              // protection) and clear the resume pointer.
-              P4.recordSubmission(fullMock.attemptId, { title: 'Full Mock Result', headline: '—', sub: 'All 4 skills · No overall band (see sections)', detail: detail, label: 'Overall band' }, { attemptId: fullMock.attemptId, test: 'Full Mock', mode: examModeLabel(), set: null, score: 'Listening ' + listenScore + '/3 · Reading ' + readScore + '/10', pct: null, band: null, at: Date.now() });
-              fmCacheClear();
-            } catch (error) {
-              console.error('Full Mock result failed:', error);
-              showToast('Result error: ' + (error && error.message ? error.message : 'could not prepare result') + ' — আবার চেষ্টা করুন।');
-              btn.disabled = false; btn.textContent = 'Finish mock → See result';
-            }
-          });
+          renderFmSpeaking();
         }
+
       }
 
       /* ---- Exam hub wiring ---- */
