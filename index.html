@@ -1411,6 +1411,33 @@
         </div>
         <div class="exam-meta p4-attempt"><span class="p4-attempt-text"></span> <button class="exam-secondary" type="button" data-p4-fresh="writing" style="min-height:30px;padding:0 10px">Start fresh</button></div>
         <div class="exam-meta p4-autosave"></div>
+        <div id="writingConflictBanner" hidden style="border:2px solid #b45309;background:#fffbeb;border-radius:12px;padding:12px 14px;margin:10px 0">
+          <strong>Another tab has newer saved changes. Your current text has not been saved.</strong>
+          <p style="margin:6px 0;font-size:.9rem">Your text is still in the boxes below. Choose what to do:</p>
+          <div style="display:flex;gap:8px;flex-wrap:wrap">
+            <button class="exam-primary" id="writingConflictLoadBtn" type="button" style="min-height:36px;padding:0 12px">Load Newer Version</button>
+            <button class="exam-secondary" id="writingConflictCopyBtn" type="button" style="min-height:36px;padding:0 12px">Copy My Text</button>
+            <button class="exam-secondary" id="writingConflictRecoveryBtn" type="button" style="min-height:36px;padding:0 12px">Save Recovery Copy</button>
+          </div>
+          <div id="writingConflictConfirm" hidden style="margin-top:10px">
+            <p style="margin:0 0 6px;font-size:.9rem">Discard your unsaved text and load the newer saved draft?</p>
+            <div style="display:flex;gap:8px;flex-wrap:wrap">
+              <button class="exam-primary" id="writingConflictConfirmYes" type="button" style="min-height:36px;padding:0 12px">Yes, discard my unsaved text</button>
+              <button class="exam-secondary" id="writingConflictConfirmNo" type="button" style="min-height:36px;padding:0 12px">Cancel</button>
+            </div>
+          </div>
+          <div id="writingConflictNote" style="margin-top:8px;font-size:.85rem"></div>
+        </div>
+        <div id="writingUpdateNotice" hidden style="border:1px solid #2563eb;background:#eff6ff;border-radius:12px;padding:10px 14px;margin:10px 0">
+          <span>A newer version was saved in another tab.</span>
+          <button class="exam-secondary" id="writingUpdateLoadBtn" type="button" style="min-height:30px;padding:0 10px;margin-left:8px">Load newer version</button>
+          <button class="exam-secondary" id="writingUpdateDismissBtn" type="button" style="min-height:30px;padding:0 10px;margin-left:6px">Dismiss</button>
+        </div>
+        <div id="writingRecoveryNote" hidden style="border:1px solid #15803d;background:#f0fdf4;border-radius:12px;padding:10px 14px;margin:10px 0">
+          <span>You have a saved recovery copy from an earlier conflict.</span>
+          <button class="exam-secondary" id="writingRecoveryRestoreBtn" type="button" style="min-height:30px;padding:0 10px;margin-left:8px">Insert recovery text</button>
+          <button class="exam-secondary" id="writingRecoveryDiscardBtn" type="button" style="min-height:30px;padding:0 10px;margin-left:6px">Discard recovery copy</button>
+        </div>
         <div class="exam-result-box" id="writingTask1Academic">
           <div class="exam-part">Task 1 · Academic · 20 minutes · at least 150 words</div>
           <div style="display:flex;gap:6px;flex-wrap:wrap;margin:10px 0">
@@ -3158,7 +3185,10 @@
 
       /* ================= Phase 4: Progress persistence (localStorage) ================= */
       // Single-device only: progress + history live in this browser's
-      // localStorage (~5MB limit, last-write-wins across tabs). No account,
+      // localStorage (~5MB limit). Other skills are last-write-wins
+      // across tabs; Writing drafts use revision-based conflict
+      // protection (see p4SaveWriting) so a stale tab can never
+      // silently overwrite a newer saved draft. No account,
       // no cross-device sync. Server-side per-user progress would need
       // authentication + user-scoped storage — NOT built here (see audit).
       // NOT persisted in Phase 4: Full Mock (4-skill) and Full Reading Mock
@@ -3213,7 +3243,7 @@
               ' · ' + d.toLocaleString('en-GB') + '</span></div>';
           }).join('');
         }
-        return { load: load, save: save, remove: remove, markSaved: markSaved, refreshNotes: refreshNotes, newAttemptId: newAttemptId, getSubmitted: getSubmitted, recordSubmission: recordSubmission, renderHistory: renderHistory };
+        return { load: load, save: save, remove: remove, markSaved: markSaved, refreshNotes: refreshNotes, setNote: function (t) { lastLabel = t; refreshNotes(); }, newAttemptId: newAttemptId, getSubmitted: getSubmitted, recordSubmission: recordSubmission, renderHistory: renderHistory };
       })();
       // Cross-mode draft preservation (Phase 6E fix): standalone
       // Reading/Writing progress is stored as a MAP keyed by mode
@@ -3258,13 +3288,266 @@
       function p4SaveListening() {
         P4.save('progress_listening', { attemptId: listeningAttemptId, fullMock: listeningFullMock, setIndex: listeningSetIndex, answers: listeningAnswers, partIndex: listeningPartIndex, played: listeningPlayed, updatedAt: Date.now() });
       }
+      /* ---- Phase 6E stale-overwrite fix: revision-based conflict protection for Writing drafts ----
+         A Writing save slot carries revision (monotonic per mode slot),
+         writerTabId, and updatedAt. Each tab remembers the revision it
+         last loaded/saved (writingLoadedRevision). Before any save, the
+         tab re-reads the persisted slot: if another tab saved a NEWER
+         revision of the same attempt (or replaced the slot with a
+         different attempt, e.g. Start fresh), the save is BLOCKED and
+         the conflict banner is shown — the newer saved draft is never
+         silently overwritten, and "warn but save anyway" is never done.
+         A save whose content is identical to the persisted slot is a
+         no-op (no revision bump), so opening a tab or flushing an
+         unchanged draft never makes another tab stale.
+         Web Locks (where supported) serialize the debounced autosave
+         read-check-write across tabs; the synchronous revision check
+         below still guards every other save path (open-save, prompt
+         switches, submit flush), so an unsupported browser only loses
+         the lock, never the protection. updatedAt alone is never used
+         as the guard. */
+      var WRITING_CONFLICT_MSG = 'Another tab has newer saved changes. Your current text has not been saved.';
+      var writingLoadedRevision = 0;
+      var writingConflict = null; // { revision, savedAt, attemptId } while a conflict is active
+      var writingDirty = false;
+      var writingBC = null;
+      try {
+        if (typeof BroadcastChannel !== 'undefined') {
+          writingBC = new BroadcastChannel('ieltsgo-writing-rev');
+          writingBC.onmessage = function (ev) { writingOnExternalRevision(ev && ev.data); };
+        }
+      } catch (e) { writingBC = null; }
+      function writingNotifyRevision() {
+        if (!writingBC) return;
+        try { writingBC.postMessage({ type: 'writing-revision', attemptId: writingAttemptId, mode: writingMode, revision: writingLoadedRevision, writerTabId: tabId }); } catch (e) {}
+      }
+      function writingOnExternalRevision(msg) {
+        if (!msg || msg.type !== 'writing-revision') return;
+        if (msg.attemptId !== writingAttemptId || msg.mode !== writingMode) return;
+        if (msg.writerTabId === tabId) return;
+        if (typeof msg.revision !== 'number' || msg.revision <= writingLoadedRevision) return;
+        var view = document.getElementById('examWriting');
+        if (!view || view.hidden) return;
+        if (writingConflict) return; // full conflict banner already shown
+        writingShowUpdateNotice();
+      }
+      window.addEventListener('storage', function (e) {
+        try {
+          if (!e || e.key !== 'ieltsgo_p4_progress_writing') return;
+          var map = e.newValue ? JSON.parse(e.newValue) : null;
+          var slot = map && map[writingMode];
+          if (!slot || slot.attemptId !== writingAttemptId) return;
+          var rev = (typeof slot.revision === 'number') ? slot.revision : 0;
+          if (rev <= writingLoadedRevision) return;
+          if (slot.writerTabId === tabId) return;
+          var view = document.getElementById('examWriting');
+          if (!view || view.hidden) return;
+          if (writingConflict) return;
+          writingShowUpdateNotice();
+        } catch (err) {}
+      });
+      function writingShowConflictBanner() {
+        var b = document.getElementById('writingConflictBanner');
+        if (b) b.hidden = false;
+        var n = document.getElementById('writingUpdateNotice');
+        if (n) n.hidden = true;
+        var c = document.getElementById('writingConflictConfirm');
+        if (c) c.hidden = true;
+        var note = document.getElementById('writingConflictNote');
+        if (note) note.textContent = '';
+      }
+      function writingHideConflictUI() {
+        var b = document.getElementById('writingConflictBanner');
+        if (b) b.hidden = true;
+        var c = document.getElementById('writingConflictConfirm');
+        if (c) c.hidden = true;
+        var n = document.getElementById('writingUpdateNotice');
+        if (n) n.hidden = true;
+      }
+      function writingShowUpdateNotice() {
+        if (writingConflict) return;
+        var n = document.getElementById('writingUpdateNotice');
+        if (n) n.hidden = false;
+      }
+      function writingHideRecoveryNote() {
+        var el = document.getElementById('writingRecoveryNote');
+        if (el) el.hidden = true;
+      }
+      function writingEnterConflict(persisted) {
+        var first = !writingConflict;
+        writingConflict = { revision: (persisted && typeof persisted.revision === 'number') ? persisted.revision : 0, savedAt: (persisted && persisted.updatedAt) || 0, attemptId: persisted && persisted.attemptId };
+        writingShowConflictBanner();
+        P4.setNote('Not saved — another tab has newer changes');
+        if (first) showToast(WRITING_CONFLICT_MSG);
+      }
+      function writingBuildSave(revision) {
+        return { attemptId: writingAttemptId, mode: writingMode, revision: revision, writerTabId: tabId, letterIndex: writingLetterIndex, essayIndex: writingEssayIndex, task1Type: writingTask1Type, task1: document.getElementById('writingTask1').value, task1GT: document.getElementById('writingTask1GT').value, task2: document.getElementById('writingTask2').value, task1Drafts: writingTask1Drafts, letterDrafts: writingLetterDrafts, essayDrafts: writingEssayDrafts, task1EndsAt: writingTask1EndsAt, task2EndsAt: writingTask2EndsAt, updatedAt: Date.now() };
+      }
+      function writingSaveContentEqual(a, b) {
+        if (!a || !b) return false;
+        var keys = ['letterIndex', 'essayIndex', 'task1Type', 'task1', 'task1GT', 'task2', 'task1EndsAt', 'task2EndsAt'];
+        for (var i = 0; i < keys.length; i++) { if (String(a[keys[i]] == null ? '' : a[keys[i]]) !== String(b[keys[i]] == null ? '' : b[keys[i]])) return false; }
+        var maps = [['task1Drafts', ['chart', 'table', 'map', 'process']], ['letterDrafts', ['0', '1']], ['essayDrafts', ['0', '1']]];
+        for (var j = 0; j < maps.length; j++) {
+          for (var k = 0; k < maps[j][1].length; k++) {
+            var av = (a[maps[j][0]] && a[maps[j][0]][maps[j][1][k]]) || '';
+            var bv = (b[maps[j][0]] && b[maps[j][0]][maps[j][1][k]]) || '';
+            if (String(av) !== String(bv)) return false;
+          }
+        }
+        return true;
+      }
       function p4SaveWriting() {
         syncWritingDraftMaps();
-        p4SaveModeSlot('progress_writing', writingMode, { attemptId: writingAttemptId, mode: writingMode, letterIndex: writingLetterIndex, essayIndex: writingEssayIndex, task1Type: writingTask1Type, task1: document.getElementById('writingTask1').value, task1GT: document.getElementById('writingTask1GT').value, task2: document.getElementById('writingTask2').value, task1Drafts: writingTask1Drafts, letterDrafts: writingLetterDrafts, essayDrafts: writingEssayDrafts, task1EndsAt: writingTask1EndsAt, task2EndsAt: writingTask2EndsAt, updatedAt: Date.now() });
+        var persisted = p4LoadModeSlot('progress_writing', writingMode);
+        var persistedRev = (persisted && typeof persisted.revision === 'number') ? persisted.revision : 0;
+        var candidate = writingBuildSave(persistedRev);
+        // Identical content: no write, no revision bump — just sync the
+        // loaded revision. A tab that opens or flushes an unchanged
+        // draft never makes another tab stale.
+        if (persisted && persisted.attemptId === writingAttemptId && writingSaveContentEqual(candidate, persisted)) {
+          writingLoadedRevision = persistedRev;
+          writingDirty = false;
+          if (writingConflict) { writingConflict = null; writingHideConflictUI(); }
+          return 'saved';
+        }
+        // Stale-tab guard: another tab saved a newer revision of this
+        // attempt, or replaced this slot with a different attempt,
+        // after this tab loaded it. Block the write.
+        if (persisted && (persisted.attemptId !== writingAttemptId || persistedRev > writingLoadedRevision)) {
+          writingEnterConflict(persisted);
+          return 'conflict';
+        }
+        var nextRevision = Math.max(writingLoadedRevision, (persisted && persisted.attemptId === writingAttemptId) ? persistedRev : 0) + 1;
+        candidate.revision = nextRevision;
+        p4SaveModeSlot('progress_writing', writingMode, candidate);
+        writingLoadedRevision = nextRevision;
+        writingDirty = false;
+        if (writingConflict) { writingConflict = null; writingHideConflictUI(); }
+        writingNotifyRevision();
+        return 'saved';
       }
       function p4SaveWritingSoon() {
+        writingDirty = true;
         clearTimeout(writingSaveTimer);
-        writingSaveTimer = setTimeout(p4SaveWriting, 600);
+        writingSaveTimer = setTimeout(function () {
+          if (navigator.locks && navigator.locks.request) {
+            try {
+              navigator.locks.request('ieltsgo-writing-' + writingMode, function () { p4SaveWriting(); }).catch(function () { p4SaveWriting(); });
+            } catch (e) { p4SaveWriting(); }
+          } else { p4SaveWriting(); }
+        }, 600);
+      }
+      // Conflict actions: Load Newer always confirms first (the banner
+      // text promises the current text is not discarded silently).
+      function writingRequestLoadNewer() {
+        writingShowConflictBanner();
+        var c = document.getElementById('writingConflictConfirm');
+        if (c) c.hidden = false;
+      }
+      function writingLoadNewerConfirmed() {
+        var newer = p4LoadModeSlot('progress_writing', writingMode);
+        if (!newer || !newer.attemptId) { showToast('No newer saved version found.'); return; }
+        startWritingNow(newer);
+        writingConflict = null;
+        writingDirty = false;
+        writingHideConflictUI();
+        showToast('Loaded the newer saved version.');
+        writingMaybeShowRecoveryNote();
+      }
+      function writingSnapshotTexts() {
+        syncWritingDraftMaps();
+        return { attemptId: writingAttemptId, mode: writingMode, letterIndex: writingLetterIndex, essayIndex: writingEssayIndex, task1Type: writingTask1Type, task1: document.getElementById('writingTask1').value, task1GT: document.getElementById('writingTask1GT').value, task2: document.getElementById('writingTask2').value, task1Drafts: JSON.parse(JSON.stringify(writingTask1Drafts)), letterDrafts: JSON.parse(JSON.stringify(writingLetterDrafts)), essayDrafts: JSON.parse(JSON.stringify(writingEssayDrafts)), savedAt: Date.now() };
+      }
+      function writingSaveRecoveryCopy() {
+        var snap = writingSnapshotTexts();
+        var all = P4.load('writing_recovery', {});
+        if (!all || typeof all !== 'object' || Array.isArray(all)) all = {};
+        all[snap.attemptId] = snap;
+        var keys = Object.keys(all);
+        if (keys.length > 5) {
+          keys.sort(function (a, b) { return (all[a].savedAt || 0) - (all[b].savedAt || 0); });
+          for (var i = 0; i < keys.length - 5; i++) delete all[keys[i]];
+        }
+        P4.save('writing_recovery', all);
+        var note = document.getElementById('writingConflictNote');
+        if (note) note.textContent = 'Recovery copy saved in this browser.';
+        showToast('Recovery copy saved.');
+      }
+      function writingRestoreRecoveryCopy() {
+        var all = P4.load('writing_recovery', {});
+        var snap = all && all[writingAttemptId];
+        if (!snap) return;
+        // Restore the per-prompt draft maps only; keep the current
+        // prompt selections. Refill shows the current prompt's text.
+        // The next keystroke saves through the normal revision check
+        // with an up-to-date loaded revision, so this can never
+        // overwrite a newer saved draft.
+        writingTask1Drafts = normalizeDraftMap(snap.task1Drafts, ['chart', 'table', 'map', 'process']);
+        writingLetterDrafts = normalizeDraftMap(snap.letterDrafts, ['0', '1']);
+        writingEssayDrafts = normalizeDraftMap(snap.essayDrafts, ['0', '1']);
+        refillWritingTask1();
+        refillWritingTask1GT();
+        refillWritingTask2();
+        writingDirty = true;
+        writingHideRecoveryNote();
+        showToast('Recovery text inserted. It will save on your next edit.');
+      }
+      function writingDiscardRecoveryCopy() {
+        var all = P4.load('writing_recovery', {});
+        if (all && all[writingAttemptId]) { delete all[writingAttemptId]; P4.save('writing_recovery', all); }
+        writingHideRecoveryNote();
+      }
+      function writingMaybeShowRecoveryNote() {
+        var all = P4.load('writing_recovery', {});
+        var snap = all && all[writingAttemptId];
+        var el = document.getElementById('writingRecoveryNote');
+        if (el) el.hidden = !(snap && snap.mode === writingMode);
+      }
+      function writingCopyMyText() {
+        syncWritingDraftMaps();
+        var t1 = writingMode === 'general' ? document.getElementById('writingTask1GT').value : document.getElementById('writingTask1').value;
+        var text = 'Task 1:\n' + t1 + '\n\nTask 2:\n' + document.getElementById('writingTask2').value;
+        var done = function () {
+          var note = document.getElementById('writingConflictNote');
+          if (note) note.textContent = 'Your text was copied.';
+          showToast('Your text was copied.');
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(text).then(done).catch(function () { writingCopyFallback(text); done(); });
+        } else { writingCopyFallback(text); done(); }
+      }
+      function writingCopyFallback(text) {
+        try { var ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta); } catch (e) {}
+      }
+      function writingOn(id, fn) { var el = document.getElementById(id); if (el) el.addEventListener('click', fn); }
+      writingOn('writingConflictLoadBtn', writingRequestLoadNewer);
+      writingOn('writingConflictConfirmYes', writingLoadNewerConfirmed);
+      writingOn('writingConflictConfirmNo', function () { var c = document.getElementById('writingConflictConfirm'); if (c) c.hidden = true; });
+      writingOn('writingConflictCopyBtn', writingCopyMyText);
+      writingOn('writingConflictRecoveryBtn', writingSaveRecoveryCopy);
+      writingOn('writingUpdateLoadBtn', writingRequestLoadNewer);
+      writingOn('writingUpdateDismissBtn', function () { var n = document.getElementById('writingUpdateNotice'); if (n) n.hidden = true; });
+      writingOn('writingRecoveryRestoreBtn', writingRestoreRecoveryCopy);
+      writingOn('writingRecoveryDiscardBtn', writingDiscardRecoveryCopy);
+      // Duplicate-submission race: two tabs can both pass the
+      // start-of-submit check and evaluate concurrently. Serialize the
+      // record step (Web Locks where supported) and re-check inside it
+      // — the second tab shows the FIRST tab's saved result instead of
+      // recording a duplicate.
+      function writingRecordSubmissionOnce(attemptId, result, historyEntry) {
+        var doRecord = function () {
+          if (P4.getSubmitted(attemptId)) return 'already';
+          P4.recordSubmission(attemptId, result, historyEntry);
+          var cur = p4LoadModeSlot('progress_writing', writingMode);
+          if (cur && cur.attemptId === attemptId) p4ClearModeSlot('progress_writing', writingMode);
+          return 'recorded';
+        };
+        if (navigator.locks && navigator.locks.request) {
+          try { return navigator.locks.request('ieltsgo-writing-submit-' + attemptId, doRecord).catch(function () { return doRecord(); }); }
+          catch (e) { return doRecord(); }
+        }
+        return doRecord();
       }
       function p4SaveSpeaking() {
         P4.save('progress_speaking', { attemptId: speakingAttemptId, set: mockSetIndex, transcript: transcript, mockQuestionIndex: mockQuestionIndex, mockStartedAt: mockStartedAt, updatedAt: Date.now() });
@@ -4342,6 +4625,12 @@
           writingEssayIndex = (restore.essayIndex === 1) ? 1 : 0;
           writingTask1Type = (['chart', 'table', 'map', 'process'].indexOf(restore.task1Type) !== -1) ? restore.task1Type : 'chart';
           writingAttemptId = restore.attemptId;
+          // Stale-overwrite fix: remember the revision this tab loaded
+          // so a later save can tell a newer other-tab revision apart.
+          writingLoadedRevision = (typeof restore.revision === 'number') ? restore.revision : 0;
+          writingConflict = null;
+          writingDirty = false;
+          writingHideConflictUI();
           // Phase 6E: resume the saved timer deadlines (pre-6E saves have
           // none — those restart once, then persist).
           writingTask1EndsAt = restore.task1EndsAt || (Date.now() + 20 * 60 * 1000);
@@ -4361,6 +4650,10 @@
           writingMode = examMode;
           writingTask1Type = 'chart';
           writingAttemptId = P4.newAttemptId();
+          writingLoadedRevision = 0;
+          writingConflict = null;
+          writingDirty = false;
+          writingHideConflictUI();
           writingTask1EndsAt = Date.now() + 20 * 60 * 1000;
           writingTask2EndsAt = Date.now() + 40 * 60 * 1000;
           writingTask1Drafts = { chart: '', table: '', map: '', process: '' };
@@ -4388,6 +4681,7 @@
         p4ShowAttempt('examWriting', (resumed ? 'Resumed attempt ' : 'Attempt ') + writingAttemptId + ' · ' + examModeLabel());
         p4SaveWriting();
         P4.refreshNotes();
+        writingMaybeShowRecoveryNote();
       }
       document.getElementById('writingTask1').addEventListener('input', function () {
         document.getElementById('writingTask1Count').textContent = countWords(this.value) + ' words';
@@ -4424,7 +4718,14 @@
         // draft is persisted BEFORE any AI call — never evaluate an
         // unsaved draft. A failed save aborts the evaluation.
         clearTimeout(writingSaveTimer);
-        p4SaveWriting();
+        // A blocked stale save must abort the evaluation, not evaluate
+        // an unsaved draft.
+        if (p4SaveWriting() === 'conflict') {
+          showToast(WRITING_CONFLICT_MSG);
+          btn.disabled = false;
+          btn.textContent = 'Submit writing → Get band score';
+          return;
+        }
         var savedDraft = p4LoadModeSlot('progress_writing', writingMode);
         var savedTask1 = writingMode === 'general' ? (savedDraft && savedDraft.task1GT) : (savedDraft && savedDraft.task1);
         if (!savedDraft || savedDraft.attemptId !== writingAttemptId ||
@@ -4495,9 +4796,15 @@
           var t2Corr = writingWordCountCorrection(data.task2_feedback, t2Count, 250, 'Task 2');
           if (t1Corr || t2Corr) detail = (t1Corr || '') + (t2Corr || '') + detail;
           var writingResult = { title: 'Writing Result · ' + examModeLabel(), headline: band + ' (est.)', sub: 'Task 1: ' + t1Count + ' words · Task 2: ' + t2Count + ' words', detail: detail, label: undefined, wordCounts: { task1: t1Count, task2: t2Count } };
-          showExamResult(writingResult.title, writingResult.headline, writingResult.sub, writingResult.detail, writingResult.label);
-          P4.recordSubmission(writingAttemptId, writingResult, { attemptId: writingAttemptId, test: 'Writing', mode: examModeLabel(), set: null, score: band + ' (est.)', pct: null, band: data.band != null ? Number(data.band) : null, at: Date.now(), wordCounts: { task1: t1Count, task2: t2Count } });
-          p4ClearModeSlot('progress_writing', writingMode);
+          var writingHistoryEntry = { attemptId: writingAttemptId, test: 'Writing', mode: examModeLabel(), set: null, score: band + ' (est.)', pct: null, band: data.band != null ? Number(data.band) : null, at: Date.now(), wordCounts: { task1: t1Count, task2: t2Count } };
+          var recordOutcome = await writingRecordSubmissionOnce(writingAttemptId, writingResult, writingHistoryEntry);
+          if (recordOutcome === 'already') {
+            var savedWriting = P4.getSubmitted(writingAttemptId);
+            showExamResult(savedWriting.title, savedWriting.headline, savedWriting.sub, savedWriting.detail, savedWriting.label);
+            showToast('Already submitted — showing your saved result.');
+          } else {
+            showExamResult(writingResult.title, writingResult.headline, writingResult.sub, writingResult.detail, writingResult.label);
+          }
         } catch (error) {
           console.error('Writing evaluation failed:', error);
           // State stays intact: texts were never cleared, so Retry
