@@ -1942,21 +1942,27 @@
         }
       }
 
-      async function requestAI(systemPrompt, userPrompt) {
+      // BUG 1 (4-bug fix): the caller may request a larger output
+      // budget for evaluation calls (Writing/Speaking JSON assessments
+      // need more room than a chat reply). The proxy clamps it
+      // server-side (100..2000); default 800 when omitted.
+      async function requestAI(systemPrompt, userPrompt, opts) {
         var controller = new AbortController();
         var timeout = setTimeout(function () { controller.abort(); }, 60000);
         try {
           var response;
           try {
+            var reqBody = {
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+              ]
+            };
+            if (opts && opts.maxTokens) reqBody.maxTokens = opts.maxTokens;
             response = await fetch(AI_ENDPOINT, {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                messages: [
-                  { role: 'system', content: systemPrompt },
-                  { role: 'user', content: userPrompt }
-                ]
-              }),
+              body: JSON.stringify(reqBody),
               signal: controller.signal
             });
           } catch (fetchError) {
@@ -1986,10 +1992,61 @@
           var payload = await response.json();
           var content = payload && payload.text ? payload.text : '';
           if (!content) throw new Error('AI response was empty');
-          return extractJsonObject(content);
+          // Tag parse failures so requestJsonAI can tell "the model
+          // returned malformed JSON" (one bounded repair attempt) apart
+          // from transport failures (no automatic re-send).
+          try {
+            return extractJsonObject(content);
+          } catch (parseError) {
+            parseError.code = 'ai-parse';
+            throw parseError;
+          }
         } finally {
           clearTimeout(timeout);
         }
+      }
+
+      // BUG 1 (4-bug fix): validated JSON evaluation calls. The free
+      // model sometimes returns malformed/truncated JSON; a raw
+      // extractJsonObject throw used to surface as an opaque failure.
+      // requestJsonAI validates the parsed object against `validate`
+      // (returns an error string or null). ONLY parse/validation
+      // failures get exactly ONE bounded repair attempt ("reply with
+      // ONLY the JSON object"); transport errors (502/timeout/rate
+      // limit) are thrown immediately with no automatic re-send — the
+      // caller's Retry button owns those. A malformed response is
+      // NEVER treated as a valid score. No infinite retry anywhere.
+      async function requestJsonAI(systemPrompt, userPrompt, opts) {
+        var validate = (opts && opts.validate) || function () { return null; };
+        var maxTokens = (opts && opts.maxTokens) || 1200;
+        var data;
+        try {
+          data = await requestAI(systemPrompt, userPrompt, { maxTokens: maxTokens });
+        } catch (e) {
+          if (e && e.code === 'ai-parse') {
+            // One repair attempt with a larger budget.
+            data = await requestAI(
+              'You MUST reply with ONLY a valid JSON object matching the requested schema. No other text, no markdown fences, no explanation.',
+              userPrompt + '\n\nYour previous reply was not valid JSON. Reply with ONLY the JSON object, no other text.',
+              { maxTokens: Math.min(2000, Math.round(maxTokens * 1.5)) }
+            );
+          } else {
+            throw e;
+          }
+        }
+        var problem = validate(data);
+        if (!problem) return data;
+        // Parsed but failed schema validation: one repair attempt.
+        var repaired = await requestAI(
+          'You MUST reply with ONLY a valid JSON object matching the requested schema. No other text, no markdown fences, no explanation.',
+          userPrompt + '\n\nYour previous reply did not match the required schema (' + problem + '). Reply with ONLY the corrected JSON object, no other text.',
+          { maxTokens: Math.min(2000, Math.round(maxTokens * 1.5)) }
+        );
+        var problem2 = validate(repaired);
+        if (!problem2) return repaired;
+        var err = new Error('AI returned an unreadable evaluation');
+        err.code = 'ai-bad-json';
+        throw err;
       }
 
       // Phase 6E 3-bug fix: map a structured AI failure to an actionable,
@@ -2003,6 +2060,8 @@
         if (reason === 'all_keys_rejected') return 'AI key-তে সমস্যা হয়েছে — admin-কে জানাও। তোমার উত্তর save আছে।';
         if (reason === 'bad_upstream_request') return 'AI request reject হয়েছে — page reload করে আবার চেষ্টা করো। তোমার উত্তর save আছে।';
         if (reason === 'upstream_error') return 'AI service busy — তোমার উত্তর save আছে। Retry চাপো।';
+        if (reason === 'response_truncated') return 'AI-এর উত্তর মাঝপথে কেটে গেছে — তোমার উত্তর save আছে। Retry চাপো।';
+        if (error && error.code === 'ai-bad-json') return 'AI unreadable evaluation দিয়েছে — তোমার উত্তর save আছে। Retry চাপো।';
         if (error && error.message === 'ai-rate-limit') return 'Too many AI requests — একটু পরে আবার চেষ্টা করো। তোমার উত্তর save আছে।';
         if (error && error.message && error.message.indexOf('60s timeout') !== -1) return 'AI অনেক দেরি করছে (60s) — তোমার উত্তর save আছে। Retry চাপো।';
         return (error && error.message ? error.message : 'connection failed') + ' — তোমার উত্তর save আছে।';
@@ -2053,7 +2112,13 @@
           'Return ONLY valid JSON with exactly these keys: overall_band, fluency, lexical, grammar, pronunciation, strengths_bn, next_steps_bn.',
           'overall_band must average only the three assessable criteria. strengths_bn and next_steps_bn must be specific Bengali feedback grounded in these answers; format next_steps_bn as numbered points in one string.'
         ].join(' ');
-        return requestAI(systemPrompt, testText);
+        // BUG 1: validated JSON call — a malformed examiner reply is
+        // never treated as a score (one bounded repair attempt inside
+        // requestJsonAI, then a typed failure the caller can retry).
+        return requestJsonAI(systemPrompt, testText, { maxTokens: 1200, validate: function (d) {
+          if (typeof d.overall_band !== 'number' || d.overall_band < 0 || d.overall_band > 9) return 'overall_band must be a number 0-9';
+          return null;
+        } });
       }
 
       function setStatus(text, active) {
@@ -2479,29 +2544,7 @@
 
         stopMockTimer();
         updateMockHeader();
-        setStatus('AI is preparing your result…', true);
-        addMessage('assistant', '', true);
-        try {
-          var result = await getMockFeedback();
-          removeTyping();
-          addMessage('assistant', 'That is the end of the speaking test. Your AI assessment is ready.', false);
-          renderMockResult(result);
-          // Phase 4: record the completed test in history; clear progress.
-          P4.recordSubmission(speakingAttemptId, { type: 'speaking', band: result.overall_band }, { attemptId: speakingAttemptId, test: 'Speaking', mode: '—', set: 'Set ' + (mockSetIndex + 1), score: 'Band ' + (result.overall_band != null ? result.overall_band : '—'), pct: null, band: result.overall_band != null ? Number(result.overall_band) : null, at: Date.now() });
-          P4.remove('progress_speaking');
-          scoreLabel.textContent = 'Estimated overall band';
-          setStatus('Mock test complete', false);
-          newSessionBtn.textContent = 'Try another test';
-          speak('That is the end of the speaking test. Your practice result is ready.');
-        } catch (error) {
-          removeTyping();
-          addMessage('assistant', 'I could not reach the AI examiner, so no score was created. Please restart the test when your connection is available.', false);
-          setStatus('AI result unavailable', true);
-          scoreLabel.textContent = 'Result not created';
-          scoreSub.textContent = 'AI connection unavailable';
-          showToast('AI সংযোগ পাওয়া যায়নি—কোনো অনুমানভিত্তিক স্কোর দেখানো হয়নি।');
-          newSessionBtn.textContent = 'Restart test';
-        }
+        await finishSpeakingMock();
         mockStarted = false;
         isBusy = false;
         composerForm.setAttribute('aria-busy', 'false');
@@ -2509,6 +2552,69 @@
         sendBtn.disabled = true;
         sendBtn.textContent = 'Finished';
         micBtn.disabled = true;
+      }
+
+      // BUG 3: Speaking Mock evaluation, extracted so a failure can
+      // RETRY from the saved transcript (no re-answering) instead of
+      // leaving the UI stuck on "preparing" with only Restart.
+      // - If a result was ALREADY recorded for this attempt (e.g. the
+      //   evaluation succeeded but the UI never rendered it), render
+      //   the stored result instead of re-evaluating or failing.
+      // - The full result is stored in the submitted map so re-entry
+      //   can render it; history keeps the summary entry as before.
+      // - A retry never duplicates: it runs only when no result is
+      //   recorded, and success records exactly once.
+      // - Stale-toast guard: a failure from an abandoned attempt must
+      //   not surface in a newer attempt's flow.
+      async function finishSpeakingMock() {
+        var already = P4.getSubmitted(speakingAttemptId);
+        if (already && already.result) {
+          removeTyping();
+          addMessage('assistant', 'That is the end of the speaking test. Your AI assessment is ready.', false);
+          renderMockResult(already.result);
+          scoreLabel.textContent = 'Estimated overall band';
+          setStatus('Mock test complete', false);
+          newSessionBtn.textContent = 'Try another test';
+          return;
+        }
+        setStatus('AI is preparing your result…', true);
+        addMessage('assistant', '', true);
+        var evalAttempt = speakingAttemptId;
+        try {
+          var result = await getMockFeedback();
+          removeTyping();
+          addMessage('assistant', 'That is the end of the speaking test. Your AI assessment is ready.', false);
+          renderMockResult(result);
+          // Phase 4: record the completed test in history; clear progress.
+          // The full result rides in the stored object so a later
+          // re-entry can render it without re-evaluating.
+          P4.recordSubmission(speakingAttemptId, { type: 'speaking', band: result.overall_band, result: result }, { attemptId: speakingAttemptId, test: 'Speaking', mode: '—', set: 'Set ' + (mockSetIndex + 1), score: 'Band ' + (result.overall_band != null ? result.overall_band : '—'), pct: null, band: result.overall_band != null ? Number(result.overall_band) : null, at: Date.now() });
+          P4.remove('progress_speaking');
+          scoreLabel.textContent = 'Estimated overall band';
+          setStatus('Mock test complete', false);
+          newSessionBtn.textContent = 'Try another test';
+          speak('That is the end of the speaking test. Your practice result is ready.');
+        } catch (error) {
+          removeTyping();
+          addMessage('assistant', 'I could not reach the AI examiner, so no score was created. Your answers are saved — use Retry evaluation to try again.', false);
+          setStatus('AI result unavailable', true);
+          scoreLabel.textContent = 'Result not created';
+          scoreSub.textContent = 'AI connection unavailable';
+          if (speakingAttemptId === evalAttempt) showToast('AI examiner error: ' + aiErrorMessage(error));
+          // Retry control: re-run the evaluation from the saved
+          // transcript — no re-answering, no duplicate result.
+          var retryBtn = document.createElement('button');
+          retryBtn.className = 'exam-primary';
+          retryBtn.type = 'button';
+          retryBtn.textContent = 'Retry evaluation';
+          retryBtn.addEventListener('click', function () {
+            retryBtn.disabled = true;
+            retryBtn.textContent = 'Retrying…';
+            finishSpeakingMock();
+          });
+          feedbackEl.appendChild(retryBtn);
+          newSessionBtn.textContent = 'Restart test';
+        }
       }
 
       async function submitMessage() {
@@ -2974,6 +3080,25 @@
       function countWords(text) {
         var words = String(text || '').trim().split(/\s+/).filter(Boolean);
         return String(text || '').trim() ? words.length : 0;
+      }
+
+      // BUG 4: verified word counts for AI evaluation prompts + feedback
+      // validation. The model is told the verified counts and must NOT
+      // recount; if its feedback still contradicts the verified count,
+      // the claim is flagged and a correction is shown instead of
+      // presenting the contradiction as fact. 150 (Task 1) / 250
+      // (Task 2) are MINIMUM targets, not maximums.
+      function writingCountLine(taskLabel, count, minimum) {
+        return taskLabel + ': ' + count + ' words (minimum ' + minimum + ' — requirement ' + (count >= minimum ? 'MET' : 'NOT MET') + ')';
+      }
+      function writingWordCountCorrection(feedbackText, count, minimum, taskLabel) {
+        // Returns a correction HTML string when the feedback claims the
+        // text is under the minimum while the verified count meets it.
+        if (count < minimum) return '';
+        var text = String(feedbackText || '');
+        var re = new RegExp('under\\s+(the\\s+)?(' + minimum + '|minimum)|below\\s+(the\\s+)?(' + minimum + '|minimum)|less\\s+than\\s+(the\\s+)?(' + minimum + '|minimum)|short\\s+of\\s+(the\\s+)?(' + minimum + '|minimum)|did\\s+not\\s+reach\\s+(the\\s+)?(' + minimum + '|minimum)|failed\\s+to\\s+meet\\s+(the\\s+)?(minimum|' + minimum + ')|underlength|too\\s+short|needs\\s+more\\s+words', 'i');
+        if (!re.test(text)) return '';
+        return '<div class="exam-result-box"><h3>Word-count correction (verified)</h3><p>' + escapeHtml(taskLabel) + ' = <strong>' + count + ' words</strong> — meets the ' + minimum + '-word minimum. The AI remark claiming it is under the minimum was incorrect and has been set aside.</p></div>';
       }
       function showExamHub() {
         refreshExamModeUi();
@@ -4086,7 +4211,10 @@
         document.getElementById('writingTask1GT').value = '';
         document.getElementById('writingTask1GTCount').textContent = '0 words';
         updateWritingPickerUI();
-        p4SaveWriting();
+        // BUG 2: NO save here — saving mid-render (with a cleared
+        // field) used to clobber the persisted draft if anything
+        // threw before the restore refill. Saves happen explicitly
+        // after refill (startWritingNow) and on input/submit.
       }
       function renderWritingEssay() {
         var el = document.getElementById('writingEssayBody');
@@ -4095,7 +4223,7 @@
         document.getElementById('writingTask2').value = '';
         document.getElementById('writingTask2Count').textContent = '0 words';
         updateWritingPickerUI();
-        p4SaveWriting();
+        // BUG 2: NO save here — see renderWritingLetter.
       }
       document.querySelectorAll('[data-writing-letter]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -4216,20 +4344,61 @@
         btn.disabled = true;
         btn.textContent = 'Checking…';
         stopExamTimers();
+        // BUG 2: flush the pending debounced autosave and CONFIRM the
+        // draft is persisted BEFORE any AI call — never evaluate an
+        // unsaved draft. A failed save aborts the evaluation.
+        clearTimeout(writingSaveTimer);
+        p4SaveWriting();
+        var savedDraft = P4.load('progress_writing', null);
+        var savedTask1 = writingMode === 'general' ? (savedDraft && savedDraft.task1GT) : (savedDraft && savedDraft.task1);
+        if (!savedDraft || savedDraft.attemptId !== writingAttemptId ||
+            String(savedTask1 || '').trim() !== t1 ||
+            String(savedDraft.task2 || '').trim() !== t2) {
+          showToast('Draft save failed — please try again. Your text is still in the boxes.');
+          btn.disabled = false;
+          btn.textContent = 'Submit writing → Get band score';
+          return;
+        }
+        // Stale-toast guard (BUG 3): if the user starts a different
+        // attempt before this evaluation finishes, its failure toast
+        // must not surface in the new attempt's flow.
+        var evalAttempt = writingAttemptId;
         try {
           var task1Desc = writingMode === 'general' ? 'TASK 1 (General Training letter)' : 'TASK 1 (Academic ' + writingTask1Type + ' description)';
           // Phase 6E: send the ACTUAL prompt text to the examiner — the
           // previous code only sent a label, so feedback could not
           // reference the prompt.
           var wPrompts = currentWritingPromptText();
-          var data = await requestAI(
-            'You are an IELTS Writing examiner (' + examModeLabel() + ' mode). Assess the learner writing below on the four IELTS criteria: Task Achievement/Task Response, Coherence and Cohesion, Lexical Resource, Grammatical Range and Accuracy. Return ONLY valid JSON with exactly these keys: band (number 1-9, one decimal allowed), task1_feedback (short English string), task2_feedback (short English string), criteria (object with task_achievement, coherence, lexical, grammar — each a short English string), corrections (array of up to 4 objects with original, corrected, explanation_bn). Never invent errors.',
-            task1Desc + '\nPROMPT:\n' + wPrompts.task1 + '\n\nYOUR WRITING (Task 1):\n' + t1 + '\n\nTASK 2 (essay)\nPROMPT:\n' + wPrompts.task2 + '\n\nYOUR ESSAY (Task 2):\n' + t2
+          // BUG 1: split evaluation — one SMALL call per task. The
+          // previous single giant call (both essays + the full schema)
+          // failed upstream (502) twice in live testing, while a small
+          // call succeeded in ~5s. BUG 4: verified word counts travel
+          // with each call; the model must not recount.
+          var t1Count = countWords(t1), t2Count = countWords(t2);
+          var countHeader = 'VERIFIED WORD COUNTS — do not recount, do not contradict these numbers; base any word-count remark ONLY on them:\n' +
+            writingCountLine('Task 1', t1Count, 150) + '\n' + writingCountLine('Task 2', t2Count, 250) + '\n';
+          var writingValidate = function (d) {
+            if (typeof d.band !== 'number' || d.band < 1 || d.band > 9) return 'band must be a number 1-9';
+            if (typeof d.feedback !== 'string' || !d.feedback) return 'feedback must be a non-empty string';
+            return null;
+          };
+          var t1Data = await requestJsonAI(
+            'You are an IELTS Writing examiner (' + examModeLabel() + ' mode). Assess ONLY Task 1 below on Task Achievement, Coherence and Cohesion, Lexical Resource, Grammatical Range and Accuracy. Return ONLY valid JSON with exactly these keys: band (number 1-9, one decimal allowed), feedback (short English string), corrections (array of up to 2 objects with original, corrected, explanation_bn). Never invent errors.',
+            countHeader + '\n' + task1Desc + '\nPROMPT:\n' + wPrompts.task1 + '\n\nYOUR WRITING (Task 1):\n' + t1,
+            { maxTokens: 1200, validate: writingValidate }
           );
+          var t2Data = await requestJsonAI(
+            'You are an IELTS Writing examiner (' + examModeLabel() + ' mode). Assess ONLY the Task 2 essay below on Task Response, Coherence and Cohesion, Lexical Resource, Grammatical Range and Accuracy. Return ONLY valid JSON with exactly these keys: band (number 1-9, one decimal allowed), feedback (short English string), criteria (object with task_achievement, coherence, lexical, grammar — each a short English string), corrections (array of up to 2 objects with original, corrected, explanation_bn). Never invent errors.',
+            countHeader + '\nTASK 2 (essay)\nPROMPT:\n' + wPrompts.task2 + '\n\nYOUR ESSAY (Task 2):\n' + t2,
+            { maxTokens: 1400, validate: writingValidate }
+          );
+          // Overall band = mean of the two task bands, 1 decimal.
+          var bandNum = Math.round(((t1Data.band + t2Data.band) / 2) * 10) / 10;
+          var data = { band: bandNum, task1_feedback: t1Data.feedback, task2_feedback: t2Data.feedback, criteria: t2Data.criteria, corrections: [].concat(t1Data.corrections || []).concat(t2Data.corrections || []).slice(0, 4) };
           var band = data.band != null ? String(data.band) : '—';
           var detail = '';
           if (data.criteria) {
-            detail += '<div class="exam-result-box"><h3>Band criteria</h3><ul>' +
+            detail += '<div class="exam-result-box"><h3>Band criteria (Task 2 essay)</h3><ul>' +
               '<li><strong>Task Achievement / Response:</strong> ' + escapeHtml(data.criteria.task_achievement || '—') + '</li>' +
               '<li><strong>Coherence and Cohesion:</strong> ' + escapeHtml(data.criteria.coherence || '—') + '</li>' +
               '<li><strong>Lexical Resource:</strong> ' + escapeHtml(data.criteria.lexical || '—') + '</li>' +
@@ -4243,15 +4412,29 @@
             }).join('') + '</ul></div>';
           }
           detail += '<p class="exam-disclaimer">This is an ESTIMATED AI band. It is NOT an official IELTS score and does not guarantee any official result.</p>';
-          var writingResult = { title: 'Writing Result · ' + examModeLabel(), headline: band + ' (est.)', sub: 'Task 1: ' + countWords(t1) + ' words · Task 2: ' + countWords(t2) + ' words', detail: detail, label: undefined };
+          // BUG 4: if the AI feedback contradicts the VERIFIED word
+          // count, prepend a correction — the contradictory claim is
+          // never presented as trustworthy final feedback.
+          var t1Corr = writingWordCountCorrection(data.task1_feedback, t1Count, 150, 'Task 1');
+          var t2Corr = writingWordCountCorrection(data.task2_feedback, t2Count, 250, 'Task 2');
+          if (t1Corr || t2Corr) detail = (t1Corr || '') + (t2Corr || '') + detail;
+          var writingResult = { title: 'Writing Result · ' + examModeLabel(), headline: band + ' (est.)', sub: 'Task 1: ' + t1Count + ' words · Task 2: ' + t2Count + ' words', detail: detail, label: undefined, wordCounts: { task1: t1Count, task2: t2Count } };
           showExamResult(writingResult.title, writingResult.headline, writingResult.sub, writingResult.detail, writingResult.label);
-          P4.recordSubmission(writingAttemptId, writingResult, { attemptId: writingAttemptId, test: 'Writing', mode: examModeLabel(), set: null, score: band + ' (est.)', pct: null, band: data.band != null ? Number(data.band) : null, at: Date.now() });
+          P4.recordSubmission(writingAttemptId, writingResult, { attemptId: writingAttemptId, test: 'Writing', mode: examModeLabel(), set: null, score: band + ' (est.)', pct: null, band: data.band != null ? Number(data.band) : null, at: Date.now(), wordCounts: { task1: t1Count, task2: t2Count } });
           P4.remove('progress_writing');
         } catch (error) {
           console.error('Writing evaluation failed:', error);
           // State stays intact: texts were never cleared, so Retry
           // re-sends the same writing — no fake score is ever shown.
-          showToast('AI examiner error: ' + aiErrorMessage(error));
+          // BUG 2: re-confirm the draft is persisted after a failure,
+          // and make the kept-draft state visible in the attempt label.
+          // BUG 3: stale-toast guard — a failure from an abandoned
+          // attempt must not surface in a newer attempt's flow.
+          p4SaveWriting();
+          if (writingAttemptId === evalAttempt) {
+            p4ShowAttempt('examWriting', 'Attempt ' + writingAttemptId + ' · ' + examModeLabel() + ' · Draft kept — Retry evaluation');
+            showToast('AI examiner error: ' + aiErrorMessage(error));
+          }
         } finally {
           btn.disabled = false;
           btn.textContent = 'Submit writing → Get band score';
@@ -4527,22 +4710,44 @@
         document.getElementById('fmWriteNextBtn').addEventListener('click', async function () {
           var essay = document.getElementById('fmWriting').value.trim();
           if (countWords(essay) < 20) { showToast('অন্তত কিছু লিখুন, তারপর Submit চাপুন।'); return; }
+          // BUG 1: reuse a stored evaluation when the texts have not
+          // changed — never duplicate-evaluate the same essays.
+          var t1Text = (fullMock.writingTask1Text || '').trim();
+          var evalKey = t1Text + '\n---\n' + essay;
+          if (fullMock.writingBand != null && fullMock._writingEvalKey === evalKey) {
+            fullMock.writingText = essay;
+            fmSave(function () { return fmWritingPatch(true); }, true);
+            fullMock.stage = 3;
+            renderFullMockStage();
+            return;
+          }
           this.disabled = true; this.textContent = 'Checking…';
           stopExamTimers();
+          // Stale-toast guard (BUG 3): a failure from an abandoned
+          // attempt must not surface in a newer attempt's flow.
+          var fmEvalAttempt = fullMock.attemptId;
           try {
             // One AI call assesses BOTH tasks (Task 1 + Task 2) and
             // returns a single overall Writing band — same AI cost as
-            // the old Task 2-only evaluation.
-            var t1Text = (fullMock.writingTask1Text || '').trim();
+            // the old Task 2-only evaluation. BUG 4: verified word
+            // counts travel with the call; the model must not recount.
+            var fmT1Count = countWords(t1Text), fmT2Count = countWords(essay);
+            var fmCountHeader = 'VERIFIED WORD COUNTS — do not recount, do not contradict these numbers; base any word-count remark ONLY on them:\n' +
+              writingCountLine('Task 1', fmT1Count, 150) + '\n' + writingCountLine('Task 2', fmT2Count, 250) + '\n';
             var aiPrompt = t1Text
               ? 'You are an IELTS Writing examiner. Assess the TWO tasks below (Task 1: task achievement, coherence, vocabulary, grammar; Task 2: task achievement, coherence, vocabulary, grammar). Return ONLY valid JSON with exactly: band (number 1-9, overall for both tasks), feedback (short English string covering both tasks).'
               : 'You are an IELTS Writing examiner. Assess the Task 2 essay below (task achievement, coherence, vocabulary, grammar). Return ONLY valid JSON with exactly: band (number 1-9), feedback (short English string).';
             var aiUser = t1Text
-              ? 'TASK 1 PROMPT:\n' + fullMockTask1Prompt().text + '\n\nTASK 1 ANSWER:\n' + t1Text + '\n\nTASK 2 ESSAY PROMPT:\n' + fmEssay.text + '\n\nTASK 2 ESSAY:\n' + essay
-              : 'TASK 2 ESSAY PROMPT:\n' + fmEssay.text + '\n\nYOUR ESSAY:\n' + essay;
-            var data = await requestAI(aiPrompt, aiUser);
+              ? fmCountHeader + '\nTASK 1 PROMPT:\n' + fullMockTask1Prompt().text + '\n\nTASK 1 ANSWER:\n' + t1Text + '\n\nTASK 2 ESSAY PROMPT:\n' + fmEssay.text + '\n\nTASK 2 ESSAY:\n' + essay
+              : fmCountHeader + '\nTASK 2 ESSAY PROMPT:\n' + fmEssay.text + '\n\nYOUR ESSAY:\n' + essay;
+            var data = await requestJsonAI(aiPrompt, aiUser, { maxTokens: 1200, validate: function (d) {
+              if (typeof d.band !== 'number' || d.band < 1 || d.band > 9) return 'band must be a number 1-9';
+              if (typeof d.feedback !== 'string' || !d.feedback) return 'feedback must be a non-empty string';
+              return null;
+            } });
             fullMock.writingBand = Number(data.band) || null;
             fullMock.writingFeedback = data.feedback || '';
+            fullMock._writingEvalKey = evalKey;
             fullMock.writingText = essay;
             fmSave(function () { return fmWritingPatch(true); }, true);
             fullMock.stage = 3;
@@ -4552,7 +4757,7 @@
             // State stays intact: texts were never cleared, and the
             // evaluation is stateless — Retry re-sends the same essays
             // and cannot duplicate a Speaking session (none was created).
-            showToast('AI examiner error: ' + aiErrorMessage(error));
+            if (fullMock.attemptId === fmEvalAttempt) showToast('AI examiner error: ' + aiErrorMessage(error));
             this.disabled = false; this.textContent = 'Retry evaluation → Speaking';
           }
         });
