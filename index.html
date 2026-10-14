@@ -1966,7 +1966,23 @@
             throw fetchError;
           }
           if (response.status === 429) throw new Error('ai-rate-limit');
-          if (!response.ok) throw new Error('AI service returned ' + response.status);
+          if (!response.ok) {
+            // Phase 6E 3-bug fix: the proxy now returns a structured
+            // 502 body ({ reason, retryable, retryAfterSeconds }).
+            // Carry it on the Error so callers can show an actionable
+            // message instead of a bare "502". Never fabricate a reply.
+            var errBody = null;
+            try { errBody = await response.json(); } catch (e) { errBody = null; }
+            var err = new Error('AI service returned ' + response.status);
+            err.status = response.status;
+            if (errBody) {
+              err.reason = errBody.reason || null;
+              err.retryable = errBody.retryable;
+              err.retryAfterSeconds = errBody.retryAfterSeconds;
+              if (errBody.error) err.serverMessage = errBody.error;
+            }
+            throw err;
+          }
           var payload = await response.json();
           var content = payload && payload.text ? payload.text : '';
           if (!content) throw new Error('AI response was empty');
@@ -1974,6 +1990,22 @@
         } finally {
           clearTimeout(timeout);
         }
+      }
+
+      // Phase 6E 3-bug fix: map a structured AI failure to an actionable,
+      // user-facing message. Answers/attempt state always stay intact on
+      // failure — the caller must never clear them, and must never show
+      // a fake AI reply or fabricated score.
+      function aiErrorMessage(error) {
+        var reason = error && error.reason;
+        if (reason === 'all_keys_rate_limited') return 'AI coach busy — সব key-এর limit শেষ। তোমার উত্তর save আছে। কয়েক মিনিট পর আবার চেষ্টা করো।';
+        if (reason === 'upstream_timeout') return 'AI service timeout হয়েছে — তোমার উত্তর save আছে। Retry চাপো।';
+        if (reason === 'all_keys_rejected') return 'AI key-তে সমস্যা হয়েছে — admin-কে জানাও। তোমার উত্তর save আছে।';
+        if (reason === 'bad_upstream_request') return 'AI request reject হয়েছে — page reload করে আবার চেষ্টা করো। তোমার উত্তর save আছে।';
+        if (reason === 'upstream_error') return 'AI service busy — তোমার উত্তর save আছে। Retry চাপো।';
+        if (error && error.message === 'ai-rate-limit') return 'Too many AI requests — একটু পরে আবার চেষ্টা করো। তোমার উত্তর save আছে।';
+        if (error && error.message && error.message.indexOf('60s timeout') !== -1) return 'AI অনেক দেরি করছে (60s) — তোমার উত্তর save আছে। Retry চাপো।';
+        return (error && error.message ? error.message : 'connection failed') + ' — তোমার উত্তর save আছে।';
       }
 
       function normalizeCoachResult(data) {
@@ -2988,6 +3020,14 @@
         try { sessionStorage.setItem('ieltsgo_exam_mode', examMode); } catch (e) {}
         refreshExamModeUi();
       }
+      // Phase 6E 3-bug fix: does a saved standalone attempt belong to
+      // the currently selected hub mode? Legacy saves without a mode
+      // field count as Academic. Used by openReading/openWriting so a
+      // stale other-mode save can never hijack the hub selection.
+      function savedModeMatches(saved) {
+        var savedMode = (saved && (saved.mode === 'general' || saved.mode === 'academic')) ? saved.mode : 'academic';
+        return savedMode === examMode;
+      }
       document.getElementById('modeAcademicBtn').addEventListener('click', function () { setExamMode('academic'); });
       document.getElementById('modeGeneralBtn').addEventListener('click', function () { setExamMode('general'); });
 
@@ -3078,7 +3118,12 @@
       }
       function openReading() {
         var saved = P4.load('progress_reading', null);
-        if (saved && saved.attemptId) startReading(saved); else startReading(null);
+        // Phase 6E 3-bug fix: only auto-resume when the saved attempt is
+        // in the currently selected hub mode. A stale other-mode save
+        // must never flip the hub mode or load the wrong format's
+        // content — start fresh in the hub mode instead, and keep the
+        // other-mode save intact for when the user switches back.
+        if (saved && saved.attemptId && savedModeMatches(saved)) startReading(saved); else startReading(null);
       }
       function openListening() {
         var saved = P4.load('progress_listening', null);
@@ -3086,7 +3131,9 @@
       }
       function openWriting() {
         var saved = P4.load('progress_writing', null);
-        if (saved && saved.attemptId) startWriting(saved); else startWriting(null);
+        // Phase 6E 3-bug fix: same mode-match rule as openReading —
+        // never let a stale other-mode save flip the hub selection.
+        if (saved && saved.attemptId && savedModeMatches(saved)) startWriting(saved); else startWriting(null);
       }
       document.querySelectorAll('[data-p4-fresh]').forEach(function (btn) {
         btn.addEventListener('click', function () {
@@ -3377,7 +3424,9 @@
         var resumed = !!restore;
         if (restore) {
           // Phase 4: resume the saved attempt (mode + set + answers + timer).
-          setExamMode(restore.mode);
+          // 3-bug fix: only a valid saved mode may apply — a missing or
+          // garbage mode must never reset the hub selection to Academic.
+          if (restore.mode === 'general' || restore.mode === 'academic') setExamMode(restore.mode);
           readingSetIndex[examMode] = restore.setIndex;
           readingAnswers = restore.answers || {};
           readingAttemptId = restore.attemptId;
@@ -3659,7 +3708,14 @@
         if (cached && cached.attemptId) {
           getAttempt(cached.attemptId).then(function (attempt) {
             if (attempt.submitted) { frCacheClear(); startFullReading(); return; }
-            askResumePrompt('Unfinished Full Reading Mock', 'You have an unfinished Full Reading Mock (' + (attempt.mode === 'general' ? 'General Training' : 'Academic') + '). Resume it or start fresh?').then(function (resume) {
+            // 3-bug fix: if the saved attempt is in the OTHER mode than
+            // the hub selection, say so — Resume keeps the attempt's
+            // mode, Start fresh begins a new attempt in the hub mode.
+            var frModeLabel = attempt.mode === 'general' ? 'General Training' : 'Academic';
+            var frMismatch = (attempt.mode || 'academic') !== examMode
+              ? ' The hub is currently set to ' + examModeLabel() + '. Resume keeps the ' + frModeLabel + ' attempt; Start fresh begins a new ' + examModeLabel() + ' attempt.'
+              : '';
+            askResumePrompt('Unfinished Full Reading Mock', 'You have an unfinished Full Reading Mock (' + frModeLabel + '). Resume it or start fresh?' + frMismatch).then(function (resume) {
               if (resume) resumeFullReadingFromAttempt(attempt);
               else { frCacheClear(); startFullReading(); }
             });
@@ -3832,7 +3888,30 @@
           frSave(false);
         }
       });
+      // Phase 6E 3-bug fix: Full Reading submits never reached the hub
+      // history (every other test type records via P4.recordSubmission).
+      // Record the SERVER-validated result — never a browser-computed
+      // score. Duplicate-safe: if this attempt is already recorded,
+      // do nothing, so a re-submit never creates a duplicate entry.
+      function recordFullReadingHistory(serverResult, overTime) {
+        if (P4.getSubmitted(fullReadingAttemptId)) return false;
+        var correct = serverResult.score, total = serverResult.total;
+        var pct = total ? Math.round(correct / total * 100) : 0;
+        var modeLabel = fullReadingState.mode === 'general' ? 'General Training' : 'Academic';
+        P4.recordSubmission(fullReadingAttemptId,
+          { serverResult: serverResult, overTime: !!overTime },
+          { attemptId: fullReadingAttemptId, test: 'Full Reading Mock', mode: modeLabel, set: null, score: correct + ' / ' + total, pct: pct, band: serverResult.band != null ? Number(serverResult.band) : null, at: Date.now() });
+        return true;
+      }
       document.getElementById('fullReadingSubmitBtn').addEventListener('click', function () {
+        // Phase 6E 3-bug fix: duplicate-submit guard — replay the saved
+        // result instead of re-scoring / re-recording the same attempt.
+        var dupFR = P4.getSubmitted(fullReadingAttemptId);
+        if (dupFR && dupFR.serverResult) {
+          showFullReadingResult(dupFR.serverResult, dupFR.overTime);
+          showToast('Already submitted — showing your saved result.');
+          return;
+        }
         var total = 0;
         fullReadingPassages().forEach(function (p) { total += p.questions.length; });
         var unanswered = 0;
@@ -3863,6 +3942,7 @@
                 var sub = await attemptApi({ action: 'submit', attemptId: fullReadingServer.attemptId, expectedVersion: fullReadingServer.version, stageResults: { reading: { testId: test.id, context: 'practice' } } });
                 fullReadingServer.version = sub.attempt.version;
                 showFullReadingResult(result, sub.attempt.result.overTime && sub.attempt.result.overTime.reading);
+                recordFullReadingHistory(result, sub.attempt.result.overTime && sub.attempt.result.overTime.reading);
                 frCacheClear();
                 return;
               } catch (submitErr) {
@@ -3870,6 +3950,7 @@
                   var att = await getAttempt(fullReadingServer.attemptId);
                   if (att.result) {
                     showFullReadingResult(att.result.perSkill.reading, att.result.overTime && att.result.overTime.reading);
+                    recordFullReadingHistory(att.result.perSkill.reading, att.result.overTime && att.result.overTime.reading);
                     frCacheClear();
                     showToast('Already submitted — showing your saved result.');
                     return;
@@ -3881,6 +3962,7 @@
                     var sub2 = await attemptApi({ action: 'submit', attemptId: fullReadingServer.attemptId, expectedVersion: att.version, stageResults: { reading: { testId: test.id, context: 'practice' } } });
                     fullReadingServer.version = sub2.attempt.version;
                     showFullReadingResult(result, sub2.attempt.result.overTime && sub2.attempt.result.overTime.reading);
+                    recordFullReadingHistory(result, sub2.attempt.result.overTime && sub2.attempt.result.overTime.reading);
                     frCacheClear();
                     return;
                   } catch (e2) {
@@ -3894,6 +3976,7 @@
               }
             }
             showFullReadingResult(result, false);
+            recordFullReadingHistory(result, false);
             frCacheClear();
           })
           .catch(function (err) {
@@ -4048,7 +4131,8 @@
         var resumed = !!restore;
         if (restore) {
           // Phase 4: resume the saved attempt (mode + prompts + text).
-          setExamMode(restore.mode);
+          // 3-bug fix: only a valid saved mode may apply (see startReading).
+          if (restore.mode === 'general' || restore.mode === 'academic') setExamMode(restore.mode);
           writingMode = examMode;
           writingLetterIndex = restore.letterIndex;
           writingEssayIndex = restore.essayIndex;
@@ -4165,7 +4249,9 @@
           P4.remove('progress_writing');
         } catch (error) {
           console.error('Writing evaluation failed:', error);
-          showToast('AI examiner error: ' + (error && error.message ? error.message : 'connection failed') + ' — আবার চেষ্টা করুন।');
+          // State stays intact: texts were never cleared, so Retry
+          // re-sends the same writing — no fake score is ever shown.
+          showToast('AI examiner error: ' + aiErrorMessage(error));
         } finally {
           btn.disabled = false;
           btn.textContent = 'Submit writing → Get band score';
@@ -4319,7 +4405,14 @@
         if (cached && cached.attemptId) {
           getAttempt(cached.attemptId).then(function (attempt) {
             if (attempt.submitted) { fmCacheClear(); startFullMock(); return; }
-            askResumePrompt('Unfinished Full Mock', 'You have an unfinished Full Mock (Stage ' + (fmStageFromAttempt(attempt) + 1) + ' of 4). Resume it or start fresh?').then(function (resume) {
+            // 3-bug fix: surface a mode mismatch like openFullReading
+            // does — Resume keeps the attempt's mode, Start fresh uses
+            // the hub mode.
+            var fmModeLabel = attempt.mode === 'general' ? 'General Training' : 'Academic';
+            var fmMismatch = (attempt.mode || 'academic') !== examMode
+              ? ' The hub is currently set to ' + examModeLabel() + '. Resume keeps the ' + fmModeLabel + ' attempt; Start fresh begins a new ' + examModeLabel() + ' attempt.'
+              : '';
+            askResumePrompt('Unfinished Full Mock', 'You have an unfinished Full Mock (' + fmModeLabel + ', Stage ' + (fmStageFromAttempt(attempt) + 1) + ' of 4). Resume it or start fresh?' + fmMismatch).then(function (resume) {
               if (resume) resumeFullMockFromAttempt(attempt);
               else { fmCacheClear(); startFullMock(); }
             });
@@ -4456,8 +4549,11 @@
             renderFullMockStage();
           } catch (error) {
             console.error('Full Mock Writing evaluation failed:', error);
-            showToast('AI examiner error: ' + (error && error.message ? error.message : 'connection failed') + ' — আবার চেষ্টা করুন।');
-            this.disabled = false; this.textContent = 'Submit writing → Speaking';
+            // State stays intact: texts were never cleared, and the
+            // evaluation is stateless — Retry re-sends the same essays
+            // and cannot duplicate a Speaking session (none was created).
+            showToast('AI examiner error: ' + aiErrorMessage(error));
+            this.disabled = false; this.textContent = 'Retry evaluation → Speaking';
           }
         });
       }
