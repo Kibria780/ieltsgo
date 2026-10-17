@@ -3281,57 +3281,41 @@
         stream.getTracks().forEach(function (track) { track.stop(); });
       }
 
-      async function startVoiceInput() {
-        if (!recognition || isStartingRecognition || isListening) return;
-        isStartingRecognition = true;
-        recognitionFailed = false;
-        input.value = '';
-        speechFinalText = '';
-        delete input.dataset.finalSpeech;
-        micBtn.classList.add('listening');
-        micBtn.setAttribute('aria-label', 'Starting microphone');
-        micHint.textContent = 'মাইক্রোফোন চালু হচ্ছে… অনুমতি চাইলে Allow চাপুন';
-        setStatus('Starting microphone…', true);
+      // Mic fix 2026-10-17 (permission granted but no capture):
+      // Root causes: (1) requestMicrophoneAccess() was dead code — the app
+      // never called getUserMedia, so no in-app permission prompt ever
+      // appeared and iOS (no SpeechRecognition) had no capture path at all.
+      // (2) The 5s start timer aborted slow mobile service starts.
+      // (3) One recognition instance was reused after abort/error and could
+      // get wedged. Fix: explicit getUserMedia permission prompt first,
+      // fresh recognition instance per attempt, 12s start timeout,
+      // audio-capture retry with a direct start, honest fallback messages.
+      var audioCaptureRetried = false;
+      var micPermissionGranted = false;
 
-        try {
-          if (!window.isSecureContext) throw new Error('insecure-context');
-          // Note: no getUserMedia here — SpeechRecognition requests mic
-          // permission itself. Calling getUserMedia first causes an
-          // audio-capture conflict on Android Chrome.
-          recognition.start();
-          speechStartTimer = setTimeout(function () {
-            if (!isListening) {
-              try { recognition.abort(); } catch (ignore) {}
-              useKeyboardDictationFallback('মাইক্রোফোন চালু হতে দেরি হচ্ছে। Chrome-এ microphone permission Allow করে আবার চেষ্টা করুন।');
-            }
-          }, 5000);
-        } catch (error) {
-          recognitionFailed = true;
-          var permissionDenied = error && (error.name === 'NotAllowedError' || error.name === 'SecurityError');
-          useKeyboardDictationFallback(permissionDenied
-            ? 'Microphone permission বন্ধ আছে। Browser settings থেকে Microphone Allow করে আবার mic চাপুন।'
-            : 'Voice input চালু হয়নি। Chrome-এ microphone permission Allow করে আবার চেষ্টা করুন।');
-        }
+      function sleepMs(ms) {
+        return new Promise(function (resolve) { setTimeout(resolve, ms); });
       }
 
-      if (SpeechRecognition) {
-        recognition = new SpeechRecognition();
-        recognition.lang = 'en-US';
-        recognition.interimResults = true;
-        recognition.continuous = true;
-        recognition.maxAlternatives = 3;
-
-        function bestSpeechAlternative(result) {
-          var best = result[0];
-          for (var i = 1; i < result.length; i++) {
-            if (result[i].confidence > best.confidence) best = result[i];
-          }
-          return best ? best.transcript.trim() : '';
+      function bestSpeechAlternative(result) {
+        var best = result[0];
+        for (var i = 1; i < result.length; i++) {
+          if (result[i].confidence > best.confidence) best = result[i];
         }
+        return best ? best.transcript.trim() : '';
+      }
 
-        recognition.onstart = function () {
+      function createRecognition() {
+        var rec = new SpeechRecognition();
+        rec.lang = 'en-US';
+        rec.interimResults = true;
+        rec.continuous = true;
+        rec.maxAlternatives = 3;
+        rec.onstart = function () {
+          if (recognition !== rec) return;
           clearTimeout(speechStartTimer);
           isStartingRecognition = false;
+          recognitionFailed = false;
           isListening = true;
           speechFinalText = '';
           clearTimeout(speechStopTimer);
@@ -3340,7 +3324,8 @@
           micHint.textContent = 'শুনছি… যত খুশি বলুন, শেষ হলে mic-এ আবার চাপুন';
           setStatus('Listening to you…', true);
         };
-        recognition.onresult = function (event) {
+        rec.onresult = function (event) {
+          if (recognition !== rec) return;
           // Speech resumed — cancel any pending auto-stop.
           clearTimeout(speechStopTimer);
           var finalParts = [];
@@ -3355,44 +3340,140 @@
           input.value = [speechFinalText, interimParts.join(' ')].filter(Boolean).join(' ').trim();
           if (speechFinalText) input.dataset.finalSpeech = 'true';
         };
-        recognition.onspeechend = function () {
+        rec.onspeechend = function () {
+          if (recognition !== rec) return;
           // Don't stop immediately — user may pause between sentences.
           // Auto-stop only after 3s of complete silence; tapping mic stops sooner.
           clearTimeout(speechStopTimer);
           speechStopTimer = setTimeout(function () {
-            if (isListening) recognition.stop();
+            if (isListening && recognition === rec) rec.stop();
           }, 3000);
         };
-        recognition.onend = function () {
+        rec.onend = function () {
+          if (recognition !== rec) return;
           if (recognitionFailed) {
             clearTimeout(speechStartTimer);
             clearTimeout(speechStopTimer);
             isStartingRecognition = false;
             isListening = false;
             micBtn.classList.remove('listening');
+            recognition = null;
             return;
           }
           var shouldSubmit = input.value.trim();
           resetVoiceInputUi();
+          recognition = null;
           if (shouldSubmit) {
             delete input.dataset.finalSpeech;
             submitMessage();
           }
         };
-        recognition.onerror = function (event) {
+        rec.onerror = function (event) {
+          if (recognition !== rec) return;
           recognitionFailed = true;
           clearTimeout(speechStartTimer);
           clearTimeout(speechStopTimer);
           delete input.dataset.finalSpeech;
-          if (event.error === 'not-allowed' || event.error === 'service-not-allowed' || event.error === 'audio-capture') {
-            useKeyboardDictationFallback('Microphone permission বন্ধ আছে। Browser settings থেকে Microphone Allow করে আবার mic চাপুন।');
+          if (event.error === 'audio-capture' && !audioCaptureRetried) {
+            // The getUserMedia pre-step stream may still hold the mic on
+            // some Android builds. Permission is already granted, so retry
+            // once with a direct start (no getUserMedia pre-step).
+            audioCaptureRetried = true;
+            beginRecognition();
+            return;
+          }
+          if (event.error === 'not-allowed' || event.error === 'service-not-allowed') {
+            useKeyboardDictationFallback(micPermissionGranted
+              ? 'Voice service চালু হচ্ছে না (microphone অনুমতি দেওয়া আছে)। কীবোর্ডের mic দিয়ে বলুন, তারপর Send চাপুন।'
+              : 'Microphone permission বন্ধ আছে। Browser settings থেকে Microphone Allow করে আবার mic চাপুন।');
             return;
           }
           resetVoiceInputUi();
+          recognition = null;
           if (event.error === 'no-speech') showToast('কথা শোনা যায়নি—মাইকের একটু কাছে থেকে আবার বলুন।');
           else if (event.error !== 'aborted') showToast('মাইক্রোফোন শোনা যায়নি। Internet connection দেখে আবার চেষ্টা করুন।');
         };
-      } else {
+        return rec;
+      }
+
+      function beginRecognition() {
+        // Assumes mic permission was already granted in this attempt.
+        var rec = createRecognition();
+        recognition = rec;
+        try {
+          rec.start();
+          // Mobile speech-service startup can take a while; 12s so a slow
+          // but working start is not killed (the old 5s timer did that).
+          speechStartTimer = setTimeout(function () {
+            if (recognition === rec && !isListening) {
+              try { rec.abort(); } catch (ignore) {}
+              useKeyboardDictationFallback('মাইক্রোফোন চালু হতে দেরি হচ্ছে। আবার চেষ্টা করুন।');
+            }
+          }, 12000);
+        } catch (error) {
+          recognitionFailed = true;
+          useKeyboardDictationFallback('Voice input চালু হয়নি। আবার চেষ্টা করুন।');
+        }
+      }
+
+      async function startVoiceInput() {
+        if (isStartingRecognition || isListening) return;
+        isStartingRecognition = true;
+        recognitionFailed = false;
+        audioCaptureRetried = false;
+        micPermissionGranted = false;
+        input.value = '';
+        speechFinalText = '';
+        delete input.dataset.finalSpeech;
+        micBtn.classList.add('listening');
+        micBtn.setAttribute('aria-label', 'Starting microphone');
+        micHint.textContent = 'মাইক্রোফোন চালু হচ্ছে… অনুমতি চাইলে Allow চাপুন';
+        setStatus('Starting microphone…', true);
+
+        try {
+          if (!window.isSecureContext) throw new Error('insecure-context');
+          // Step 1: explicit mic permission prompt via getUserMedia.
+          // This is the prompt the user actually sees and grants.
+          // The stream is stopped immediately so SpeechRecognition can
+          // take the mic (avoids the audio-capture conflict).
+          var hasGum = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
+          if (hasGum) {
+            try {
+              await requestMicrophoneAccess();
+              micPermissionGranted = true;
+            } catch (permError) {
+              var denied = permError && (permError.name === 'NotAllowedError' || permError.name === 'SecurityError');
+              if (denied) {
+                useKeyboardDictationFallback('Microphone permission বন্ধ আছে। Browser settings থেকে Microphone Allow করে আবার mic চাপুন।');
+                return;
+              }
+              throw permError;
+            }
+          } else if (!SpeechRecognition) {
+            useKeyboardDictationFallback();
+            return;
+          }
+          if (!SpeechRecognition) {
+            // iOS Safari and similar: no in-app speech recognition exists.
+            // Permission was just granted above, but there is no capture
+            // API to use it with — honest keyboard-dictation fallback.
+            useKeyboardDictationFallback('মাইক্রোফোন অনুমতি দেওয়া আছে। এই browser-এ in-app voice input নেই — কীবোর্ডের mic (🎤) চেপে বলুন, তারপর Send চাপুন।');
+            return;
+          }
+          // Small pause so the OS fully releases the mic after the
+          // getUserMedia pre-step stream was stopped.
+          await sleepMs(150);
+          beginRecognition();
+        } catch (error) {
+          recognitionFailed = true;
+          var permissionDenied = error && (error.name === 'NotAllowedError' || error.name === 'SecurityError');
+          useKeyboardDictationFallback(permissionDenied
+            ? 'Microphone permission বন্ধ আছে। Browser settings থেকে Microphone Allow করে আবার mic চাপুন।'
+            : 'Voice input চালু হয়নি। Chrome-এ microphone permission Allow করে আবার চেষ্টা করুন।');
+        }
+      }
+
+      if (!SpeechRecognition) {
         micBtn.disabled = false;
         micBtn.setAttribute('aria-label', 'Use keyboard voice typing');
         micHint.textContent = 'কীবোর্ডের মাইক চেপে বলুন, তারপর Send চাপুন';
@@ -3400,12 +3481,14 @@
 
       micBtn.addEventListener('click', function () {
         if (isBusy) return;
-        if (!recognition) {
-          useKeyboardDictationFallback();
+        // startVoiceInput handles both paths: SpeechRecognition devices
+        // (fresh instance per attempt) and no-SR browsers (iOS — prompt
+        // via getUserMedia, then honest keyboard-dictation fallback).
+        if (isListening) {
+          if (recognition) recognition.stop();
           return;
         }
-        if (isListening) recognition.stop();
-        else startVoiceInput();
+        startVoiceInput();
       });
       composerForm.addEventListener('submit', function (event) {
         event.preventDefault();
@@ -5790,7 +5873,7 @@
           }, 1000);
           examTimers.push(prepTimer);
         }
-        document.getElementById('fmMicBtn').addEventListener('click', function () {
+        document.getElementById('fmMicBtn').addEventListener('click', async function () {
           var btn = this;
           btn.disabled = true; btn.textContent = '🎤 Listening… (speak now)';
           document.getElementById('fmSpeakNote').textContent = 'শুনছি… শেষ হলে mic বন্ধ হবে।';
@@ -5804,25 +5887,45 @@
             }, 1000);
             examTimers.push(talkTimer);
           }
-          if (recognition && !isListening) {
-            var savedOnEnd = recognition.onend;
-            recognition.onend = function () {
-              var captured = (input.value || '').trim();
-              if (captured) {
-                if (!fullMock.speakingTranscripts) fullMock.speakingTranscripts = { 1: '', 2: '', 3: '' };
-                var prev = fullMock.speakingTranscripts[part] || '';
-                fullMock.speakingTranscripts[part] = prev ? prev + ' ' + captured : captured;
-                fullMock.speakingText = fmCombinedSpeakingTranscript();
-                fmSave(function () { return fmSpeakingPatch(); }, false);
-              }
-              document.getElementById('fmSpeakNote').textContent = captured ? 'আপনার উত্তর নেওয়া হয়েছে: ' + captured.slice(0, 120) : 'কথা শোনা যায়নি—আবার চেষ্টা করুন।';
-              recognition.onend = savedOnEnd;
-              resetVoiceInputUi();
-            };
-            try { recognition.start(); } catch (e) {}
-          } else {
+          if (!SpeechRecognition) {
             document.getElementById('fmSpeakNote').textContent = 'এই ব্রাউজারে voice input নেই — নিচে Finish চাপুন।';
+            btn.disabled = false; btn.textContent = '🎤 Start speaking';
+            return;
           }
+          if (isListening) {
+            btn.disabled = false; btn.textContent = '🎤 Start speaking';
+            return;
+          }
+          // Mic fix 2026-10-17: explicit permission prompt first (same as
+          // Practice Chat), then a fresh recognition instance — the old
+          // code reused the load-time instance, which no longer exists.
+          try {
+            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+              await requestMicrophoneAccess();
+              await sleepMs(150);
+            }
+          } catch (permError) {
+            document.getElementById('fmSpeakNote').textContent = 'Microphone permission বন্ধ আছে। Browser settings থেকে Microphone Allow করে আবার চেষ্টা করুন।';
+            btn.disabled = false; btn.textContent = '🎤 Start speaking';
+            return;
+          }
+          var fmRec = createRecognition();
+          recognition = fmRec;
+          var savedOnEnd = fmRec.onend;
+          fmRec.onend = function () {
+            var captured = (input.value || '').trim();
+            if (captured) {
+              if (!fullMock.speakingTranscripts) fullMock.speakingTranscripts = { 1: '', 2: '', 3: '' };
+              var prev = fullMock.speakingTranscripts[part] || '';
+              fullMock.speakingTranscripts[part] = prev ? prev + ' ' + captured : captured;
+              fullMock.speakingText = fmCombinedSpeakingTranscript();
+              fmSave(function () { return fmSpeakingPatch(); }, false);
+            }
+            document.getElementById('fmSpeakNote').textContent = captured ? 'আপনার উত্তর নেওয়া হয়েছে: ' + captured.slice(0, 120) : 'কথা শোনা যায়নি—আবার চেষ্টা করুন।';
+            fmRec.onend = savedOnEnd;
+            resetVoiceInputUi();
+          };
+          try { fmRec.start(); } catch (e) {}
         });
         var nextQBtn = document.getElementById('fmSpeakNextQBtn');
         if (nextQBtn) nextQBtn.addEventListener('click', function () {
