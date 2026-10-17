@@ -1276,6 +1276,46 @@
       .exam-grid { grid-template-columns: 1fr; }
       .exam { padding: 16px; }
     }
+    /* ---- Mobile fix 2026-10-17 (phone widths only; desktop untouched) ----
+       Audit evidence (Playwright emulation, Pixel 7 / iPhone 14 / 360px):
+       1. Mode switch clipped: .setup was a 2-column grid on phones, so the
+          3-button mode switch got ~1/2 screen width and "Practice"/"Mock
+          test" clipped/wrapped. Single-column setup gives it full width.
+       2. Touch targets below 44px: mode buttons, topic chips, gender
+          buttons, voice toggle, Coach-history pagination, question
+          palette, exam option rows, exam mode/back buttons, composer
+          mic/Send. Raised to 44px on phones.
+       3. Writing textareas were 15.2px, so iOS Safari auto-zooms on
+          focus. 16px stops the zoom jump.
+       4. 100vh on iOS includes the URL bar; 100dvh tracks the visible
+          viewport instead (progressive enhancement, old browsers keep
+          the earlier 100vh rule). */
+    @supports (min-height: 100dvh) {
+      body { min-height: 100dvh; }
+    }
+    @media (max-width: 640px) {
+      .setup { grid-template-columns: 1fr; }
+      .mode-switch { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      .mode-btn { min-height: 44px; padding: 0 6px; white-space: nowrap; font-size: .82rem; }
+      .chip { min-height: 44px; }
+      .gender-btn { min-height: 44px; padding: 0 12px; }
+      .voice-toggle { min-height: 44px; padding: 0 6px; }
+      .coach-history-pages button { min-height: 44px; padding: 10px 12px; }
+      .q-pal-btn { width: 44px; height: 44px; }
+      .exam-options label { padding: 12px 10px; }
+      .exam-mode-btn, .exam-back { min-height: 44px; }
+      /* Writing prompt pickers + "Start fresh" buttons carry inline
+         min-height:30/36px styles, which beat plain stylesheet rules —
+         !important is needed to lift them to 44px on phones. Other
+         .exam-secondary buttons are already 46px, so this changes nothing
+         for them. */
+      .exam .exam-secondary { min-height: 44px !important; }
+      .exam-textarea, .exam input[type="text"] { font-size: 16px; }
+      .voice-row { grid-template-columns: 44px minmax(0, 1fr) 72px; }
+      .mic { width: 44px; height: 44px; }
+      .text-input { height: 44px; }
+      .send { width: 72px; min-width: 72px; height: 44px; }
+    }
   </style>
 </head>
 <body>
@@ -2647,6 +2687,7 @@
         chunks.forEach(function (chunk) {
           var a = new Audio();
           a.preload = 'auto';
+          a.playsInline = true; // Mobile fix 2026-10-17: inline playback on iOS Safari.
           a.playbackRate = 1.15;
           a.src = ttsUrlFor(chunk);
           if (!firstAudio) firstAudio = a;
@@ -3370,6 +3411,30 @@
         event.preventDefault();
         submitMessage();
       });
+      // Mobile fix 2026-10-17: on-screen keyboard can cover the composer.
+      // iOS Safari does not resize the layout viewport when the keyboard
+      // opens, so keep the composer in view while the answer field has
+      // focus and the visual viewport has shrunk (keyboard open).
+      // Desktop: visualViewport height equals window height, so this is
+      // a no-op there.
+      if (window.visualViewport) {
+        input.addEventListener('focus', function () {
+          try {
+            if (window.visualViewport.height < window.innerHeight - 100) {
+              setTimeout(function () {
+                try { composerForm.scrollIntoView({ block: 'end', behavior: 'smooth' }); } catch (e) {}
+              }, 350);
+            }
+          } catch (e) {}
+        });
+        window.visualViewport.addEventListener('resize', function () {
+          try {
+            if (document.activeElement === input && window.visualViewport.height < window.innerHeight - 100) {
+              composerForm.scrollIntoView({ block: 'end' });
+            }
+          } catch (e) {}
+        });
+      }
       sendBtn.addEventListener('click', function (event) {
         event.preventDefault();
         submitMessage();
@@ -3558,6 +3623,16 @@
           stopListeningAudio();
           showExamHub();
           newSessionBtn.textContent = 'All exams';
+          // Mobile fix 2026-10-17: on phones the exam section is flex
+          // order 0, so it renders at the very top of the page while the
+          // Mode switch the user just tapped sits lower down. Without a
+          // scroll, tapping Exam looks like nothing happened. Bring the
+          // exam into view after layout settles.
+          try {
+            requestAnimationFrame(function () {
+              try { examSection.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (e) {}
+            });
+          } catch (e) {}
           return;
         }
         if (examSection) examSection.hidden = true;
@@ -4162,6 +4237,7 @@
             '&voice_gender=' + gender + '&_=' + Date.now() + i;
           listeningAudio = new Audio();
           listeningAudio.playbackRate = 1.0;
+          listeningAudio.playsInline = true; // Mobile fix 2026-10-17: inline playback on iOS Safari.
           listeningAudio.src = url;
           listeningAudio.onplaying = function () { started = true; armStall(); if (onState) onState('playing'); };
           listeningAudio.ontimeupdate = function () { armStall(); };
@@ -4632,9 +4708,12 @@
       function askResumePrompt(title, detail) {
         return new Promise(function (resolve) {
           var overlay = document.createElement('div');
-          overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px';
+          overlay.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.55);display:flex;align-items:center;justify-content:center;z-index:9999;padding:16px;overflow-y:auto';
           var box = document.createElement('div');
-          box.style.cssText = 'background:#fff;border-radius:12px;max-width:460px;width:100%;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.25)';
+          // Mobile fix 2026-10-17: the box used background:#fff with NO text
+          // colour, so in dark mode the inherited light text was invisible
+          // on the white box. Pin dark text on the white box in both modes.
+          box.style.cssText = 'background:#fff;color:#14251d;border-radius:12px;max-width:460px;width:100%;padding:20px;box-shadow:0 10px 30px rgba(0,0,0,.25);margin:auto';
           var h = document.createElement('h3');
           h.style.margin = '0 0 8px';
           h.textContent = title;
@@ -4642,7 +4721,7 @@
           p.style.margin = '0';
           p.textContent = detail;
           var row = document.createElement('div');
-          row.style.cssText = 'display:flex;gap:10px;justify-content:flex-end;margin-top:16px';
+          row.style.cssText = 'display:flex;gap:10px;flex-wrap:wrap;justify-content:flex-end;margin-top:16px';
           var freshBtn = document.createElement('button');
           freshBtn.type = 'button'; freshBtn.className = 'exam-secondary'; freshBtn.textContent = 'Start fresh';
           var resumeBtn = document.createElement('button');
