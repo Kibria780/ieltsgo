@@ -3292,6 +3292,9 @@
       // audio-capture retry with a direct start, honest fallback messages.
       var audioCaptureRetried = false;
       var micPermissionGranted = false;
+      // Set when the user taps mic to stop; suppresses "no speech"
+      // messages for a deliberate stop (a stop is not a failure).
+      var userStopped = false;
 
       function sleepMs(ms) {
         return new Promise(function (resolve) { setTimeout(resolve, ms); });
@@ -3307,12 +3310,19 @@
 
       function createRecognition() {
         var rec = new SpeechRecognition();
+        // Per-instance lifecycle flags. Chrome on Android can end a
+        // recognition with a BARE onend (no onstart, no onerror) when
+        // the mic is busy — that must be a VISIBLE failure, never a
+        // silent reset to "ready".
+        var startedFired = false;
+        var errorFired = false;
         rec.lang = 'en-US';
         rec.interimResults = true;
         rec.continuous = true;
         rec.maxAlternatives = 3;
         rec.onstart = function () {
           if (recognition !== rec) return;
+          startedFired = true;
           clearTimeout(speechStartTimer);
           isStartingRecognition = false;
           recognitionFailed = false;
@@ -3351,33 +3361,51 @@
         };
         rec.onend = function () {
           if (recognition !== rec) return;
+          clearTimeout(speechStartTimer);
+          clearTimeout(speechStopTimer);
+          isStartingRecognition = false;
+          isListening = false;
+          micBtn.classList.remove('listening');
+          recognition = null;
+          if (errorFired) {
+            // onerror already handled the UI (reset / fallback / toast).
+            // Do not toast or reset a second time.
+            return;
+          }
+          if (!startedFired) {
+            // Bare onend: the recognizer ended without ever starting
+            // and without any error (Android Chrome mic-busy case).
+            // NEVER silently reset — show a visible failure.
+            resetVoiceInputUi();
+            showToast('Voice চালু হয়নি — আবার mic চাপুন।');
+            return;
+          }
           if (recognitionFailed) {
-            clearTimeout(speechStartTimer);
-            clearTimeout(speechStopTimer);
-            isStartingRecognition = false;
-            isListening = false;
-            micBtn.classList.remove('listening');
-            recognition = null;
+            // Defensive: onerror should have handled the UI, but never
+            // leave the UI stale on "Starting microphone…".
+            resetVoiceInputUi();
+            showToast('Voice বন্ধ হয়ে গেছে — আবার mic চাপুন।');
             return;
           }
           var shouldSubmit = input.value.trim();
           resetVoiceInputUi();
-          recognition = null;
           if (shouldSubmit) {
             delete input.dataset.finalSpeech;
             submitMessage();
+          } else if (!userStopped) {
+            showToast('কথা শোনা যায়নি — মাইকের কাছে থেকে আবার বলুন।');
           }
         };
         rec.onerror = function (event) {
           if (recognition !== rec) return;
+          errorFired = true;
           recognitionFailed = true;
           clearTimeout(speechStartTimer);
           clearTimeout(speechStopTimer);
           delete input.dataset.finalSpeech;
           if (event.error === 'audio-capture' && !audioCaptureRetried) {
-            // The getUserMedia pre-step stream may still hold the mic on
-            // some Android builds. Permission is already granted, so retry
-            // once with a direct start (no getUserMedia pre-step).
+            // Another app / the OS may still hold the mic. Retry once
+            // with a fresh instance and a direct start.
             audioCaptureRetried = true;
             beginRecognition();
             return;
@@ -3388,16 +3416,30 @@
               : 'Microphone permission বন্ধ আছে। Browser settings থেকে Microphone Allow করে আবার mic চাপুন।');
             return;
           }
+          if (event.error === 'aborted') {
+            // 'aborted' was silently swallowed before (no toast) — that
+            // is how a failed start looked like a silent reset. Only
+            // stay quiet when the user stopped it deliberately.
+            resetVoiceInputUi();
+            recognition = null;
+            if (!userStopped) showToast('Voice বন্ধ হয়ে গেছে — আবার mic চাপুন।');
+            return;
+          }
           resetVoiceInputUi();
           recognition = null;
           if (event.error === 'no-speech') showToast('কথা শোনা যায়নি—মাইকের একটু কাছে থেকে আবার বলুন।');
-          else if (event.error !== 'aborted') showToast('মাইক্রোফোন শোনা যায়নি। Internet connection দেখে আবার চেষ্টা করুন।');
+          else showToast('মাইক্রোফোন শোনা যায়নি। Internet connection দেখে আবার চেষ্টা করুন।');
         };
         return rec;
       }
 
       function beginRecognition() {
-        // Assumes mic permission was already granted in this attempt.
+        // Assumes mic permission was already granted in this attempt
+        // (SpeechRecognition asks for it itself) or the browser does
+        // not need a pre-step. Reset the failure flag: a previous
+        // instance's error (e.g. audio-capture retry) must not poison
+        // this instance's onend handling.
+        recognitionFailed = false;
         var rec = createRecognition();
         recognition = rec;
         try {
@@ -3422,6 +3464,7 @@
         recognitionFailed = false;
         audioCaptureRetried = false;
         micPermissionGranted = false;
+        userStopped = false;
         input.value = '';
         speechFinalText = '';
         delete input.dataset.finalSpeech;
@@ -3432,10 +3475,20 @@
 
         try {
           if (!window.isSecureContext) throw new Error('insecure-context');
-          // Step 1: explicit mic permission prompt via getUserMedia.
-          // This is the prompt the user actually sees and grants.
-          // The stream is stopped immediately so SpeechRecognition can
-          // take the mic (avoids the audio-capture conflict).
+          if (SpeechRecognition) {
+            // Mic fix 2026-10-17b (real Android phone: permission granted
+            // but recognition never started, then a SILENT reset):
+            // start recognition DIRECTLY in the tap gesture. The old
+            // code called getUserMedia first; that stream held the mic
+            // and Android Chrome's recognizer then failed to acquire
+            // it — ending with a bare onend (no onstart, no onerror)
+            // that silently reset the UI to "ready". SpeechRecognition
+            // asks for mic permission itself, so no pre-step is needed.
+            beginRecognition();
+            return;
+          }
+          // No SpeechRecognition (iOS Safari): prompt via getUserMedia,
+          // then honest keyboard-dictation fallback.
           var hasGum = !!(navigator.mediaDevices && navigator.mediaDevices.getUserMedia);
           if (hasGum) {
             try {
@@ -3449,21 +3502,8 @@
               }
               throw permError;
             }
-          } else if (!SpeechRecognition) {
-            useKeyboardDictationFallback();
-            return;
           }
-          if (!SpeechRecognition) {
-            // iOS Safari and similar: no in-app speech recognition exists.
-            // Permission was just granted above, but there is no capture
-            // API to use it with — honest keyboard-dictation fallback.
-            useKeyboardDictationFallback('মাইক্রোফোন অনুমতি দেওয়া আছে। এই browser-এ in-app voice input নেই — কীবোর্ডের mic (🎤) চেপে বলুন, তারপর Send চাপুন।');
-            return;
-          }
-          // Small pause so the OS fully releases the mic after the
-          // getUserMedia pre-step stream was stopped.
-          await sleepMs(150);
-          beginRecognition();
+          useKeyboardDictationFallback('মাইক্রোফোন অনুমতি দেওয়া আছে। এই browser-এ in-app voice input নেই — কীবোর্ডের mic (🎤) চেপে বলুন, তারপর Send চাপুন।');
         } catch (error) {
           recognitionFailed = true;
           var permissionDenied = error && (error.name === 'NotAllowedError' || error.name === 'SecurityError');
@@ -3485,6 +3525,7 @@
         // (fresh instance per attempt) and no-SR browsers (iOS — prompt
         // via getUserMedia, then honest keyboard-dictation fallback).
         if (isListening) {
+          userStopped = true;
           if (recognition) recognition.stop();
           return;
         }
@@ -5896,19 +5937,11 @@
             btn.disabled = false; btn.textContent = '🎤 Start speaking';
             return;
           }
-          // Mic fix 2026-10-17: explicit permission prompt first (same as
-          // Practice Chat), then a fresh recognition instance — the old
-          // code reused the load-time instance, which no longer exists.
-          try {
-            if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
-              await requestMicrophoneAccess();
-              await sleepMs(150);
-            }
-          } catch (permError) {
-            document.getElementById('fmSpeakNote').textContent = 'Microphone permission বন্ধ আছে। Browser settings থেকে Microphone Allow করে আবার চেষ্টা করুন।';
-            btn.disabled = false; btn.textContent = '🎤 Start speaking';
-            return;
-          }
+          // Mic fix 2026-10-17b: start recognition directly — do NOT
+          // call getUserMedia first (the pre-step stream holds the
+          // mic on Android and the recognizer then ends silently
+          // with no transcript). SpeechRecognition asks for mic
+          // permission itself.
           var fmRec = createRecognition();
           recognition = fmRec;
           var savedOnEnd = fmRec.onend;
@@ -5925,7 +5958,10 @@
             fmRec.onend = savedOnEnd;
             resetVoiceInputUi();
           };
-          try { fmRec.start(); } catch (e) {}
+          try { fmRec.start(); } catch (e) {
+            document.getElementById('fmSpeakNote').textContent = 'Voice চালু হয়নি — আবার চেষ্টা করুন।';
+            btn.disabled = false; btn.textContent = '🎤 Start speaking';
+          }
         });
         var nextQBtn = document.getElementById('fmSpeakNextQBtn');
         if (nextQBtn) nextQBtn.addEventListener('click', function () {
