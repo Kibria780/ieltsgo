@@ -1726,6 +1726,30 @@
 
       var AI_ENDPOINT = 'https://ieltsgo-proxy.vercel.app/api/chat';
 
+      // Latency: warm the serverless functions on page load so the first
+      // real message does not pay the Vercel cold start (~5-8s). Both
+      // warmup requests are rejected by validation (400) BEFORE any AI
+      // key or quota is touched, so they cost nothing and send no user
+      // data. Re-warmed when the tab returns after 10+ minutes hidden.
+      var warmedUpAt = 0;
+      function warmupLatency() {
+        var now = Date.now();
+        if (now - warmedUpAt < 10 * 60 * 1000) return;
+        warmedUpAt = now;
+        try {
+          fetch(AI_ENDPOINT, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ messages: [] })
+          }).catch(function () {});
+          fetch(TTS_ENDPOINT + '?warmup=1').catch(function () {});
+        } catch (e) {}
+      }
+      warmupLatency();
+      document.addEventListener('visibilitychange', function () {
+        if (!document.hidden) warmupLatency();
+      });
+
       /* ---- Phase 5: server-side question bank + scoring ----
          Questions (WITHOUT answer keys) come from GET /api/questions.
          Scores come from POST /api/submit, computed on the server from the
@@ -2110,7 +2134,9 @@
         };
       }
 
-      async function getPracticeFeedback(text) {
+      // Shared Practice Chat prompt (used by both the streaming and the
+      // non-streaming fallback paths so the two can never drift apart).
+      function practicePromptFor(text) {
         var recent = transcript.slice(-8).map(function (item) {
           return (item.role === 'user' ? 'Learner: ' : 'Coach: ') + item.text;
         }).join('\n');
@@ -2122,7 +2148,170 @@
           'Return ONLY valid JSON with exactly these keys: reply (English string), corrections (array of objects with original, corrected, explanation_bn), score (integer 0-100 for grammar and clarity), encouragement_bn (Bengali string).',
           'Each original must quote the learner’s exact problematic words. Each corrected must show the improved wording. Each explanation_bn must clearly explain the rule in Bengali. If there is no meaningful error, return an empty corrections array.'
         ].join(' ');
-        return normalizeCoachResult(await requestAI(systemPrompt, 'Conversation context:\n' + recent + '\n\nLatest learner answer to analyse:\n' + text));
+        return {
+          system: systemPrompt,
+          user: 'Conversation context:\n' + recent + '\n\nLatest learner answer to analyse:\n' + text
+        };
+      }
+
+      async function getPracticeFeedback(text) {
+        var prompt = practicePromptFor(text);
+        return normalizeCoachResult(await requestAI(prompt.system, prompt.user));
+      }
+
+      // Streaming Practice Chat: the proxy forwards upstream SSE deltas, so
+      // the reply text appears as it generates and voice can start on the
+      // first complete sentence instead of waiting for the whole reply.
+      // onText(fullAccumulatedText) fires on every delta.
+      async function requestAIStream(systemPrompt, userPrompt, opts, onText) {
+        var controller = new AbortController();
+        var timeout = setTimeout(function () { controller.abort(); }, 60000);
+        try {
+          var response;
+          try {
+            var reqBody = {
+              messages: [
+                { role: 'system', content: systemPrompt },
+                { role: 'user', content: userPrompt }
+              ],
+              stream: true
+            };
+            if (opts && opts.maxTokens) reqBody.maxTokens = opts.maxTokens;
+            response = await fetch(AI_ENDPOINT, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(reqBody),
+              signal: controller.signal
+            });
+          } catch (fetchError) {
+            if (fetchError && fetchError.name === 'AbortError') throw new Error('AI took too long (60s timeout)');
+            throw fetchError;
+          }
+          if (response.status === 429) throw new Error('ai-rate-limit');
+          if (!response.ok) {
+            var errBody = null;
+            try { errBody = await response.json(); } catch (e) { errBody = null; }
+            var err = new Error('AI service returned ' + response.status);
+            err.status = response.status;
+            if (errBody) {
+              err.reason = errBody.reason || null;
+              err.retryable = errBody.retryable;
+              err.retryAfterSeconds = errBody.retryAfterSeconds;
+              if (errBody.error) err.serverMessage = errBody.error;
+            }
+            throw err;
+          }
+          var ct = String(response.headers.get('content-type') || '');
+          if (ct.indexOf('text/event-stream') === -1) {
+            // Proxy answered non-streaming (upstream ignored stream:true):
+            // parse as before and deliver the whole text at once.
+            var payload = await response.json();
+            var content = payload && payload.text ? payload.text : '';
+            if (!content) throw new Error('AI response was empty');
+            if (onText) onText(content);
+            return content;
+          }
+          var reader = response.body.getReader();
+          var decoder = new TextDecoder();
+          var buf = '';
+          var acc = '';
+          var streamErr = null;
+          for (;;) {
+            var read = await reader.read();
+            if (read.done) break;
+            buf += decoder.decode(read.value, { stream: true });
+            var idx;
+            while ((idx = buf.indexOf('\n\n')) !== -1) {
+              var raw = buf.slice(0, idx);
+              buf = buf.slice(idx + 2);
+              var lines = raw.split('\n');
+              for (var li = 0; li < lines.length; li++) {
+                var t = lines[li].trim();
+                if (t.indexOf('data:') !== 0) continue;
+                var p = t.slice(5).trim();
+                if (p === '[DONE]') continue;
+                var obj = null;
+                try { obj = JSON.parse(p); } catch (e) { continue; }
+                if (!obj) continue;
+                if (obj.done) continue;
+                if (obj.error) { streamErr = new Error('AI stream error: ' + obj.error); break; }
+                if (obj.delta) {
+                  acc += obj.delta;
+                  if (onText) onText(acc);
+                }
+              }
+              if (streamErr) break;
+            }
+            if (streamErr) break;
+          }
+          if (streamErr) throw streamErr;
+          if (!acc) throw new Error('AI response was empty');
+          return acc;
+        } finally {
+          clearTimeout(timeout);
+        }
+      }
+
+      // Extract the "reply" value from a PARTIAL JSON stream (the closing
+      // quote may not have arrived yet). Returns '' when no usable prefix
+      // exists yet — the caller just waits for more deltas.
+      function extractPartialReply(acc) {
+        var m = /"reply"\s*:\s*"((?:[^"\\]|\\.)*)/.exec(acc);
+        if (!m) return '';
+        try { return JSON.parse('"' + m[1] + '"'); } catch (e) {
+          try { return JSON.parse('"' + m[1].replace(/\\$/, '') + '"'); } catch (e2) { return ''; }
+        }
+      }
+
+      // Index just past the last complete sentence boundary (". " / "! " /
+      // "? ") in `s`, or -1 when no complete sentence has arrived yet. A
+      // boundary only counts once the next sentence has started, so a
+      // decimal ("3.5") or abbreviation is never spoken half-finished.
+      function lastSentenceBoundary(s) {
+        var re = /[.!?]["']?\s+/g;
+        var last = -1;
+        var m;
+        while ((m = re.exec(s)) !== null) last = m.index + m[0].length;
+        return last;
+      }
+
+      // Streaming Practice Chat: shows the reply as it generates and
+      // speaks each sentence as soon as it completes. `state` reports
+      // back whether any voice already started (so the caller knows a
+      // fallback must not re-speak) and holds the live bubble element.
+      async function getPracticeFeedbackStream(text, state) {
+        var prompt = practicePromptFor(text);
+        var full = await requestAIStream(prompt.system, prompt.user, null, function (acc) {
+          var partial = extractPartialReply(acc);
+          if (!partial) return;
+          if (!state.liveRow) {
+            removeTyping();
+            state.liveRow = addMessage('assistant', partial, false);
+            state.liveBubble = state.liveRow.querySelector('.bubble');
+          } else if (state.liveBubble) {
+            state.liveBubble.textContent = partial;
+          }
+          var boundary = lastSentenceBoundary(partial);
+          if (boundary > state.spokenUpTo) {
+            var sentence = partial.slice(state.spokenUpTo, boundary).trim();
+            state.spokenUpTo = boundary;
+            if (sentence) {
+              if (!state.spokenAny) { state.spokenAny = true; speak(sentence); }
+              else speakMore(sentence);
+            }
+          }
+        });
+        var result = normalizeCoachResult(extractJsonObject(full));
+        // Speak any remainder the stream-end left unspoken (e.g. a
+        // single-sentence reply with no sentence boundary mid-stream).
+        var remainder = (result.reply || '').slice(state.spokenUpTo).trim();
+        if (remainder) {
+          if (!state.spokenAny) { state.spokenAny = true; speak(remainder); }
+          else speakMore(remainder);
+          state.spokenUpTo = (result.reply || '').length;
+        }
+        if (state.liveBubble) state.liveBubble.textContent = result.reply || '';
+        return result;
       }
 
       async function getMockFeedback() {
@@ -2311,23 +2500,79 @@
       // Chunked TTS session: bumped on every speak()/stop so stale
       // chunk queues die when a new reply starts or playback stops.
       var ttsSession = 0;
-      var ttsPrefetched = {};
+      // Playback queue: speak() starts a fresh queue, speakMore()
+      // appends to the live queue without restarting playback — the
+      // streaming chat starts voice on the first sentence while the
+      // rest of the reply is still generating.
+      var ttsQueue = [];
+      var ttsPumpRunning = false;
+      var ttsFirstTimer = null;
 
       function stopVoicePlayback() {
         ttsSession++;
         if ('speechSynthesis' in window) window.speechSynthesis.cancel();
+        if (ttsFirstTimer) { clearTimeout(ttsFirstTimer); ttsFirstTimer = null; }
+        ttsQueue.forEach(function (item) { try { item.pause(); } catch (e) {} });
+        ttsQueue = [];
+        ttsPumpRunning = false;
         if (ttsAudio) {
-          ttsAudio.pause();
+          try { ttsAudio.pause(); } catch (e) {}
           ttsAudio = null;
         }
-        Object.keys(ttsPrefetched).forEach(function (k) {
-          try { ttsPrefetched[k].pause(); } catch (e) {}
-        });
-        ttsPrefetched = {};
         if (ttsAudioUrl) {
           URL.revokeObjectURL(ttsAudioUrl);
           ttsAudioUrl = '';
         }
+      }
+
+      // Drain the TTS queue in order. Each chunk's Audio is created at
+      // enqueue time (preload auto), so the next chunk is already
+      // downloading while the current one plays.
+      function pumpTtsQueue(session, fullText, fallback) {
+        if (ttsPumpRunning) return;
+        ttsPumpRunning = true;
+        function next() {
+          if (session !== ttsSession) { ttsPumpRunning = false; return; }
+          var item = ttsQueue.shift();
+          if (!item) { ttsPumpRunning = false; ttsAudio = null; return; }
+          var audio = item;
+          ttsAudio = audio;
+          audio.onplaying = function () {
+            if (session !== ttsSession) return;
+            if (ttsFirstTimer) { clearTimeout(ttsFirstTimer); ttsFirstTimer = null; }
+          };
+          audio.onended = function () {
+            if (session !== ttsSession) return;
+            next();
+          };
+          audio.onerror = function () {
+            if (session !== ttsSession) return;
+            if (fallback && fallback.firstChunkFailed && audio === fallback.firstAudio) fallback.firstChunkFailed();
+            next();
+          };
+          audio.play().catch(function () {
+            if (session !== ttsSession) return;
+            if (fallback && fallback.firstChunkFailed && audio === fallback.firstAudio) fallback.firstChunkFailed();
+            next();
+          });
+        }
+        next();
+      }
+
+      function enqueueTts(text, session, fallback) {
+        var chunks = splitSpeechChunks(text);
+        var firstAudio = null;
+        chunks.forEach(function (chunk) {
+          var a = new Audio();
+          a.preload = 'auto';
+          a.playbackRate = 1.15;
+          a.src = ttsUrlFor(chunk);
+          if (!firstAudio) firstAudio = a;
+          ttsQueue.push(a);
+        });
+        if (fallback) fallback.firstAudio = firstAudio;
+        if (chunks.length) pumpTtsQueue(session, text, fallback);
+        return chunks.length;
       }
 
       function speakWithBrowser(text) {
@@ -2381,6 +2626,9 @@
           '&_=' + Date.now() + Math.floor(Math.random() * 1000);
       }
 
+      // Fresh voice reply: stops any current playback, then speaks `text`.
+      // The 8s first-chunk timer falls back to the browser voice if the
+      // natural voice never starts (same behaviour as before).
       async function speak(text) {
         if (!voiceOn) return;
         stopVoicePlayback();
@@ -2395,52 +2643,40 @@
           speakWithBrowser(text);
         }
 
-        var chunks = splitSpeechChunks(text);
-        if (!chunks.length) return;
-
-        // One Audio per chunk, created on demand. While chunk i plays,
-        // chunk i+1 is already downloading, so playback stays seamless.
-        function getChunkAudio(index) {
-          if (!ttsPrefetched[index]) {
-            var a = new Audio();
-            a.preload = 'auto';
-            a.playbackRate = 1.15;
-            a.src = ttsUrlFor(chunks[index]);
-            ttsPrefetched[index] = a;
-          }
-          return ttsPrefetched[index];
-        }
-
-        var firstTimer = setTimeout(function () {
+        var fallback = {
+          firstAudio: null,
+          firstChunkFailed: useBrowserFallback
+        };
+        if (!enqueueTts(text, session, fallback)) return;
+        ttsFirstTimer = setTimeout(function () {
           if (session === ttsSession) useBrowserFallback();
         }, 8000);
+      }
 
-        function playChunk(index) {
-          if (session !== ttsSession) return;
-          if (index >= chunks.length) { ttsAudio = null; return; }
-          var audio = getChunkAudio(index);
-          ttsAudio = audio;
-          audio.onplaying = function () {
-            if (session !== ttsSession) return;
-            if (index === 0 && firstTimer) { clearTimeout(firstTimer); firstTimer = null; }
-            if (index + 1 < chunks.length) getChunkAudio(index + 1);
-          };
-          audio.onended = function () {
-            if (session !== ttsSession) return;
-            playChunk(index + 1);
-          };
-          audio.onerror = function () {
-            if (session !== ttsSession) return;
-            if (index === 0) useBrowserFallback();
-            else playChunk(index + 1);
-          };
-          audio.play().catch(function () {
-            if (session !== ttsSession) return;
-            if (index === 0) useBrowserFallback();
-          });
+      // Append `text` to the live voice queue without stopping what is
+      // already playing. Used by the streaming chat: the first sentence
+      // is spoken while the rest of the reply is still generating.
+      // If nothing is playing, behaves like speak() for this text.
+      function speakMore(text) {
+        if (!voiceOn) return;
+        var session = ttsSession;
+        var wasIdle = ttsQueue.length === 0 && !ttsPumpRunning;
+        var fallback = {
+          firstAudio: null,
+          firstChunkFailed: function () {
+            if (wasIdle && session === ttsSession) {
+              stopVoicePlayback();
+              showToast('Natural voice unavailable—browser voice ব্যবহার করা হচ্ছে।');
+              speakWithBrowser(text);
+            }
+          }
+        };
+        if (!enqueueTts(text, session, fallback)) return;
+        if (wasIdle && !ttsFirstTimer) {
+          ttsFirstTimer = setTimeout(function () {
+            if (session === ttsSession && fallback.firstChunkFailed) fallback.firstChunkFailed();
+          }, 8000);
         }
-
-        playChunk(0);
       }
 
       function renderFeedback(result) {
@@ -2662,23 +2898,45 @@
         setStatus('AI coach is checking…', true);
         addMessage('assistant', '', true);
 
+        var streamState = null;
         try {
           var result;
+          // Streaming first: reply text appears as it generates and voice
+          // starts on the first complete sentence. If the stream fails
+          // before any voice started, fall back once to the proven
+          // non-streaming path (existing retry behaviour). If voice
+          // already started, keep the partial reply and do NOT re-speak.
+          streamState = { spokenUpTo: 0, spokenAny: false, liveRow: null, liveBubble: null };
           try {
-            result = await getPracticeFeedback(text);
-          } catch (firstError) {
-            // Auto-retry once after a short pause (transient network/AI hiccup).
+            result = await getPracticeFeedbackStream(text, streamState);
+          } catch (streamError) {
+            if (streamState.spokenAny) throw streamError;
+            if (streamState.liveRow) streamState.liveRow.remove();
+            streamState = { spokenUpTo: 0, spokenAny: false, liveRow: null, liveBubble: null, streamed: false };
             setStatus('আবার চেষ্টা করছি…', true);
             await new Promise(function (r) { setTimeout(r, 2000); });
             result = await getPracticeFeedback(text);
           }
           removeTyping();
-          addMessage('assistant', result.reply, false);
+          if (streamState.liveRow) {
+            if (streamState.liveBubble) streamState.liveBubble.textContent = result.reply;
+          } else {
+            addMessage('assistant', result.reply, false);
+          }
           transcript.push({ role: 'assistant', text: result.reply });
           renderFeedback(result);
-          speak(result.reply);
+          if (!streamState.spokenAny) speak(result.reply);
           setStatus('AI coach · ready', false);
         } catch (error) {
+          removeTyping();
+          if (streamState && streamState.spokenAny) {
+            // A sentence was already spoken: keep the partial reply on
+            // screen, do not fabricate the rest, offer a retry.
+            setStatus('AI coach unavailable', true);
+            showToast('উত্তরটি শেষ হওয়ার আগেই সংযোগ কেটে গেছে — আবার Send চাপুন।');
+            input.value = text;
+            return;
+          }
           removeTyping();
           var rateLimited = error && error.message === 'ai-rate-limit';
           input.value = text;
