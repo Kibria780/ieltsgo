@@ -605,6 +605,84 @@
       line-height: 1.6;
       font-size: .86rem;
     }
+    .coach-history {
+      border-top: 1px solid var(--line);
+      padding: 14px 16px 16px;
+    }
+    .coach-history-title {
+      margin: 0 0 4px;
+      font-size: .76rem;
+      color: var(--muted);
+      letter-spacing: .04em;
+    }
+    .coach-history-note {
+      margin: 0 0 10px;
+      font-size: .7rem;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .coach-history-empty {
+      margin: 0;
+      font-size: .8rem;
+      color: var(--muted);
+      line-height: 1.6;
+    }
+    .coach-history-entry {
+      margin-bottom: 10px;
+      padding: 12px;
+      border-radius: 14px;
+      background: var(--surface-2);
+    }
+    .coach-history-meta {
+      display: flex;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 6px;
+      font-size: .7rem;
+      color: var(--muted);
+    }
+    .coach-history-meta strong { color: var(--ink); }
+    .coach-history-answer {
+      margin: 0 0 6px;
+      font-size: .82rem;
+      line-height: 1.5;
+      font-style: italic;
+    }
+    .coach-history-correction {
+      margin: 6px 0 0;
+      font-size: .78rem;
+      line-height: 1.55;
+    }
+    .coach-history-correction .wrong { display: block; }
+    .coach-history-correction .right { display: block; }
+    .coach-history-correction .explain {
+      display: block;
+      margin: 4px 0 0;
+      padding-top: 4px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: .74rem;
+    }
+    .coach-history-pages {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .coach-history-pages button {
+      min-width: 64px;
+      padding: 7px 10px;
+      border: 1px solid var(--line);
+      border-radius: 10px;
+      background: var(--surface);
+      color: var(--ink);
+      font-size: .78rem;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .coach-history-pages button:disabled { opacity: .45; cursor: not-allowed; }
+    .coach-history-pages span { font-size: .76rem; color: var(--muted); }
     .mock-progress { display: grid; gap: 14px; }
     .mock-note {
       margin: 0;
@@ -1319,6 +1397,7 @@
             </div>
           </div>
         </div>
+        <div class="coach-history" id="coachHistory" aria-label="Coach notes history"></div>
       </aside>
     </section>
 
@@ -2725,6 +2804,180 @@
         });
       }
 
+      // ---- Coach Notes history (browser-only, paginated) ----
+      // Every practice coach feedback entry is saved in this browser's
+      // localStorage (same recovery-cache pattern as other progress).
+      // It is NOT cross-device: history lives in this browser/device.
+      // Cap keeps localStorage small; no keys/credentials are stored.
+      var COACH_HISTORY_KEY = 'ieltsgo_p4_coach_history';
+      var COACH_HISTORY_MAX = 200;
+      var COACH_HISTORY_PER_PAGE = 5;
+      var coachHistoryPage = 1;
+      var coachHistoryEl = document.getElementById('coachHistory');
+
+      function coachHistoryClip(value, max) {
+        var s = String(value == null ? '' : value);
+        return s.length > max ? s.slice(0, max) : s;
+      }
+
+      function loadCoachHistory() {
+        try {
+          var raw = localStorage.getItem(COACH_HISTORY_KEY);
+          if (!raw) return [];
+          var list = JSON.parse(raw);
+          return Array.isArray(list) ? list : [];
+        } catch (e) { return []; }
+      }
+
+      function saveCoachHistory(list) {
+        try {
+          localStorage.setItem(COACH_HISTORY_KEY, JSON.stringify(list.slice(-COACH_HISTORY_MAX)));
+          return true;
+        } catch (e) {
+          // Quota: drop the oldest half once and retry; never crash the app.
+          try {
+            var trimmed = list.slice(Math.floor(list.length / 2)).slice(-COACH_HISTORY_MAX);
+            localStorage.setItem(COACH_HISTORY_KEY, JSON.stringify(trimmed));
+            return true;
+          } catch (e2) { return false; }
+        }
+      }
+
+      function recordCoachHistory(userText, result) {
+        if (!result) return;
+        var list = loadCoachHistory();
+        var entry = {
+          id: Date.now() + '-' + Math.floor(Math.random() * 100000),
+          at: new Date().toISOString(),
+          answer: coachHistoryClip(userText, 300),
+          reply: coachHistoryClip(result.reply, 300),
+          score: Number(result.score) || 0,
+          encouragement: coachHistoryClip(result.encouragement_bn, 300),
+          corrections: (result.corrections || []).slice(0, 3).map(function (c) {
+            return {
+              original: coachHistoryClip(c.original, 300),
+              corrected: coachHistoryClip(c.corrected, 300),
+              explanation_bn: coachHistoryClip(c.explanation_bn, 300)
+            };
+          })
+        };
+        // De-dup guard: one submit = one entry. Skip if the newest entry
+        // is the same answer + reply within 10 seconds (double-render).
+        var last = list[list.length - 1];
+        if (last && last.answer === entry.answer && last.reply === entry.reply) {
+          var lastAt = Date.parse(last.at || '');
+          if (lastAt && Date.now() - lastAt < 10000) return;
+        }
+        list.push(entry);
+        saveCoachHistory(list);
+        coachHistoryPage = 1;
+        renderCoachHistory();
+      }
+
+      function renderCoachHistory() {
+        if (!coachHistoryEl) return;
+        var list = loadCoachHistory();
+        coachHistoryEl.innerHTML = '';
+        var title = document.createElement('h3');
+        title.className = 'coach-history-title';
+        title.textContent = 'RECENT HISTORY' + (list.length ? ' · ' + list.length : '');
+        coachHistoryEl.appendChild(title);
+        var note = document.createElement('p');
+        note.className = 'coach-history-note bn';
+        note.textContent = 'সব entry এই browser/device-এ save হয় — অন্য device-এ দেখা যাবে না।';
+        coachHistoryEl.appendChild(note);
+        if (!list.length) {
+          var empty = document.createElement('p');
+          empty.className = 'coach-history-empty bn';
+          empty.textContent = 'এখনো কোনো history নেই। উত্তর দিলে প্রতিটি turn-এর coach note এখানে জমা হবে।';
+          coachHistoryEl.appendChild(empty);
+          return;
+        }
+        var totalPages = Math.max(1, Math.ceil(list.length / COACH_HISTORY_PER_PAGE));
+        if (coachHistoryPage > totalPages) coachHistoryPage = totalPages;
+        if (coachHistoryPage < 1) coachHistoryPage = 1;
+        // Newest first: page p shows indices
+        // [len - p*PER_PAGE, len - (p-1)*PER_PAGE).
+        var end = list.length - (coachHistoryPage - 1) * COACH_HISTORY_PER_PAGE;
+        var start = list.length - coachHistoryPage * COACH_HISTORY_PER_PAGE;
+        if (start < 0) start = 0;
+        var pageEntries = list.slice(start, end).reverse();
+        pageEntries.forEach(function (entry) {
+          var card = document.createElement('article');
+          card.className = 'coach-history-entry';
+          var meta = document.createElement('div');
+          meta.className = 'coach-history-meta';
+          var turnLabel = document.createElement('strong');
+          turnLabel.textContent = 'Score ' + (entry.score || '—');
+          var timeLabel = document.createElement('span');
+          var d = new Date(entry.at);
+          timeLabel.textContent = isNaN(d.getTime()) ? '' : d.toLocaleString();
+          meta.appendChild(turnLabel);
+          meta.appendChild(timeLabel);
+          card.appendChild(meta);
+          if (entry.answer) {
+            var answer = document.createElement('p');
+            answer.className = 'coach-history-answer';
+            answer.textContent = '“' + entry.answer + '”';
+            card.appendChild(answer);
+          }
+          if (entry.corrections && entry.corrections.length) {
+            entry.corrections.forEach(function (c, i) {
+              var corr = document.createElement('p');
+              corr.className = 'coach-history-correction';
+              var n = document.createElement('strong');
+              n.textContent = (i + 1) + '. ';
+              corr.appendChild(n);
+              var wrong = document.createElement('span');
+              wrong.className = 'wrong';
+              wrong.textContent = c.original || '—';
+              corr.appendChild(wrong);
+              var right = document.createElement('span');
+              right.className = 'right';
+              right.textContent = c.corrected || '—';
+              corr.appendChild(right);
+              if (c.explanation_bn) {
+                var ex = document.createElement('span');
+                ex.className = 'explain bn';
+                ex.textContent = c.explanation_bn;
+                corr.appendChild(ex);
+              }
+              card.appendChild(corr);
+            });
+          } else if (entry.encouragement) {
+            var enc = document.createElement('p');
+            enc.className = 'coach-history-correction bn';
+            enc.textContent = entry.encouragement;
+            card.appendChild(enc);
+          }
+          coachHistoryEl.appendChild(card);
+        });
+        var pager = document.createElement('div');
+        pager.className = 'coach-history-pages';
+        var prevBtn = document.createElement('button');
+        prevBtn.type = 'button';
+        prevBtn.textContent = '← Prev';
+        prevBtn.disabled = coachHistoryPage <= 1;
+        prevBtn.addEventListener('click', function () {
+          if (coachHistoryPage > 1) { coachHistoryPage -= 1; renderCoachHistory(); }
+        });
+        var pageLabel = document.createElement('span');
+        pageLabel.textContent = 'Page ' + coachHistoryPage + ' of ' + totalPages;
+        var nextBtn = document.createElement('button');
+        nextBtn.type = 'button';
+        nextBtn.textContent = 'Next →';
+        nextBtn.disabled = coachHistoryPage >= totalPages;
+        nextBtn.addEventListener('click', function () {
+          if (coachHistoryPage < totalPages) { coachHistoryPage += 1; renderCoachHistory(); }
+        });
+        pager.appendChild(prevBtn);
+        pager.appendChild(pageLabel);
+        pager.appendChild(nextBtn);
+        coachHistoryEl.appendChild(pager);
+      }
+
+      renderCoachHistory();
+
       function renderMockResult(data) {
         var overall = Math.max(0, Math.min(9, Number(data.overall_band) || 0));
         scoreRing.style.setProperty('--score', (overall / 9 * 360) + 'deg');
@@ -2928,6 +3181,7 @@
           }
           transcript.push({ role: 'assistant', text: result.reply });
           renderFeedback(result);
+          recordCoachHistory(text, result);
           if (!streamState.spokenAny) speak(result.reply);
           setStatus('AI coach · ready', false);
         } catch (error) {
