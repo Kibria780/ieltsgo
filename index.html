@@ -3257,11 +3257,38 @@
       // records with LIVE "Recording… MM:SS" + level bars -> tap mic again
       // to stop -> blob POSTs to /api/transcribe (own proxy, Groq
       // whisper-large-v3) -> text fills the input -> user taps Send.
-      // NOTHING auto-submits: the user verifies the text first.
-      // Audio blobs go only to the user's own proxy, never stored.
+      // LIVE auto-send 2026-10-18: while recording, an AnalyserNode
+      // measures the mic level. Once real speech has been heard, 3s of
+      // continuous silence auto-stops the recording; a non-empty
+      // transcript then AUTO-SENDS (same submit path as Send). Empty
+      // transcripts never auto-send. If the user taps into / edits the
+      // input during transcription, auto-send is cancelled and the text
+      // stays for manual Send. Audio blobs go only to the user's own
+      // proxy, never stored.
       var TRANSCRIBE_ENDPOINT = 'https://ieltsgo-proxy.vercel.app/api/transcribe';
       var MAX_REC_MS = 180000; // 3 min cap bounds upload size (~1 MB Opus)
-      var recSession = null; // {recorder, stream, chunks, timerId, startedAt, levelHistory, audioCtx, analyser, callbacks, discard, mimeType}
+      var SILENCE_MS = 3000; // 3s of silence after speech -> auto-stop
+      // Silence threshold on the scaled RMS level (0..1) the level bars
+      // show. Normal speech is well above it; a quiet room is below.
+      // If the room is too noisy the silence trigger simply never fires
+      // and the user stops manually (safe fallback, no false send).
+      var SILENCE_LEVEL = 0.12;
+      var recSession = null; // {recorder, stream, chunks, timerId, startedAt, levelHistory, audioCtx, analyser, callbacks, discard, mimeType, lastSpeechAt, heardSpeech, autoStopped, silenceStopFired}
+      // Auto-send arming for the current voice turn (Practice Chat only).
+      // Armed at recording start; cancelled if the user taps into or
+      // edits the input (they take over the message manually).
+      var voiceAutoSend = false;
+      function cancelVoiceAutoSend() { voiceAutoSend = false; }
+      function armVoiceAutoSend() {
+        voiceAutoSend = true;
+        input.addEventListener('input', cancelVoiceAutoSend);
+        input.addEventListener('focus', cancelVoiceAutoSend);
+      }
+      function disarmVoiceAutoSend() {
+        voiceAutoSend = false;
+        input.removeEventListener('input', cancelVoiceAutoSend);
+        input.removeEventListener('focus', cancelVoiceAutoSend);
+      }
 
       function formatRecTime(ms) {
         var total = Math.floor(ms / 1000);
@@ -3322,7 +3349,7 @@
           callbacks.onError(denied ? 'permission' : 'start');
           return false;
         }
-        var session = { stream: stream, chunks: [], callbacks: callbacks, startedAt: Date.now(), levelHistory: [], discard: false, audioCtx: null, analyser: null, timerId: null, mimeType: '' };
+        var session = { stream: stream, chunks: [], callbacks: callbacks, startedAt: Date.now(), levelHistory: [], discard: false, audioCtx: null, analyser: null, timerId: null, mimeType: '', lastSpeechAt: 0, heardSpeech: false, autoStopped: false, silenceStopFired: false };
         recSession = session;
         // Live level meter (waveform-ish): RMS from an AnalyserNode.
         // Cosmetic only — recording works without it.
@@ -3355,7 +3382,7 @@
           if (recSession === session) recSession = null;
           if (session.discard) return;
           var blob = new Blob(session.chunks, { type: session.mimeType || 'audio/webm' });
-          session.callbacks.onDone(blob);
+          session.callbacks.onDone(blob, !!session.autoStopped);
         };
         try {
           recorder.start(250);
@@ -3381,16 +3408,29 @@
           session.levelHistory.push(level);
           if (session.levelHistory.length > 14) session.levelHistory.shift();
           callbacks.onTick(elapsed, levelBars(session.levelHistory));
+          // Silence auto-stop: only AFTER real speech was heard (a
+          // quiet start must not instantly auto-send), and only after
+          // SILENCE_MS of continuous below-threshold level.
+          if (level >= SILENCE_LEVEL) {
+            session.lastSpeechAt = Date.now();
+            session.heardSpeech = true;
+          } else if (session.heardSpeech && !session.silenceStopFired && Date.now() - session.lastSpeechAt >= SILENCE_MS) {
+            session.silenceStopFired = true;
+            session.autoStopped = true;
+            stopVoiceRecording(false);
+          }
           if (elapsed >= MAX_REC_MS) stopVoiceRecording(false);
         }, 250);
         return true;
       }
       // Stop the active recording. discard=true: throw the audio away
       // (used when the user hits Send mid-recording — no transcription).
+      // A discarded recording can never auto-send, so disarm it.
       function stopVoiceRecording(discard) {
         if (!recSession) return false;
         var session = recSession;
         session.discard = !!discard;
+        if (discard) disarmVoiceAutoSend();
         try {
           if (session.recorder && session.recorder.state !== 'inactive') session.recorder.stop();
           else { stopLevelMeter(session); stopAudioTracks(session.stream); recSession = null; }
@@ -3433,15 +3473,16 @@
         }
         input.value = '';
         isListening = true;
+        armVoiceAutoSend();
         micBtn.classList.add('listening');
         micBtn.setAttribute('aria-label', 'Stop recording');
-        micHint.textContent = '🔴 Recording… 00:00 — শেষ হলে mic-এ আবার চাপুন';
+        micHint.textContent = '🔴 Recording… 00:00 — ৩ সেকেন্ড চুপ থাকলে নিজে থেকেই পাঠানো হবে';
         setStatus('Recording…', true);
         await startAudioRecording({
           onTick: function (elapsed, bars) {
-            micHint.textContent = '🔴 Recording… ' + formatRecTime(elapsed) + ' ' + bars + ' — শেষ হলে mic-এ আবার চাপুন';
+            micHint.textContent = '🔴 Recording… ' + formatRecTime(elapsed) + ' ' + bars + ' — ৩ সেকেন্ড চুপ থাকলে auto-send';
           },
-          onDone: function (blob) {
+          onDone: function (blob, autoStopped) {
             isListening = false;
             isTranscribing = true;
             micBtn.classList.remove('listening');
@@ -3450,17 +3491,27 @@
             setStatus('Transcribing…', true);
             transcribeAudioBlob(blob).then(function (text) {
               isTranscribing = false;
+              // Auto-send is decided NOW (not at stop time): the user
+              // may have tapped into / edited the input during
+              // transcription, which cancels it via cancelVoiceAutoSend.
+              var autoSend = !!(autoStopped && voiceAutoSend);
+              disarmVoiceAutoSend();
               resetVoiceInputUi();
               if (text) {
-                // Fill the input — NEVER auto-submit. The user verifies
-                // the text first, then taps Send (or edits/retries).
                 input.value = input.value.trim() ? input.value.trim() + ' ' + text : text;
-                input.focus({ preventScroll: true });
+                if (autoSend && !isBusy) {
+                  // LIVE auto-send: same submit path as the Send button.
+                  setStatus('Sending…', true);
+                  submitMessage();
+                } else {
+                  input.focus({ preventScroll: true });
+                }
               } else {
                 showToast('কথা শোনা যায়নি — মাইকের কাছে থেকে আবার বলুন।');
               }
             }).catch(function (err) {
               isTranscribing = false;
+              disarmVoiceAutoSend();
               if (err && err.code === 'not_configured') {
                 resetVoiceInputUi();
                 micHint.textContent = 'কীবোর্ডের মাইক চেপে বলুন, তারপর Send চাপুন';
@@ -3474,6 +3525,7 @@
           },
           onError: function (kind) {
             isListening = false;
+            disarmVoiceAutoSend();
             if (kind === 'permission') {
               useKeyboardDictationFallback('Microphone permission বন্ধ আছে। Browser settings থেকে Microphone Allow করে আবার mic চাপুন।');
             } else if (kind === 'unsupported') {
@@ -3493,7 +3545,9 @@
       micBtn.addEventListener('click', function () {
         if (isBusy || isTranscribing) return;
         // Tap to start recording, tap again to stop + transcribe.
-        // The transcript fills the input — the user taps Send.
+        // LIVE auto-send: 3s of silence after speech auto-stops the
+        // recording and auto-sends a non-empty transcript. Manual stop
+        // still just fills the input for the user to Send.
         if (isListening) {
           stopVoiceRecording(false);
           return;
@@ -5888,6 +5942,9 @@
           // Toggle: tap to record, tap again to stop + transcribe.
           // Same MediaRecorder path as Practice Chat — SpeechRecognition
           // is dead on this device (aborts ~1s after start).
+          // 3s of silence after speech auto-stops here too (shared
+          // silence detection in startAudioRecording); the transcript
+          // is then saved to this part, as before.
           if (isListening) {
             btn.disabled = true; btn.textContent = 'Transcribing…';
             stopVoiceRecording(false);
@@ -5911,10 +5968,10 @@
           var started = await startAudioRecording({
             onTick: function (elapsed, bars) {
               var note = document.getElementById('fmSpeakNote');
-              if (note) note.textContent = '🔴 Recording… ' + formatRecTime(elapsed) + ' ' + bars + ' — শেষ হলে mic-এ আবার চাপুন।';
+              if (note) note.textContent = '🔴 Recording… ' + formatRecTime(elapsed) + ' ' + bars + ' — ৩ সেকেন্ড চুপ থাকলে নিজে থেকেই থামবে।';
               btn.disabled = false; btn.textContent = '⏹ Stop recording';
             },
-            onDone: function (blob) {
+            onDone: function (blob, autoStopped) {
               isListening = false;
               isTranscribing = true;
               btn.disabled = true; btn.textContent = 'Transcribing…';
