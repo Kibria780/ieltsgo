@@ -1387,16 +1387,267 @@
       .send { background: #ffffff !important; color: #14251d !important; }
     }
   </style>
+  <!-- UI SHELL (demo-faithful layout, 2026-10-18): sidebar + screens. CSS only;
+       all IDs / JS logic untouched. -->
+  <style id="ui-shell">
+    :root { --ink-2: #33465C; --line-strong: #BFCBD8; }
+    @media (prefers-color-scheme: dark) {
+      :root { --ink-2: #C3D2E1; --line-strong: #2E4763; }
+    }
+    .app-shell { display: grid; grid-template-columns: 228px 1fr; gap: 0; align-items: start; }
+    .side-nav { display: flex; flex-direction: column; gap: 4px; }
+    .side { background: var(--surface-2); border: 1px solid var(--line); border-radius: 18px; padding: 20px 14px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 12px; }
+    .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 18px; }
+    .brand-mark { width: 38px; height: 38px; border-radius: 11px; background: var(--accent); color: #fff; display: grid; place-items: center; font-family: "Newsreader", Georgia, serif; font-weight: 700; font-size: 19px; flex: none; }
+    .brand-name { font-weight: 800; font-size: 17px; letter-spacing: -.01em; line-height: 1; }
+    .brand-name span { color: var(--accent); }
+    .brand-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
+    .nav-label { font-size: 10.5px; font-weight: 700; letter-spacing: .1em; text-transform: uppercase; color: var(--muted); padding: 12px 10px 6px; }
+    .nav-item { display: flex; align-items: center; gap: 11px; width: 100%; text-align: left; border: 0; background: transparent; padding: 10px; border-radius: 10px; color: var(--ink-2); font-weight: 600; font-size: 14px; cursor: pointer; }
+    .nav-item svg { flex: none; }
+    .nav-item:hover { background: var(--surface-3); }
+    .nav-item.active { background: var(--ink); color: var(--bg); }
+    .nav-item.active .nav-badge { background: var(--accent); color: #fff; }
+    .nav-badge { margin-left: auto; background: var(--accent-soft); color: var(--accent); font-size: 11px; font-weight: 700; border-radius: 999px; padding: 2px 8px; }
+    .side-card { margin-top: 14px; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; }
+    .side-card h4 { margin: 0 0 4px; font-size: 13.5px; }
+    .side-card p { margin: 0 0 10px; font-size: 12.5px; color: var(--muted); line-height: 1.5; }
+    .mini-progress { height: 7px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+    .mini-progress i { display: block; height: 100%; background: var(--green); border-radius: 99px; }
+    .side-card .rowline { display: flex; justify-content: space-between; font-size: 12px; color: var(--muted); margin-top: 7px; }
+    .side-card .rowline b { color: var(--ink); }
+    .main-col { min-width: 0; display: flex; flex-direction: column; }
+    .topbar { display: flex; align-items: center; gap: 14px; padding: 12px 18px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface); margin-bottom: 16px; }
+    .topbar .crumb { font-size: 13px; color: var(--muted); font-weight: 600; }
+    .topbar .crumb b { color: var(--ink); }
+    .streak { margin-left: auto; display: flex; align-items: center; gap: 6px; font-weight: 800; font-size: 14px; background: var(--amber-soft); color: var(--amber); border-radius: 999px; padding: 7px 13px; }
+    .screen { display: none; animation: screenIn .3s ease; }
+    .screen.active { display: block; }
+    @keyframes screenIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+    .screen-head { display: flex; flex-wrap: wrap; align-items: flex-end; justify-content: space-between; gap: 12px; margin-bottom: 20px; }
+    .screen-head h2 { font-family: "Newsreader", Georgia, serif; font-weight: 600; font-size: 30px; margin: 0; line-height: 1.1; }
+    .screen-head .sub { color: var(--muted); font-size: 14.5px; margin-top: 5px; }
+    .pill { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 700; border-radius: 999px; padding: 6px 12px; }
+    .pill.teal { background: var(--green-soft); color: var(--green); }
+    .pill.red { background: var(--accent-soft); color: var(--accent); }
+    .pill.amber { background: var(--amber-soft); color: var(--amber); }
+    .pill.blue { background: var(--blue-soft); color: var(--blue); }
+    .pill.ink { background: var(--surface-3); color: var(--ink-2); }
+    .dash-grid { display: grid; grid-template-columns: 1.65fr 1fr; gap: 18px; }
+    .card { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 20px; }
+    .card h3 { margin: 0 0 4px; font-size: 15.5px; font-weight: 800; }
+    .card .hint { font-size: 13px; color: var(--muted); }
+    .band-flex { display: flex; gap: 22px; align-items: center; flex-wrap: wrap; }
+    .ring-wrap { position: relative; width: 148px; height: 148px; flex: none; }
+    .ring-wrap svg { transform: rotate(-90deg); }
+    .ring-center { position: absolute; inset: 0; display: grid; place-content: center; text-align: center; }
+    .ring-center .big { font-family: "Newsreader", Georgia, serif; font-size: 44px; font-weight: 700; line-height: 1; }
+    .ring-center .small { font-size: 11px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; color: var(--muted); margin-top: 3px; }
+    .module-bars { flex: 1; min-width: 210px; display: grid; gap: 12px; }
+    .mbar { display: grid; grid-template-columns: 86px 1fr 34px; align-items: center; gap: 10px; font-size: 13.5px; }
+    .mbar .track { height: 9px; border-radius: 99px; background: var(--surface-3); overflow: hidden; }
+    .mbar .track i { display: block; height: 100%; border-radius: 99px; }
+    .mbar b { text-align: right; font-size: 14px; }
+    .target-note { margin-top: 14px; font-size: 13px; color: var(--muted); line-height: 1.55; border-top: 1px dashed var(--line); padding-top: 12px; }
+    .target-note b { color: var(--green); }
+    .plan-list { display: grid; gap: 10px; margin-top: 14px; }
+    .plan-item { display: flex; gap: 13px; align-items: center; background: var(--surface-2); border: 1px solid var(--line); border-radius: 13px; padding: 13px 14px; text-align: left; width: 100%; color: var(--ink); cursor: pointer; }
+    .plan-item:hover { border-color: var(--line-strong); }
+    .plan-ico { width: 40px; height: 40px; border-radius: 11px; display: grid; place-items: center; flex: none; font-size: 19px; }
+    .plan-item .t { font-weight: 700; font-size: 14.5px; }
+    .plan-item .d { font-size: 12.5px; color: var(--muted); margin-top: 2px; }
+    .plan-item .go { margin-left: auto; color: var(--muted); flex: none; }
+    .plan-item.done { opacity: .62; }
+    .week { display: flex; align-items: flex-end; gap: 9px; height: 96px; margin-top: 16px; }
+    .week .col { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 7px; height: 100%; justify-content: flex-end; }
+    .week .bar { width: 100%; max-width: 30px; border-radius: 7px 7px 3px 3px; background: var(--surface-3); }
+    .week .bar.mid { background: var(--blue); }
+    .week .bar.hot { background: var(--accent); }
+    .week .dl { font-size: 11px; color: var(--muted); font-weight: 600; }
+    .continue-card { grid-column: 1/-1; display: flex; flex-wrap: wrap; gap: 18px; align-items: center; background: var(--ink); color: var(--bg); border-radius: 18px; padding: 22px; border: 1px solid var(--ink); }
+    .continue-card h3 { font-family: "Newsreader", Georgia, serif; font-size: 23px; font-weight: 600; margin: 0; }
+    .continue-card p { margin: 6px 0 0; font-size: 13.5px; opacity: .75; max-width: 480px; line-height: 1.55; }
+    .continue-card .cta { margin-left: auto; display: inline-flex; align-items: center; gap: 10px; background: var(--accent); color: #fff; border: 0; border-radius: 999px; padding: 13px 22px; font-weight: 800; font-size: 14.5px; cursor: pointer; }
+    #screen-speaking .workspace { grid-template-columns: 1fr 300px; }
+    #screen-speaking .conversation { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; }
+    #screen-speaking .coach { background: var(--surface); border: 1px solid var(--line); border-radius: 18px; padding: 18px; }
+    #screen-exam .exam { border: 0; padding: 0; background: transparent; }
+    #screen-exam .exam-grid { gap: 12px; }
+    #screen-exam .exam-card { text-align: left; background: var(--surface); border: 1px solid var(--line); border-radius: 15px; padding: 16px; }
+    #screen-exam .exam-card:hover { border-color: var(--line-strong); }
+    #screen-notes .coach-history { display: grid; gap: 12px; }
+    #screen-notes .coach-history-entry { background: var(--surface); border: 1px solid var(--line); border-radius: 15px; padding: 16px 18px; }
+    #screen-notes .coach-history-correction .wrong { text-decoration: line-through var(--danger) 2px; color: var(--ink-2); }
+    #screen-notes .coach-history-correction .right { color: var(--green); font-weight: 700; }
+    .prog-grid { display: grid; grid-template-columns: 1.5fr 1fr; gap: 18px; align-items: start; }
+    .legend { display: flex; gap: 16px; font-size: 12.5px; color: var(--muted); font-weight: 600; margin-top: 10px; flex-wrap: wrap; }
+    .legend i { width: 10px; height: 10px; border-radius: 3px; display: inline-block; margin-right: 5px; vertical-align: -1px; }
+    .achv { display: flex; gap: 12px; align-items: center; padding: 11px 0; border-bottom: 1px dashed var(--line); }
+    .achv:last-child { border-bottom: 0; }
+    .achv .aico { width: 42px; height: 42px; border-radius: 12px; display: grid; place-items: center; flex: none; font-size: 19px; }
+    .achv .t { font-weight: 700; font-size: 14px; }
+    .achv .d { font-size: 12.5px; color: var(--muted); }
+    @media (max-width: 1020px) {
+      .dash-grid, .prog-grid { grid-template-columns: 1fr; }
+      #screen-speaking .workspace { grid-template-columns: 1fr; }
+      .continue-card .cta { margin-left: 0; }
+    }
+    @media (max-width: 760px) {
+      .app-shell { grid-template-columns: 1fr; }
+      .side { position: static; padding: 10px; gap: 6px; min-width: 0; }
+      .side-nav { flex-direction: row; flex-wrap: nowrap; overflow-x: auto; width: 100%; min-width: 0; gap: 4px; padding-bottom: 2px; }
+      .brand { padding: 0 2px 2px; }
+      .brand-sub, .nav-label, .side-card { display: none; }
+      .nav-item { flex: 0 0 auto; min-width: 66px; width: auto; flex-direction: column; gap: 4px; padding: 9px 2px; }
+      .nav-item .nl-text { display: block; font-size: 10px; font-weight: 700; text-align: center; line-height: 1.15; }
+      .nav-badge { display: none; }
+      .topbar { flex-wrap: wrap; }
+      .band-flex { gap: 16px; }
+    }
+  </style>
 </head>
 <body>
   <main class="page">
-    <section class="intro" aria-labelledby="main-title">
+
+    <div class="app-shell">
+      <aside class="side" aria-label="Main navigation">
+        <div class="brand">
+          <div class="brand-mark">G</div>
+          <div>
+            <div class="brand-name">IELTS<span>Go</span></div>
+            <div class="brand-sub bn">প্রতিদিন ১০ মিনিটই যথেষ্ট</div>
+          </div>
+        </div>
+        <nav class="side-nav">
+        <div class="nav-label">Learn</div>
+        <button class="nav-item active" type="button" data-nav="dashboard">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/></svg>
+          <span class="nl-text">Dashboard</span>
+        </button>
+        <button class="nav-item" type="button" data-nav="speaking">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><rect x="9" y="2" width="6" height="12" rx="3"/><path d="M5 10a7 7 0 0 0 14 0M12 19v3"/></svg>
+          <span class="nl-text">Speaking</span><span class="nav-badge">Live</span>
+        </button>
+        <button class="nav-item" type="button" data-nav="listening">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 13a8 8 0 0 1 16 0"/><rect x="2" y="13" width="4" height="7" rx="2"/><rect x="18" y="13" width="4" height="7" rx="2"/></svg>
+          <span class="nl-text">Listening</span>
+        </button>
+        <button class="nav-item" type="button" data-nav="reading">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20V3H6.5A2.5 2.5 0 0 0 4 5.5v14z"/><path d="M4 19.5A2.5 2.5 0 0 0 6.5 22H20v-5"/></svg>
+          <span class="nl-text">Reading</span>
+        </button>
+        <button class="nav-item" type="button" data-nav="writing">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M17 3a2.8 2.8 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"/></svg>
+          <span class="nl-text">Writing</span>
+        </button>
+        <button class="nav-item" type="button" data-nav="fullmock">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg>
+          <span class="nl-text">Full Mock</span>
+        </button>
+        <div class="nav-label">Review</div>
+        <button class="nav-item" type="button" data-nav="notes">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 20h9M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg>
+          <span class="nl-text">Coach Notes</span><span class="nav-badge" id="notesBadge">0</span>
+        </button>
+        <button class="nav-item" type="button" data-nav="progress">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 3v18h18"/><path d="M7 15l4-5 3 3 5-7"/></svg>
+          <span class="nl-text">Progress</span>
+        </button>
+        </nav>
+        <div class="side-card">
+          <h4 class="bn">সাপ্তাহিক লক্ষ্য</h4>
+          <p id="sideWeekText">এই সপ্তাহে এখনো practice হয়নি — আজই শুরু করুন।</p>
+          <div class="mini-progress"><i id="sideWeekBar" style="width:0%"></i></div>
+          <div class="rowline"><span id="sideWeekLabel">0 / 5 days</span><b id="sideWeekPct">0%</b></div>
+        </div>
+      </aside>
+      <div class="main-col">
+        <div class="topbar">
+          <div class="crumb">Home / <b id="crumbName">Dashboard</b></div>
+          <div class="streak" id="topStreak" title="Day streak">🔥 0 days</div>
+        </div>
+
+        <section class="screen active" id="screen-dashboard">
+          <div class="screen-head">
+            <div>
+              <h2>Dashboard</h2>
+              <div class="sub bn">আজকের লক্ষ্য — এক নজরে দেখুন, তারপর শুরু করুন।</div>
+            </div>
+          </div>
+          <section class="intro" aria-labelledby="main-title">
       <h1 id="main-title">Speak. Get corrected. <span>Try again.</span></h1>
       <p class="powered-by">⚡Powered By Syed Kibria</p>
       <p class="intro-copy bn"><strong lang="en">IELTSgo</strong>-তে মাইকে ইংরেজিতে কথা বলুন। আপনার ভার্চুয়াল পার্টনার সঙ্গে সঙ্গে উত্তর দেবে, আর ভুল থাকলে সহজ বাংলায় পয়েন্ট আকারে বুঝিয়ে দেবে।</p>
     </section>
+          <div class="dash-grid">
+            <div class="card">
+              <h3>Your band score</h3>
+              <div class="hint" id="dashBandHint">Submitted results থেকে — আসল তথ্য</div>
+              <div class="band-flex" style="margin-top:16px">
+                <div class="ring-wrap">
+                  <svg width="148" height="148" viewBox="0 0 148 148">
+                    <circle cx="74" cy="74" r="64" fill="none" stroke="var(--surface-3)" stroke-width="13"/>
+                    <circle id="dashRing" cx="74" cy="74" r="64" fill="none" stroke="var(--accent)" stroke-width="13" stroke-linecap="round" stroke-dasharray="402" stroke-dashoffset="402"/>
+                  </svg>
+                  <div class="ring-center"><div class="big" id="dashBand">—</div><div class="small">Overall</div></div>
+                </div>
+                <div class="module-bars" id="dashModules"></div>
+              </div>
+              <div class="target-note" id="dashTargetNote"></div>
+            </div>
+            <div class="card">
+              <h3>This week</h3>
+              <div class="hint">Tests + coach notes per day (আসল activity)</div>
+              <div class="week" id="weekBars"></div>
+              <div class="target-note" style="margin-top:12px" id="weekTotal"></div>
+            </div>
+            <div class="card" style="grid-column:1/-1">
+              <h3>Today&apos;s plan</h3>
+              <div class="hint bn">ক্রমটা সাজানো হয়েছে — ট্যাপ করে শুরু করুন</div>
+              <div class="plan-list">
+                <button class="plan-item" type="button" data-plan="writing">
+                  <span class="plan-ico" style="background:var(--blue-soft);color:var(--blue)">✍️</span>
+                  <span><span class="t">Writing Task 2 — Opinion essay</span><span class="d" style="display:block">AI band score + correction সহ</span></span>
+                  <span class="go">→</span>
+                </button>
+                <button class="plan-item" type="button" data-plan="speaking">
+                  <span class="plan-ico" style="background:var(--accent-soft);color:var(--accent)">🎤</span>
+                  <span><span class="t">Speaking practice — কথা বলুন</span><span class="d" style="display:block">Mic-এ বলুন, ৩ সেকেন্ড চুপ থাকলেই Send হবে</span></span>
+                  <span class="go">→</span>
+                </button>
+                <button class="plan-item" type="button" data-plan="listening" id="planListening">
+                  <span class="plan-ico" style="background:var(--green-soft);color:var(--green)">🎧</span>
+                  <span><span class="t">Listening test</span><span class="d" style="display:block">Audio শুনে উত্তর দিন</span></span>
+                  <span class="go" id="planListeningGo">→</span>
+                </button>
+              </div>
+            </div>
+            <div class="continue-card">
+              <div>
+                <h3>Speak. Get corrected. Try again.</h3>
+                <p class="bn">মাইকে চাপ দিয়ে ইংরেজিতে বলুন — কোচ সাথে সাথে ভুল ধরে বাংলায় বুঝিয়ে দেবে।</p>
+              </div>
+              <button class="cta" type="button" data-plan="speaking">🎤 Start speaking</button>
+            </div>
+          </div>
+          <section class="hint-strip" aria-label="How to use">
+      <div class="key">TIP</div>
+      <div>
+        <strong>Use complete sentences—even when you are unsure.</strong>
+        <p class="bn">AI coach ইংরেজি বুঝে উত্তর ও বাংলায় correction দেবে; প্রতিটি উত্তর natural voice-এ শোনাবে।</p>
+      </div>
+    </section>
+        </section>
 
-    <section class="setup" aria-label="Practice setup">
+        <section class="screen" id="screen-speaking">
+          <div class="screen-head">
+            <div>
+              <h2>Speaking practice</h2>
+              <div class="sub bn">মাইকে চাপ দিন, ইংরেজিতে বলুন — ৩ সেকেন্ড চুপ থাকলেই উত্তর চলে যাবে।</div>
+            </div>
+            <span class="pill red">Live practice</span>
+          </div>
+          <section class="setup" aria-label="Practice setup">
       <div class="mode-field">
         <span class="field-label">MODE</span>
         <div class="mode-switch" id="modeSwitch">
@@ -1446,9 +1697,7 @@
         </div>
       </div>
       <button class="small-action" id="newSession" type="button">New session</button>
-    </section>
-
-    <section class="workspace" id="workspaceSection">
+    </section><section class="workspace" id="workspaceSection">
       <article class="conversation" aria-label="Live English conversation">
         <header class="panel-head">
           <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">AI coach · ready</span></div>
@@ -1507,12 +1756,19 @@
             </div>
           </div>
         </div>
-        <div class="coach-history" id="coachHistory" aria-label="Coach notes history"></div>
+        
       </aside>
     </section>
+        </section>
 
-    <!-- British Council style exam practice: Listening, Writing, Speaking, Full Mock -->
-    <section class="exam" id="examSection" hidden>
+        <section class="screen" id="screen-exam">
+          <div class="screen-head">
+            <div>
+              <h2>IELTS Exam Practice</h2>
+              <div class="sub bn">আসল পরীক্ষার মতো অংশ, সময় আর নিয়ম — বারবার practice করুন।</div>
+            </div>
+          </div>
+          <section class="exam" id="examSection" hidden>
       <!-- Hub -->
       <div id="examHub">
         <div class="exam-head">
@@ -1781,16 +2037,48 @@
         </div>
       </div>
     </section>
+        </section>
 
-    <section class="hint-strip" aria-label="How to use">
-      <div class="key">TIP</div>
-      <div>
-        <strong>Use complete sentences—even when you are unsure.</strong>
-        <p class="bn">AI coach ইংরেজি বুঝে উত্তর ও বাংলায় correction দেবে; প্রতিটি উত্তর natural voice-এ শোনাবে।</p>
+        <section class="screen" id="screen-notes">
+          <div class="screen-head">
+            <div>
+              <h2>Coach notes</h2>
+              <div class="sub bn">সর্বশেষ উত্তরের ভুল ও উন্নতির জায়গা — পুরো history, page by page।</div>
+            </div>
+            <span class="pill ink" id="notesCountChip">saved in this browser</span>
+          </div>
+          <div class="coach-history" id="coachHistory" aria-label="Coach notes history"></div>
+        </section>
+
+        <section class="screen" id="screen-progress">
+          <div class="screen-head">
+            <div>
+              <h2>Progress</h2>
+              <div class="sub bn">আপনার আসল submitted results থেকে — কোনো sample data নয়।</div>
+            </div>
+            <span class="pill teal" id="progDelta">—</span>
+          </div>
+          <div class="prog-grid">
+            <div class="card">
+              <h3>Band score trend</h3>
+              <div class="hint">Submitted results · band আছে এমন entry</div>
+              <div id="progChartWrap" style="margin-top:14px"></div>
+              <div class="legend"><span><i style="background:var(--green)"></i>Overall band</span></div>
+            </div>
+            <div class="card">
+              <h3>Achievements</h3>
+              <div id="progAchv"></div>
+            </div>
+            <div class="card" style="grid-column:1/-1">
+              <h3>Where to focus next</h3>
+              <p style="margin:6px 0 0;font-size:14.5px;line-height:1.7;color:var(--ink-2)" id="progFocus"></p>
+            </div>
+          </div>
+        </section>
+
       </div>
-    </section>
+    </div>
   </main>
-
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
 
   <script>
@@ -3856,6 +4144,7 @@
         var workspaceSection = document.getElementById('workspaceSection');
         if (mode === 'exam') {
           if (examSection) examSection.hidden = false;
+          showAppScreen('exam');
           if (workspaceSection) workspaceSection.style.display = 'none';
           stopListeningAudio();
           showExamHub();
@@ -3874,6 +4163,7 @@
         }
         if (examSection) examSection.hidden = true;
         if (workspaceSection) workspaceSection.style.display = '';
+        showAppScreen('speaking');
         stopListeningAudio();
         stopExamTimers();
         document.querySelector('.coach-top h2').textContent = mode === 'mock' ? 'Test progress' : 'Coach notes';
@@ -6413,6 +6703,193 @@
       document.querySelectorAll('[data-exam-back]').forEach(function (btn) {
         btn.addEventListener('click', function () { showExamHub(); });
       });
+
+      /* ---- UI SHELL: sidebar screens + dashboard/progress (REAL data only) ---- */
+      var SHELL_SCREENS = { dashboard: 'Dashboard', speaking: 'Speaking', exam: 'Exam Practice', notes: 'Coach Notes', progress: 'Progress' };
+      function showAppScreen(id) {
+        document.querySelectorAll('.screen').forEach(function (s) { s.classList.toggle('active', s.id === 'screen-' + id); });
+        document.querySelectorAll('.nav-item').forEach(function (b) {
+          var nav = b.getAttribute('data-nav');
+          var active = (nav === id) || (id === 'exam' && (nav === 'listening' || nav === 'reading' || nav === 'writing' || nav === 'fullmock'));
+          b.classList.toggle('active', active);
+        });
+        var crumb = document.getElementById('crumbName');
+        if (crumb) crumb.textContent = SHELL_SCREENS[id] || id;
+      }
+      function shellGoExam(which) {
+        if (isBusy) { showToast('AI উত্তর দেওয়ার সময় একটু অপেক্ষা করুন।'); return; }
+        showAppScreen('exam');
+        if (appMode !== 'exam') switchMode('exam');
+        if (which === 'listening') openListening();
+        else if (which === 'reading') openReading();
+        else if (which === 'writing') openWriting();
+        else if (which === 'fullmock') openFullMock();
+      }
+      function shellGoSpeaking() {
+        if (isBusy) { showToast('AI উত্তর দেওয়ার সময় একটু অপেক্ষা করুন।'); return; }
+        showAppScreen('speaking');
+        if (appMode === 'exam') switchMode('practice');
+      }
+      document.querySelectorAll('.nav-item').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var nav = btn.getAttribute('data-nav');
+          if (nav === 'dashboard') { showAppScreen('dashboard'); renderShellDashboard(); }
+          else if (nav === 'speaking') shellGoSpeaking();
+          else if (nav === 'listening') shellGoExam('listening');
+          else if (nav === 'reading') shellGoExam('reading');
+          else if (nav === 'writing') shellGoExam('writing');
+          else if (nav === 'fullmock') shellGoExam('fullmock');
+          else if (nav === 'notes') { showAppScreen('notes'); renderCoachHistory(); updateNotesBadge(); }
+          else if (nav === 'progress') { showAppScreen('progress'); renderShellProgress(); }
+        });
+      });
+      document.querySelectorAll('[data-plan]').forEach(function (btn) {
+        btn.addEventListener('click', function () {
+          var p = btn.getAttribute('data-plan');
+          if (p === 'speaking') shellGoSpeaking();
+          else shellGoExam(p);
+        });
+      });
+      function shellHistory() { try { return P4.load('history', []) || []; } catch (e) { return []; } }
+      function shellCoachEntries() { try { var raw = localStorage.getItem(COACH_HISTORY_KEY); return raw ? JSON.parse(raw) : []; } catch (e) { return []; } }
+      function shellDayKey(d) { return d.getFullYear() + '-' + (d.getMonth() + 1) + '-' + d.getDate(); }
+      function shellSkillOf(test) {
+        var t = String(test || '').toLowerCase();
+        if (t.indexOf('listen') >= 0) return 'Listening';
+        if (t.indexOf('read') >= 0) return 'Reading';
+        if (t.indexOf('writ') >= 0) return 'Writing';
+        if (t.indexOf('speak') >= 0) return 'Speaking';
+        return '';
+      }
+      function updateNotesBadge() {
+        var n = shellCoachEntries().length;
+        var b = document.getElementById('notesBadge'); if (b) b.textContent = String(n);
+        var c = document.getElementById('notesCountChip'); if (c) c.textContent = n + ' notes · saved in this browser';
+      }
+      function renderShellDashboard() {
+        var h = shellHistory();
+        var coach = shellCoachEntries();
+        var skillBand = {}; var overall = null;
+        h.forEach(function (e) {
+          if (e.band != null && !isNaN(Number(e.band))) {
+            if (overall === null) overall = Number(e.band);
+            var sk = shellSkillOf(e.test);
+            if (sk && !(sk in skillBand)) skillBand[sk] = Number(e.band);
+          }
+        });
+        var bandEl = document.getElementById('dashBand');
+        if (bandEl) bandEl.textContent = overall !== null ? String(overall) : '—';
+        var ring = document.getElementById('dashRing');
+        if (ring) ring.style.strokeDashoffset = overall !== null ? String(402 - (overall / 9) * 402) : '402';
+        var mods = document.getElementById('dashModules');
+        if (mods) {
+          var skills = [['Listening', 'var(--blue)'], ['Reading', 'var(--amber)'], ['Writing', 'var(--amber)'], ['Speaking', 'var(--green)']];
+          mods.innerHTML = skills.map(function (s) {
+            var b = skillBand[s[0]];
+            var pct = b != null ? Math.round((b / 9) * 100) : 0;
+            return '<div class="mbar"><span>' + s[0] + '</span><div class="track"><i style="width:' + pct + '%;background:' + s[1] + '"></i></div><b>' + (b != null ? b : '—') + '</b></div>';
+          }).join('');
+        }
+        var tgt = document.getElementById('dashTargetNote');
+        if (tgt) {
+          if (!h.length) tgt.textContent = 'এখনো কোনো submitted result নেই — একটি test শেষ করলেই এখানে আপনার band দেখা যাবে।';
+          else {
+            var weakest = null, weakestBand = 99;
+            ['Listening', 'Reading', 'Writing', 'Speaking'].forEach(function (sk) { if (skillBand[sk] != null && skillBand[sk] < weakestBand) { weakestBand = skillBand[sk]; weakest = sk; } });
+            tgt.innerHTML = weakest ? 'সবচেয়ে বেশি উন্নতির জায়গা: <b>' + weakest + ' (Band ' + weakestBand + ')</b> — Today\u2019s plan সেই দিকেই সাজানো।' : 'Submitted results আছে — বিস্তারিত Progress screen-এ দেখুন।';
+          }
+        }
+        var now = new Date(); var counts = [];
+        for (var i = 6; i >= 0; i--) { var d = new Date(now.getFullYear(), now.getMonth(), now.getDate() - i); counts.push({ key: shellDayKey(d), label: ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'][d.getDay()], n: 0 }); }
+        var byKey = {}; counts.forEach(function (c) { byKey[c.key] = c; });
+        h.forEach(function (e) { var k = shellDayKey(new Date(e.at)); if (byKey[k]) byKey[k].n++; });
+        coach.forEach(function (e) { var k = shellDayKey(new Date(e.at)); if (byKey[k]) byKey[k].n++; });
+        var maxN = 1; counts.forEach(function (c) { if (c.n > maxN) maxN = c.n; });
+        var wb = document.getElementById('weekBars');
+        if (wb) wb.innerHTML = counts.map(function (c) {
+          var pct = Math.round((c.n / maxN) * 100);
+          var cls = c.n === 0 ? '' : (c.n === maxN ? 'hot' : 'mid');
+          return '<div class="col"><div class="bar ' + cls + '" style="height:' + Math.max(6, pct) + '%"></div><div class="dl">' + c.label + '</div></div>';
+        }).join('');
+        var total = 0; counts.forEach(function (c) { total += c.n; });
+        var wt = document.getElementById('weekTotal');
+        if (wt) wt.innerHTML = 'Total <b style="color:var(--ink)">' + total + 'টি activity</b> এই সপ্তাহে (submitted tests + coach notes)।';
+        var activeDays = {};
+        h.forEach(function (e) { activeDays[shellDayKey(new Date(e.at))] = true; });
+        coach.forEach(function (e) { activeDays[shellDayKey(new Date(e.at))] = true; });
+        var streak = 0; var cursor = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (!activeDays[shellDayKey(cursor)]) cursor.setDate(cursor.getDate() - 1);
+        while (activeDays[shellDayKey(cursor)]) { streak++; cursor.setDate(cursor.getDate() - 1); }
+        var st = document.getElementById('topStreak');
+        if (st) st.textContent = '🔥 ' + streak + ' days';
+        var weekActive = 0; counts.forEach(function (c) { if (c.n > 0) weekActive++; });
+        var swt = document.getElementById('sideWeekText');
+        if (swt) swt.textContent = weekActive ? ('এই সপ্তাহে ' + weekActive + ' দিন practice হয়েছে — আর ' + Math.max(0, 5 - weekActive) + ' দিন বাকি!') : 'এই সপ্তাহে এখনো practice হয়নি — আজই শুরু করুন।';
+        var swb = document.getElementById('sideWeekBar'); if (swb) swb.style.width = Math.min(100, weekActive * 20) + '%';
+        var swl = document.getElementById('sideWeekLabel'); if (swl) swl.textContent = weekActive + ' / 5 days';
+        var swp = document.getElementById('sideWeekPct'); if (swp) swp.textContent = Math.min(100, weekActive * 20) + '%';
+        var todayKey = shellDayKey(now);
+        var listDone = h.some(function (e) { return shellDayKey(new Date(e.at)) === todayKey && shellSkillOf(e.test) === 'Listening'; });
+        var planGo = document.getElementById('planListeningGo');
+        var planItem = document.getElementById('planListening');
+        if (planGo) planGo.textContent = listDone ? '✓ Done' : '→';
+        if (planItem) planItem.classList.toggle('done', !!listDone);
+        updateNotesBadge();
+      }
+      function renderShellProgress() {
+        var h = shellHistory();
+        var coach = shellCoachEntries();
+        var points = h.filter(function (e) { return e.band != null && !isNaN(Number(e.band)) && !isNaN(new Date(e.at).getTime()); })
+          .map(function (e) { return { at: new Date(e.at).getTime(), band: Number(e.band) }; })
+          .sort(function (a, b) { return a.at - b.at; }).slice(-8);
+        var wrap = document.getElementById('progChartWrap');
+        var delta = document.getElementById('progDelta');
+        if (wrap) {
+          if (points.length < 2) {
+            wrap.innerHTML = '<p class="exam-meta">Band trend দেখাতে অন্তত ২টি band-সহ submitted result লাগবে। এখনো ' + points.length + 'টি আছে — একটি test শেষ করুন।</p>';
+          } else {
+            var yFor = function (b) { return 170 - ((b - 1) / 8) * 140; };
+            var xFor = function (i) { return points.length === 1 ? 40 : 40 + (i / (points.length - 1)) * 470; };
+            var pts = points.map(function (p, i) { return xFor(i).toFixed(0) + ',' + yFor(p.band).toFixed(0); }).join(' ');
+            var circles = points.map(function (p, i) { return '<circle cx="' + xFor(i).toFixed(0) + '" cy="' + yFor(p.band).toFixed(0) + '" r="5"/>'; }).join('');
+            wrap.innerHTML = '<svg viewBox="0 0 520 210" style="width:100%;height:auto" role="img" aria-label="Band score trend">' +
+              '<g stroke="var(--line)" stroke-width="1"><line x1="40" y1="30" x2="40" y2="170"/><line x1="40" y1="170" x2="510" y2="170"/></g>' +
+              '<g font-size="11" fill="var(--muted)" font-weight="600"><text x="4" y="174">1</text><text x="4" y="100">5</text><text x="4" y="34">9</text></g>' +
+              '<polyline points="' + pts + '" fill="none" stroke="var(--green)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>' +
+              '<g fill="var(--surface)" stroke="var(--green)" stroke-width="3">' + circles + '</g>' +
+              '<text x="400" y="24" font-size="13" font-weight="800" fill="var(--ink)">' + points[points.length - 1].band + ' now</text></svg>';
+          }
+        }
+        if (delta) {
+          if (points.length >= 2) {
+            var d = points[points.length - 1].band - points[0].band;
+            delta.textContent = (d >= 0 ? '+' : '') + d.toFixed(1) + ' band';
+          } else delta.textContent = '—';
+        }
+        var achv = document.getElementById('progAchv');
+        if (achv) {
+          var best = null; h.forEach(function (e) { if (e.band != null && !isNaN(Number(e.band)) && (best === null || Number(e.band) > best)) best = Number(e.band); });
+          var days = {}; h.forEach(function (e) { days[shellDayKey(new Date(e.at))] = true; }); coach.forEach(function (e) { days[shellDayKey(new Date(e.at))] = true; });
+          achv.innerHTML =
+            '<div class="achv"><span class="aico" style="background:var(--green-soft);color:var(--green)">✓</span><div><div class="t">' + h.length + ' submitted results</div><div class="d">Tests + mocks completed</div></div></div>' +
+            '<div class="achv"><span class="aico" style="background:var(--blue-soft);color:var(--blue)">✎</span><div><div class="t">' + coach.length + ' coach notes</div><div class="d">Corrections saved in this browser</div></div></div>' +
+            '<div class="achv"><span class="aico" style="background:var(--amber-soft);color:var(--amber)">★</span><div><div class="t">Best band: ' + (best !== null ? best : '—') + '</div><div class="d">Across all submitted results</div></div></div>' +
+            '<div class="achv"><span class="aico" style="background:var(--accent-soft);color:var(--accent)">📅</span><div><div class="t">' + Object.keys(days).length + ' active days</div><div class="d">Days with any practice activity</div></div></div>';
+        }
+        var foc = document.getElementById('progFocus');
+        if (foc) {
+          var tally = {};
+          coach.forEach(function (e) { (e.corrections || []).forEach(function (c) { var k = (c.original || '') + ' → ' + (c.corrected || ''); if (k.trim() !== '→') tally[k] = (tally[k] || 0) + 1; }); });
+          var top = null, topN = 0;
+          Object.keys(tally).forEach(function (k) { if (tally[k] > topN) { topN = tally[k]; top = k; } });
+          if (top && topN >= 2) foc.innerHTML = 'সবচেয়ে বেশি বার ভুল হয়েছে: <b>' + escapeHtml(top) + '</b> (' + topN + ' বার)। এই pattern-টা ঠিক করলেই সবচেয়ে দ্রুত উন্নতি হবে।';
+          else if (top) foc.innerHTML = 'সাম্প্রতিক correction: <b>' + escapeHtml(top) + '</b> — Coach Notes-এ সবগুলো page by page দেখুন।';
+          else foc.textContent = 'এখনো কোনো correction জমা হয়নি — কথা বলা বা লেখা শুরু করলেই এখানে আপনার focus area দেখা যাবে।';
+        }
+      }
+      renderShellDashboard();
+      updateNotesBadge();
+      showAppScreen('dashboard');
     })();
   </script>
 </body>
