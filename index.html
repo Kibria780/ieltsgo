@@ -1851,6 +1851,13 @@
       // warmup requests are rejected by validation (400) BEFORE any AI
       // key or quota is touched, so they cost nothing and send no user
       // data. Re-warmed when the tab returns after 10+ minutes hidden.
+      // SPEED 2026-10-18: the transcribe endpoint is warmed too (it lives
+      // in the shared [route] function), and warmupLatency() is also
+      // called when a recording starts — a user who opens the page then
+      // waits 15 minutes would otherwise pay three cold starts in the
+      // voice path; the speaking time now hides the warm-up instead.
+      // TRANSCRIBE_ENDPOINT is declared later in this file, so the
+      // warmup uses the same URL as a literal (same value, see below).
       var warmedUpAt = 0;
       function warmupLatency() {
         var now = Date.now();
@@ -1863,6 +1870,11 @@
             body: JSON.stringify({ messages: [] })
           }).catch(function () {});
           fetch(TTS_ENDPOINT + '?warmup=1').catch(function () {});
+          fetch('https://ieltsgo-proxy.vercel.app/api/transcribe', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+          }).catch(function () {});
         } catch (e) {}
       }
       warmupLatency();
@@ -2257,8 +2269,12 @@
       // Shared Practice Chat prompt (used by both the streaming and the
       // non-streaming fallback paths so the two can never drift apart).
       function practicePromptFor(text) {
-        var recent = transcript.slice(-8).map(function (item) {
-          return (item.role === 'user' ? 'Learner: ' : 'Coach: ') + item.text;
+        // SPEED 2026-10-18: last 6 turns (was 8), each capped at 400
+        // chars — the model still sees the recent conversation, but a
+        // long session can no longer bloat the prompt with unbounded
+        // coach replies. Quality unchanged for normal-length turns.
+        var recent = transcript.slice(-6).map(function (item) {
+          return (item.role === 'user' ? 'Learner: ' : 'Coach: ') + String(item.text || '').slice(0, 400);
         }).join('\n');
         var systemPrompt = [
           'You are IELTSgo, a real-time English speaking coach for Bengali learners.',
@@ -3337,6 +3353,10 @@
       // 'permission' | 'unsupported' | 'start'. Returns Promise<boolean>.
       async function startAudioRecording(callbacks) {
         if (recSession) return false;
+        // SPEED 2026-10-18: re-warm the serverless functions while the
+        // user is still speaking (no-op if warmed <10 min ago) so the
+        // transcribe → chat → TTS chain never pays a cold start.
+        try { warmupLatency(); } catch (e) {}
         if (!window.MediaRecorder || !navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
           callbacks.onError('unsupported');
           return false;
