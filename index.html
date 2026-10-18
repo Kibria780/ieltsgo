@@ -1504,9 +1504,62 @@
       .topbar { flex-wrap: wrap; }
       .band-flex { gap: 16px; }
     }
+  <style id="key-gate-css">
+    /* ACCESS KEY GATE — same design tokens as the demo UI shell. */
+    .key-gate {
+      position: fixed; inset: 0; z-index: 9999;
+      display: flex; align-items: center; justify-content: center;
+      padding: 16px;
+      background: var(--bg);
+      overflow-y: auto;
+    }
+    .key-gate[hidden] { display: none; }
+    .key-gate-card {
+      width: min(440px, 100%);
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      padding: 28px 26px;
+    }
+    .key-gate-brand { font-size: 26px; font-weight: 800; letter-spacing: -.02em; }
+    .key-gate-brand span { color: var(--accent); }
+    .key-gate-card h1 { font-family: "Newsreader", Georgia, serif; font-size: 26px; margin: 14px 0 8px; }
+    .key-gate-card p { color: var(--muted); line-height: 1.65; font-size: 14.5px; margin: 0 0 14px; }
+    .key-gate-label { display: block; font-size: 12px; font-weight: 800; letter-spacing: .08em; color: var(--muted); margin: 6px 0; }
+    #keyGateInput {
+      width: 100%; min-height: 48px; font-size: 16px; padding: 12px 14px;
+      border: 1px solid var(--line); border-radius: 12px;
+      background: var(--surface-2); color: var(--ink);
+      font-family: ui-monospace, monospace; text-transform: uppercase;
+    }
+    #keyGateSubmit {
+      width: 100%; min-height: 48px; margin-top: 12px;
+      border: 0; border-radius: 12px; font-weight: 800; font-size: 15px;
+      background: var(--accent); color: #fff; cursor: pointer;
+    }
+    #keyGateSubmit:disabled { opacity: .55; cursor: default; }
+    .key-gate-error { color: var(--danger); font-weight: 600; margin-top: 12px; }
+    .key-gate-note { margin-top: 14px; }
+    .side-key-btn { width: 100%; justify-content: flex-start; }
   </style>
 </head>
 <body>
+  <!-- ACCESS KEY GATE (2026-10-19): only key holders may use the app.
+       Shown until a valid key is stored. Server-side enforcement lives
+       in the proxy; this screen only collects the key. -->
+  <div id="keyGate" class="key-gate" hidden>
+    <div class="key-gate-card">
+      <div class="key-gate-brand">IELTS<span>Go</span></div>
+      <h1>Access key দিন</h1>
+      <p class="bn">IELTSGo ব্যবহার করতে আপনার access key লাগবে। চাবিটি যিনি দিয়েছেন, তার কাছ থেকে নিন।</p>
+      <label class="key-gate-label" for="keyGateInput">ACCESS KEY</label>
+      <input id="keyGateInput" type="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="IELTSGO-XXXX-XXXX-XXXX" />
+      <button id="keyGateSubmit" type="button">Unlock</button>
+      <p id="keyGateError" class="key-gate-error" hidden></p>
+      <p class="key-gate-note bn">চাবি এই browser-এ save থাকবে, যাতে বারবার দিতে না হয়।</p>
+    </div>
+  </div>
   <main class="page">
 
     <div class="app-shell">
@@ -1560,6 +1613,10 @@
           <div class="mini-progress"><i id="sideWeekBar" style="width:0%"></i></div>
           <div class="rowline"><span id="sideWeekLabel">0 / 5 days</span><b id="sideWeekPct">0%</b></div>
         </div>
+        <button class="nav-item side-key-btn" type="button" id="changeKeyBtn">
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="8" cy="15" r="4"/><path d="M11 12L20 3M15 8l2.5 2.5M18 5l2 2"/></svg>
+          <span class="nl-text">Access key বদলান</span>
+        </button>
       </aside>
       <div class="main-col">
         <div class="topbar">
@@ -2240,6 +2297,124 @@
         if (!document.hidden) warmupLatency();
       });
 
+      /* ---- ACCESS KEY GATE (2026-10-19) ----
+         Only key holders may use the app. The key is stored in
+         localStorage as a recovery cache (same pattern as other
+         progress) — the proxy re-validates it server-side on EVERY
+         AI call, so a revoked/expired key stops working even if it
+         is still stored here. The client gate only collects the key.
+         Warmup pings (above) send no key and still get their cheap
+         400s: the proxy checks the key only after validation. */
+      var ACCESS_KEY_STORAGE = 'ieltsgo_access_key';
+      var VALIDATE_ENDPOINT = 'https://ieltsgo-proxy.vercel.app/api/validate-key';
+      var accessKey = '';
+      function getStoredAccessKey() {
+        try { return localStorage.getItem(ACCESS_KEY_STORAGE) || ''; } catch (e) { return ''; }
+      }
+      function setStoredAccessKey(k) {
+        try { localStorage.setItem(ACCESS_KEY_STORAGE, k); } catch (e) {}
+      }
+      function clearStoredAccessKey() {
+        try { localStorage.removeItem(ACCESS_KEY_STORAGE); } catch (e) {}
+      }
+      function accessKeyReasonMessage(reason) {
+        if (reason === 'access_key_required') return 'এই feature ব্যবহার করতে access key লাগবে।';
+        if (reason === 'access_key_revoked') return 'এই চাবিটি বন্ধ (revoked) করা হয়েছে।';
+        if (reason === 'access_key_expired') return 'এই চাবির মেয়াদ শেষ হয়ে গেছে।';
+        if (reason === 'access_key_exhausted') return 'এই চাবির ব্যবহারের সীমা শেষ হয়ে গেছে।';
+        if (reason === 'access_key_invalid' || reason === 'not_found') return 'চাবিটি সঠিক নয়। আবার দেখে দিন।';
+        return 'Access key সমস্যা হয়েছে।';
+      }
+      function showKeyGate(message) {
+        var gate = document.getElementById('keyGate');
+        var err = document.getElementById('keyGateError');
+        if (err) {
+          if (message) { err.textContent = message; err.hidden = false; }
+          else { err.textContent = ''; err.hidden = true; }
+        }
+        if (gate) gate.hidden = false;
+        var inp = document.getElementById('keyGateInput');
+        if (inp) inp.focus();
+      }
+      function hideKeyGate() {
+        var gate = document.getElementById('keyGate');
+        if (gate) gate.hidden = true;
+      }
+      // Called when an AI call answers 401: the stored key is dead
+      // (revoked/expired/exhausted) — drop it and ask for a new one.
+      function handleAccessKeyRejected(reason) {
+        accessKey = '';
+        clearStoredAccessKey();
+        showKeyGate(accessKeyReasonMessage(reason) + ' নতুন চাবি দিন।');
+      }
+      function validateAccessKeyOnServer(key) {
+        return fetch(VALIDATE_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ key: key })
+        }).then(function (r) { return r.json(); }).then(function (j) {
+          return !!(j && j.valid);
+        });
+      }
+      async function initAccessGate() {
+        var stored = getStoredAccessKey();
+        if (stored) {
+          accessKey = stored;
+          var ok = false;
+          try { ok = await validateAccessKeyOnServer(stored); } catch (e) { ok = false; }
+          if (ok) { hideKeyGate(); return; }
+          // Stored key no longer valid (revoked/expired/exhausted), or
+          // the check itself failed: stay locked, ask for a fresh key.
+          accessKey = '';
+          clearStoredAccessKey();
+          showKeyGate('আগের চাবিটি আর কাজ করছে না (revoked/expired হতে পারে)। নতুন চাবি দিন।');
+          return;
+        }
+        showKeyGate('');
+      }
+      (function initKeyGateUI() {
+        var submit = document.getElementById('keyGateSubmit');
+        var input = document.getElementById('keyGateInput');
+        if (!submit || !input) return;
+        function tryUnlock() {
+          var key = (input.value || '').trim();
+          if (!key) {
+            var err = document.getElementById('keyGateError');
+            if (err) { err.textContent = 'চাবিটি দিন।'; err.hidden = false; }
+            return;
+          }
+          submit.disabled = true;
+          submit.textContent = 'যাচাই হচ্ছে…';
+          validateAccessKeyOnServer(key).then(function (ok) {
+            if (ok) {
+              accessKey = key;
+              setStoredAccessKey(key);
+              input.value = '';
+              hideKeyGate();
+              showToast('Access key গ্রহণ করা হয়েছে — IELTSGo unlock হয়েছে।');
+            } else {
+              var err = document.getElementById('keyGateError');
+              if (err) { err.textContent = 'চাবিটি সঠিক নয় / মেয়াদ শেষ / বন্ধ করা হয়েছে। আবার দেখে দিন।'; err.hidden = false; }
+            }
+          }).catch(function () {
+            var err = document.getElementById('keyGateError');
+            if (err) { err.textContent = 'Server-এর সাথে যোগাযোগ হয়নি — Internet দেখে আবার চেষ্টা করুন।'; err.hidden = false; }
+          }).finally(function () {
+            submit.disabled = false;
+            submit.textContent = 'Unlock';
+          });
+        }
+        submit.addEventListener('click', tryUnlock);
+        input.addEventListener('keydown', function (e) { if (e.key === 'Enter') tryUnlock(); });
+        var changeBtn = document.getElementById('changeKeyBtn');
+        if (changeBtn) changeBtn.addEventListener('click', function () {
+          accessKey = '';
+          clearStoredAccessKey();
+          showKeyGate('নতুন চাবি দিন।');
+        });
+        initAccessGate();
+      })();
+
       /* ---- Phase 5: server-side question bank + scoring ----
          Questions (WITHOUT answer keys) come from GET /api/questions.
          Scores come from POST /api/submit, computed on the server from the
@@ -2264,12 +2439,13 @@
       function submitAnswers(payload) {
         return fetch(SUBMIT_ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 'Content-Type': 'application/json', 'X-Access-Key': accessKey },
           body: JSON.stringify(payload)
         })
           .then(function (r) {
             if (!r.ok) {
               return r.json().then(function (e) {
+                if (r.status === 401 && e && e.reason && String(e.reason).indexOf('access_key') === 0) handleAccessKeyRejected(e.reason);
                 throw new Error((e && e.error) || 'Score unavailable (HTTP ' + r.status + ').');
               }).catch(function () {
                 throw new Error('Score unavailable (HTTP ' + r.status + ').');
@@ -2502,7 +2678,7 @@
             if (opts && opts.maxTokens) reqBody.maxTokens = opts.maxTokens;
             response = await fetch(AI_ENDPOINT, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', 'X-Access-Key': accessKey },
               body: JSON.stringify(reqBody),
               signal: controller.signal
             });
@@ -2596,6 +2772,8 @@
       // a fake AI reply or fabricated score.
       function aiErrorMessage(error) {
         var reason = error && error.reason;
+        // Access-key failures: re-locked already; tell the user plainly.
+        if (reason && String(reason).indexOf('access_key') === 0) return accessKeyReasonMessage(reason) + ' নতুন চাবি দিন।';
         if (reason === 'all_keys_rate_limited') return 'AI coach busy — সব key-এর limit শেষ। তোমার উত্তর save আছে। কয়েক মিনিট পর আবার চেষ্টা করো।';
         if (reason === 'upstream_timeout') return 'AI service timeout হয়েছে — তোমার উত্তর save আছে। Retry চাপো।';
         if (reason === 'all_keys_rejected') return 'AI key-তে সমস্যা হয়েছে — admin-কে জানাও। তোমার উত্তর save আছে।';
@@ -2673,7 +2851,7 @@
             if (opts && opts.maxTokens) reqBody.maxTokens = opts.maxTokens;
             response = await fetch(AI_ENDPOINT, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', 'X-Access-Key': accessKey },
               body: JSON.stringify(reqBody),
               signal: controller.signal
             });
@@ -2692,6 +2870,8 @@
               err.retryable = errBody.retryable;
               err.retryAfterSeconds = errBody.retryAfterSeconds;
               if (errBody.error) err.serverMessage = errBody.error;
+              // Stored key died mid-session (revoked/expired): re-lock.
+              if (response.status === 401 && errBody.reason && String(errBody.reason).indexOf('access_key') === 0) handleAccessKeyRejected(errBody.reason);
             }
             throw err;
           }
@@ -3118,6 +3298,7 @@
       function ttsUrlFor(chunkText) {
         return TTS_ENDPOINT + '?text=' + encodeURIComponent(chunkText) +
           '&voice_gender=' + encodeURIComponent(selectedVoiceGender) +
+          '&access_key=' + encodeURIComponent(accessKey) +
           '&_=' + Date.now() + Math.floor(Math.random() * 1000);
       }
 
@@ -3828,9 +4009,16 @@
             if (!base64) { reject({ code: 'failed' }); return; }
             fetch(TRANSCRIBE_ENDPOINT, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
+              headers: { 'Content-Type': 'application/json', 'X-Access-Key': accessKey },
               body: JSON.stringify({ audio: base64, mimeType: blob.type || 'audio/webm' }),
             }).then(function (r) {
+              if (r.status === 401) {
+                return r.json().catch(function () { return {}; }).then(function (e) {
+                  handleAccessKeyRejected((e && e.reason) || 'access_key_invalid');
+                  reject({ code: 'key_rejected' });
+                  return null;
+                });
+              }
               if (r.status === 503) { reject({ code: 'not_configured' }); return null; }
               if (!r.ok) { reject({ code: 'failed' }); return null; }
               return r.json();
@@ -3895,6 +4083,9 @@
                 micHint.textContent = 'কীবোর্ডের মাইক চেপে বলুন, তারপর Send চাপুন';
                 showToast('Voice transcription এখনো চালু হয়নি — Admin-এ free Groq key যোগ করতে হবে। আপাতত কীবোর্ডের mic দিয়ে বলুন।');
                 input.focus({ preventScroll: false });
+              } else if (err && err.code === 'key_rejected') {
+                resetVoiceInputUi();
+                showToast('Access key সমস্যা — নতুন চাবি দিন।');
               } else {
                 resetVoiceInputUi();
                 showToast('লেখায় রূপান্তর হয়নি — Internet দেখে আবার mic চাপুন।');
@@ -4761,7 +4952,7 @@
           var line = lines[i++];
           var gender = line.s === 'B' ? 'male' : 'female';
           var url = TTS_ENDPOINT + '?text=' + encodeURIComponent(line.t) +
-            '&voice_gender=' + gender + '&_=' + Date.now() + i;
+            '&voice_gender=' + gender + '&access_key=' + encodeURIComponent(accessKey) + '&_=' + Date.now() + i;
           listeningAudio = new Audio();
           listeningAudio.playbackRate = 1.0;
           listeningAudio.playsInline = true; // Mobile fix 2026-10-17: inline playback on iOS Safari.
@@ -6378,6 +6569,9 @@
                 if (err && err.code === 'not_configured') {
                   if (note2) note2.textContent = 'Voice transcription এখনো চালু হয়নি — Admin-এ free Groq key যোগ করতে হবে।';
                   showToast('Voice transcription এখনো চালু হয়নি — Admin-এ free Groq key যোগ করতে হবে।');
+                } else if (err && err.code === 'key_rejected') {
+                  if (note2) note2.textContent = 'Access key সমস্যা — নতুন চাবি দিন।';
+                  showToast('Access key সমস্যা — নতুন চাবি দিন।');
                 } else {
                   if (note2) note2.textContent = 'লেখায় রূপান্তর হয়নি — আবার চেষ্টা করুন।';
                 }
