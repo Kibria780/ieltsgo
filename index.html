@@ -1557,7 +1557,7 @@
       <input id="keyGateInput" type="text" autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false" placeholder="IELTSGO-XXXX-XXXX-XXXX" />
       <button id="keyGateSubmit" type="button">Unlock</button>
       <p id="keyGateError" class="key-gate-error" hidden></p>
-      <p class="key-gate-note bn">চাবি এই browser-এ save থাকবে, যাতে বারবার দিতে না হয়।</p>
+      <p class="key-gate-note bn">চাবি এই browser-এ save থাকবে, যাতে বারবার দিতে না হয়। এক চাবি শুধু এক device-এ চলে — অন্য device-এ দিলে চলবে না।</p>
     </div>
   </div>
   <main class="page">
@@ -2305,6 +2305,34 @@
          is still stored here. The client gate only collects the key.
          Warmup pings (above) send no key and still get their cheap
          400s: the proxy checks the key only after validation. */
+      /* ---- DEVICE ID (ONE-KEY-ONE-DEVICE, 2026-10-19) ----
+         One key works on ONE device only. This is a random UUID the
+         browser generates once and stores in localStorage — it never
+         changes unless browser data is cleared. It is NOT fingerprinting:
+         no canvas/audio fingerprinting, no personal data, no hardware
+         info. Sent as X-Device-Id on every keyed request (and
+         ?device_id= for TTS <audio src>, which cannot send headers).
+         Clearing browser data / incognito = a NEW device ID = the key
+         stops working there until Admin resets the binding. */
+      var DEVICE_ID_STORAGE = 'ieltsgo_device_id';
+      function getOrCreateDeviceId() {
+        try {
+          var existing = localStorage.getItem(DEVICE_ID_STORAGE);
+          if (existing) return existing;
+          var id = '';
+          if (window.crypto && typeof window.crypto.randomUUID === 'function') {
+            id = window.crypto.randomUUID();
+          } else {
+            var chars = '0123456789abcdef';
+            var hex = '';
+            for (var i = 0; i < 32; i++) hex += chars[Math.floor(Math.random() * 16)];
+            id = hex.slice(0, 8) + '-' + hex.slice(8, 12) + '-' + hex.slice(12, 16) + '-' + hex.slice(16, 20) + '-' + hex.slice(20);
+          }
+          try { localStorage.setItem(DEVICE_ID_STORAGE, id); } catch (e) {}
+          return id;
+        } catch (e) { return ''; }
+      }
+      var deviceId = getOrCreateDeviceId();
       var ACCESS_KEY_STORAGE = 'ieltsgo_access_key';
       var VALIDATE_ENDPOINT = 'https://ieltsgo-proxy.vercel.app/api/validate-key';
       var accessKey = '';
@@ -2323,6 +2351,7 @@
         if (reason === 'access_key_expired') return 'এই চাবির মেয়াদ শেষ হয়ে গেছে।';
         if (reason === 'access_key_exhausted') return 'এই চাবির ব্যবহারের সীমা শেষ হয়ে গেছে।';
         if (reason === 'access_key_invalid' || reason === 'not_found') return 'চাবিটি সঠিক নয়। আবার দেখে দিন।';
+        if (reason === 'device_mismatch') return 'এই চাবি অন্য device-এ ব্যবহার হচ্ছে। এই device-এ চালাতে Admin-কে Device ছাড়াতে বলুন।';
         return 'Access key সমস্যা হয়েছে।';
       }
       function showKeyGate(message) {
@@ -2345,29 +2374,37 @@
       function handleAccessKeyRejected(reason) {
         accessKey = '';
         clearStoredAccessKey();
+        if (reason === 'device_mismatch') {
+          showKeyGate(accessKeyReasonMessage(reason) + ' Admin Device ছাড়ালে, তারপর এই device-এ আবার একই চাবি দিন।');
+          return;
+        }
         showKeyGate(accessKeyReasonMessage(reason) + ' নতুন চাবি দিন।');
       }
       function validateAccessKeyOnServer(key) {
         return fetch(VALIDATE_ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ key: key })
+          headers: { 'Content-Type': 'application/json', 'X-Device-Id': deviceId },
+          body: JSON.stringify({ key: key, deviceId: deviceId })
         }).then(function (r) { return r.json(); }).then(function (j) {
-          return !!(j && j.valid);
+          return { valid: !!(j && j.valid), reason: (j && j.reason) || '' };
         });
       }
       async function initAccessGate() {
         var stored = getStoredAccessKey();
         if (stored) {
           accessKey = stored;
-          var ok = false;
-          try { ok = await validateAccessKeyOnServer(stored); } catch (e) { ok = false; }
-          if (ok) { hideKeyGate(); return; }
-          // Stored key no longer valid (revoked/expired/exhausted), or
-          // the check itself failed: stay locked, ask for a fresh key.
+          var result = { valid: false, reason: '' };
+          try { result = await validateAccessKeyOnServer(stored); } catch (e) { result = { valid: false, reason: '' }; }
+          if (result.valid) { hideKeyGate(); return; }
+          // Stored key no longer valid (revoked/expired/exhausted /
+          // device_mismatch), or the check itself failed: stay locked.
           accessKey = '';
           clearStoredAccessKey();
-          showKeyGate('আগের চাবিটি আর কাজ করছে না (revoked/expired হতে পারে)। নতুন চাবি দিন।');
+          if (result.reason === 'device_mismatch') {
+            showKeyGate(accessKeyReasonMessage('device_mismatch') + ' Admin Device ছাড়ালে, তারপর এই device-এ আবার একই চাবি দিন।');
+          } else {
+            showKeyGate('আগের চাবিটি আর কাজ করছে না (revoked/expired হতে পারে)। নতুন চাবি দিন।');
+          }
           return;
         }
         showKeyGate('');
@@ -2385,13 +2422,16 @@
           }
           submit.disabled = true;
           submit.textContent = 'যাচাই হচ্ছে…';
-          validateAccessKeyOnServer(key).then(function (ok) {
-            if (ok) {
+          validateAccessKeyOnServer(key).then(function (result) {
+            if (result && result.valid) {
               accessKey = key;
               setStoredAccessKey(key);
               input.value = '';
               hideKeyGate();
               showToast('Access key গ্রহণ করা হয়েছে — IELTSGo unlock হয়েছে।');
+            } else if (result && result.reason === 'device_mismatch') {
+              var errD = document.getElementById('keyGateError');
+              if (errD) { errD.textContent = 'এই চাবি অন্য device-এ ব্যবহার হচ্ছে। Admin-কে Device ছাড়াতে বলুন, তারপর আবার চেষ্টা করুন।'; errD.hidden = false; }
             } else {
               var err = document.getElementById('keyGateError');
               if (err) { err.textContent = 'চাবিটি সঠিক নয় / মেয়াদ শেষ / বন্ধ করা হয়েছে। আবার দেখে দিন।'; err.hidden = false; }
@@ -2439,13 +2479,13 @@
       function submitAnswers(payload) {
         return fetch(SUBMIT_ENDPOINT, {
           method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Access-Key': accessKey },
+          headers: { 'Content-Type': 'application/json', 'X-Access-Key': accessKey, 'X-Device-Id': deviceId },
           body: JSON.stringify(payload)
         })
           .then(function (r) {
             if (!r.ok) {
               return r.json().then(function (e) {
-                if (r.status === 401 && e && e.reason && String(e.reason).indexOf('access_key') === 0) handleAccessKeyRejected(e.reason);
+                if (r.status === 401 && e && e.reason && (String(e.reason).indexOf('access_key') === 0 || e.reason === 'device_mismatch')) handleAccessKeyRejected(e.reason);
                 throw new Error((e && e.error) || 'Score unavailable (HTTP ' + r.status + ').');
               }).catch(function () {
                 throw new Error('Score unavailable (HTTP ' + r.status + ').');
@@ -2678,7 +2718,7 @@
             if (opts && opts.maxTokens) reqBody.maxTokens = opts.maxTokens;
             response = await fetch(AI_ENDPOINT, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Access-Key': accessKey },
+              headers: { 'Content-Type': 'application/json', 'X-Access-Key': accessKey, 'X-Device-Id': deviceId },
               body: JSON.stringify(reqBody),
               signal: controller.signal
             });
@@ -2773,6 +2813,7 @@
       function aiErrorMessage(error) {
         var reason = error && error.reason;
         // Access-key failures: re-locked already; tell the user plainly.
+        if (reason === 'device_mismatch') return accessKeyReasonMessage(reason) + ' Admin-কে Device ছাড়াতে বলুন। তোমার উত্তর save আছে।';
         if (reason && String(reason).indexOf('access_key') === 0) return accessKeyReasonMessage(reason) + ' নতুন চাবি দিন।';
         if (reason === 'all_keys_rate_limited') return 'AI coach busy — সব key-এর limit শেষ। তোমার উত্তর save আছে। কয়েক মিনিট পর আবার চেষ্টা করো।';
         if (reason === 'upstream_timeout') return 'AI service timeout হয়েছে — তোমার উত্তর save আছে। Retry চাপো।';
@@ -2851,7 +2892,7 @@
             if (opts && opts.maxTokens) reqBody.maxTokens = opts.maxTokens;
             response = await fetch(AI_ENDPOINT, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Access-Key': accessKey },
+              headers: { 'Content-Type': 'application/json', 'X-Access-Key': accessKey, 'X-Device-Id': deviceId },
               body: JSON.stringify(reqBody),
               signal: controller.signal
             });
@@ -2871,7 +2912,7 @@
               err.retryAfterSeconds = errBody.retryAfterSeconds;
               if (errBody.error) err.serverMessage = errBody.error;
               // Stored key died mid-session (revoked/expired): re-lock.
-              if (response.status === 401 && errBody.reason && String(errBody.reason).indexOf('access_key') === 0) handleAccessKeyRejected(errBody.reason);
+              if (response.status === 401 && errBody.reason && (String(errBody.reason).indexOf('access_key') === 0 || errBody.reason === 'device_mismatch')) handleAccessKeyRejected(errBody.reason);
             }
             throw err;
           }
@@ -3299,6 +3340,7 @@
         return TTS_ENDPOINT + '?text=' + encodeURIComponent(chunkText) +
           '&voice_gender=' + encodeURIComponent(selectedVoiceGender) +
           '&access_key=' + encodeURIComponent(accessKey) +
+          '&device_id=' + encodeURIComponent(deviceId) +
           '&_=' + Date.now() + Math.floor(Math.random() * 1000);
       }
 
@@ -4009,7 +4051,7 @@
             if (!base64) { reject({ code: 'failed' }); return; }
             fetch(TRANSCRIBE_ENDPOINT, {
               method: 'POST',
-              headers: { 'Content-Type': 'application/json', 'X-Access-Key': accessKey },
+              headers: { 'Content-Type': 'application/json', 'X-Access-Key': accessKey, 'X-Device-Id': deviceId },
               body: JSON.stringify({ audio: base64, mimeType: blob.type || 'audio/webm' }),
             }).then(function (r) {
               if (r.status === 401) {
@@ -4952,7 +4994,7 @@
           var line = lines[i++];
           var gender = line.s === 'B' ? 'male' : 'female';
           var url = TTS_ENDPOINT + '?text=' + encodeURIComponent(line.t) +
-            '&voice_gender=' + gender + '&access_key=' + encodeURIComponent(accessKey) + '&_=' + Date.now() + i;
+            '&voice_gender=' + gender + '&access_key=' + encodeURIComponent(accessKey) + '&device_id=' + encodeURIComponent(deviceId) + '&_=' + Date.now() + i;
           listeningAudio = new Audio();
           listeningAudio.playbackRate = 1.0;
           listeningAudio.playsInline = true; // Mobile fix 2026-10-17: inline playback on iOS Safari.
