@@ -1265,6 +1265,10 @@
       background: var(--surface-2); font-weight: 700; cursor: pointer;
     }
     .exam-mode-btn[aria-pressed="true"] { background: var(--ink); color: var(--surface); border-color: var(--ink); }
+    /* Weekly streak squares (2026-11-12, mocktest.live idea). */
+    .streak-day { width: 34px; height: 34px; border-radius: 9px; border: 1px solid #d1d5db; display: flex; align-items: center; justify-content: center; font-size: .8rem; background: #fff; color: #6b7280; }
+    .streak-day.done { background: #16a34a; border-color: #16a34a; color: #fff; font-weight: 700; }
+    .streak-day.today { border-color: var(--ink); border-width: 2px; }
     .exam-mode-badge {
       display: inline-block; font-size: .75rem; font-weight: 700; letter-spacing: .03em;
       padding: 4px 10px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); margin-bottom: 10px;
@@ -1756,7 +1760,8 @@
         </div>
       </div>
       <button class="small-action" id="newSession" type="button">New session</button>
-    </section><section class="workspace" id="workspaceSection">
+      <button class="small-action" id="micCheckBtn" type="button">🎤 Mic check</button>
+    </section><p class="exam-meta" id="micCheckNote" style="margin:8px 0 0"></p><section class="workspace" id="workspaceSection">
       <article class="conversation" aria-label="Live English conversation">
         <header class="panel-head">
           <div class="status"><span class="dot" id="statusDot"></span><span id="statusText">AI coach · ready</span></div>
@@ -1839,6 +1844,11 @@
           <button class="exam-mode-btn" type="button" id="modeGeneralBtn" aria-pressed="false">IELTS General Training</button>
         </div>
         <p class="exam-meta" id="examModeNote">Mode: Academic — Reading ও Writing Academic format-এ লোড হবে।</p>
+        <div class="exam-mode-switch" role="group" aria-label="Practice or exam rules">
+          <button class="exam-mode-btn" type="button" id="modeExamBtn" aria-pressed="true">🎯 Exam mode</button>
+          <button class="exam-mode-btn" type="button" id="modePracticeBtn" aria-pressed="false">📖 Practice mode</button>
+        </div>
+        <p class="exam-meta" id="p4ModeNote">Exam mode: আসল পরীক্ষার নিয়ম — Listening audio একবার, timer চলে।</p>
         <div class="exam-grid">
           <button class="exam-card" type="button" data-exam="listening">
             <h3>🎧 Listening Test</h3>
@@ -1871,6 +1881,11 @@
             <div class="exam-meta">COMPACT VERSION · ~40 MIN</div>
           </button>
         </div>
+        <div style="margin-top:24px" id="p4StreakBox">
+          <h3>এই সপ্তাহের practice</h3>
+          <div id="p4StreakSquares" style="display:flex;gap:6px;flex-wrap:wrap;margin:8px 0"></div>
+          <p class="exam-meta" id="p4StreakText"></p>
+        </div>
         <div style="margin-top:24px">
           <h3>Practice history</h3>
           <p class="exam-meta">Progress ও history এই device/browser-এই save হয় (localStorage, ~5MB limit)। কোনো account নেই, cross-device sync নেই।</p>
@@ -1884,7 +1899,7 @@
         <button class="exam-back" type="button" data-exam-back>← All exams</button>
         <div class="exam-head">
           <h2>Listening Test</h2>
-          <p>প্রশ্নগুলো দেখে নিন, তারপর ▶ Play চাপুন। Audio একবারই বাজবে — আসল পরীক্ষার মতো।</p>
+          <p id="listeningHeadNote">প্রশ্নগুলো দেখে নিন, তারপর ▶ Play চাপুন। Audio একবারই বাজবে — আসল পরীক্ষার মতো।</p>
         </div>
         <div class="exam-meta p4-attempt"><span class="p4-attempt-text"></span> <button class="exam-secondary" type="button" data-p4-fresh="listening" style="min-height:30px;padding:0 10px">Start fresh</button></div>
         <div class="exam-meta p4-autosave"></div>
@@ -1901,6 +1916,14 @@
         <div class="exam-part" id="listeningPartLabel"></div>
         <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
           <button class="exam-play" id="listeningPlayBtn" type="button">▶ Play audio</button>
+          <label style="font-size:.85rem;opacity:.85">Speed:
+            <select id="listeningSpeedSelect" style="min-height:36px;border-radius:8px;padding:0 6px">
+              <option value="0.75">0.75× ধীরে</option>
+              <option value="1" selected>1× স্বাভাবিক</option>
+              <option value="1.25">1.25×</option>
+              <option value="1.5">1.5× দ্রুত</option>
+            </select>
+          </label>
           <span class="exam-meta" id="listeningPlayNote"></span>
         </div>
         <div id="listeningQuestions"></div>
@@ -4523,6 +4546,7 @@
       }
       function showExamHub() {
         refreshExamModeUi();
+        refreshP4PracticeModeUi();
         P4.renderHistory();
         ['examHub', 'examListening', 'examReading', 'examFullReading', 'examWriting', 'examFullMock', 'examResult'].forEach(function (id) {
           var el = document.getElementById(id);
@@ -4576,6 +4600,138 @@
       }
       document.getElementById('modeAcademicBtn').addEventListener('click', function () { setExamMode('academic'); });
       document.getElementById('modeGeneralBtn').addEventListener('click', function () { setExamMode('general'); });
+      // Practice / Exam mode (2026-11-12, mocktest.live idea): a hub-level
+      // preference, default Exam (current behaviour, unchanged). Practice
+      // relaxes ONLY the three short practice modules: Listening audio
+      // replay + no Reading/Writing countdowns. Full Mock and Full
+      // Reading always keep exam rules. Stored in localStorage only.
+      var p4PracticeMode = false;
+      try { p4PracticeMode = localStorage.getItem('ieltsgo_p4_practice_mode') === '1'; } catch (e) {}
+      function isPracticeMode() { return p4PracticeMode; }
+      function refreshP4PracticeModeUi() {
+        var examBtn = document.getElementById('modeExamBtn');
+        var pracBtn = document.getElementById('modePracticeBtn');
+        if (examBtn) examBtn.setAttribute('aria-pressed', String(!p4PracticeMode));
+        if (pracBtn) pracBtn.setAttribute('aria-pressed', String(p4PracticeMode));
+        var note = document.getElementById('p4ModeNote');
+        if (note) note.textContent = p4PracticeMode
+          ? 'Practice mode: Listening audio বারবার শোনা যাবে, Reading/Writing-এ কোনো time limit নেই। Full Mock সবসময় exam নিয়মেই চলবে।'
+          : 'Exam mode: আসল পরীক্ষার নিয়ম — Listening audio একবার, timer চলে।';
+        var head = document.getElementById('listeningHeadNote');
+        if (head) head.textContent = p4PracticeMode
+          ? 'প্রশ্নগুলো দেখে নিন, তারপর ▶ Play চাপুন। Practice mode — audio বারবার শোনা যাবে।'
+          : 'প্রশ্নগুলো দেখে নিন, তারপর ▶ Play চাপুন। Audio একবারই বাজবে — আসল পরীক্ষার মতো।';
+      }
+      function setP4PracticeMode(on) {
+        p4PracticeMode = !!on;
+        try { localStorage.setItem('ieltsgo_p4_practice_mode', p4PracticeMode ? '1' : '0'); } catch (e) {}
+        refreshP4PracticeModeUi();
+      }
+      document.getElementById('modeExamBtn').addEventListener('click', function () { setP4PracticeMode(false); });
+      document.getElementById('modePracticeBtn').addEventListener('click', function () { setP4PracticeMode(true); });
+      refreshP4PracticeModeUi();
+      // Weekly streak (2026-11-12, mocktest.live idea): counts distinct
+      // days this week (Saturday–Friday, Bangladesh week) with at least
+      // one submitted practice result in local history. Read-only — it
+      // never writes history, and clearing history clears the streak.
+      function renderStreak(history) {
+        var box = document.getElementById('p4StreakSquares');
+        var text = document.getElementById('p4StreakText');
+        if (!box || !text) return;
+        var days = ['শনি', 'রবি', 'সোম', 'মঙ্গল', 'বুধ', 'বৃহ', 'শুক্র'];
+        var now = new Date();
+        var saturday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        saturday.setDate(saturday.getDate() - ((now.getDay() + 1) % 7)); // back to Saturday
+        var done = {};
+        (history || []).forEach(function (e) {
+          if (!e || !e.at) return;
+          var d = new Date(e.at);
+          done[d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate()] = true;
+        });
+        var count = 0, html = '';
+        for (var i = 0; i < 7; i++) {
+          var d = new Date(saturday.getFullYear(), saturday.getMonth(), saturday.getDate() + i);
+          var key = d.getFullYear() + '-' + d.getMonth() + '-' + d.getDate();
+          var isDone = !!done[key];
+          var isToday = d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth() && d.getDate() === now.getDate();
+          if (isDone) count += 1;
+          html += '<div class="streak-day' + (isDone ? ' done' : '') + (isToday ? ' today' : '') + '">' + days[i] + '</div>';
+        }
+        box.innerHTML = html;
+        text.textContent = count === 0
+          ? 'এই সপ্তাহে এখনো practice হয়নি — আজই শুরু করুন।'
+          : 'এই সপ্তাহে ' + count + '/7 দিন practice হয়েছে।' + (count >= 4 ? ' দারুণ ছন্দে আছেন! 🎉' : ' প্রতিদিন একটু করে চালিয়ে যান।');
+      }
+      // Mic check (2026-11-12, mocktest.live idea): records 3 seconds and
+      // plays it back, so a mic/permission problem is caught BEFORE a
+      // mock starts. Fresh MediaRecorder each run; the mic is released
+      // in every path. No audio leaves the device.
+      var micCheckRecorder = null, micCheckStream = null, micCheckBlob = null, micCheckAudio = null;
+      function micCheckCleanup() {
+        if (micCheckStream) { try { micCheckStream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {} micCheckStream = null; }
+        micCheckRecorder = null;
+      }
+      function runMicCheck() {
+        var note = document.getElementById('micCheckNote');
+        var btn = document.getElementById('micCheckBtn');
+        if (!note || !btn) return;
+        if (micCheckRecorder) return; // already running
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia || !window.MediaRecorder) {
+          note.textContent = '❌ এই browser/device-এ mic recording support করে না।';
+          return;
+        }
+        btn.disabled = true;
+        note.textContent = '🎤 Mic অনুমতি চাওয়া হচ্ছে…';
+        navigator.mediaDevices.getUserMedia({ audio: true }).then(function (stream) {
+          micCheckStream = stream;
+          var chunks = [];
+          micCheckRecorder = new MediaRecorder(stream);
+          micCheckRecorder.ondataavailable = function (e) { if (e.data && e.data.size) chunks.push(e.data); };
+          micCheckRecorder.onstop = function () {
+            micCheckBlob = new Blob(chunks, { type: (micCheckRecorder && micCheckRecorder.mimeType) || 'audio/webm' });
+            micCheckCleanup();
+            btn.disabled = false;
+            if (!micCheckBlob.size) { note.textContent = '❌ কোনো শব্দ রেকর্ড হয়নি — mic কাজ করছে না বা অনুমতি মেলেনি।'; return; }
+            note.textContent = '✅ Mic কাজ করছে! আপনার কথা শোনা যাচ্ছে — আবার শুনতে Mic check চাপুন।';
+            try {
+              if (micCheckAudio) { micCheckAudio.pause(); }
+              micCheckAudio = new Audio(URL.createObjectURL(micCheckBlob));
+              micCheckAudio.play().catch(function () {});
+            } catch (e) {}
+          };
+          micCheckRecorder.start();
+          note.textContent = '🔴 রেকর্ড হচ্ছে… এখন কিছু বলুন (৩ সেকেন্ড)।';
+          setTimeout(function () { try { if (micCheckRecorder && micCheckRecorder.state !== 'inactive') micCheckRecorder.stop(); } catch (e) {} }, 3000);
+        }).catch(function () {
+          btn.disabled = false;
+          note.textContent = '❌ Mic-এর অনুমতি মেলেনি — browser-এর address bar-এর পাশের mic icon থেকে Allow করুন, তারপর আবার চেষ্টা করুন।';
+        });
+      }
+      (function initMicCheck() {
+        var btn = document.getElementById('micCheckBtn');
+        if (btn) btn.addEventListener('click', runMicCheck);
+      })();
+      // Listening speed (2026-11-12): persisted playback rate, 1.0 default.
+      // Declared here (before initListeningSpeed below) so the select
+      // initialises from the real value, not an unassigned hoisted var.
+      var listeningSpeed = 1.0;
+      try { var _sp = parseFloat(localStorage.getItem('ieltsgo_listening_speed')); if (_sp === 0.75 || _sp === 1 || _sp === 1.25 || _sp === 1.5) listeningSpeed = _sp; } catch (e) {}
+      // Listening speed (2026-11-12, mocktest.live idea): persisted
+      // playback rate for the TTS audio. Applies to the next line AND
+      // live to audio already playing.
+      (function initListeningSpeed() {
+        var sel = document.getElementById('listeningSpeedSelect');
+        if (!sel) return;
+        sel.value = String(listeningSpeed);
+        sel.addEventListener('change', function () {
+          var v = parseFloat(sel.value);
+          if (v === 0.75 || v === 1 || v === 1.25 || v === 1.5) {
+            listeningSpeed = v;
+            try { localStorage.setItem('ieltsgo_listening_speed', String(v)); } catch (e) {}
+            if (listeningAudio) { try { listeningAudio.playbackRate = v; } catch (e) {} }
+          }
+        });
+      })();
 
       /* ================= Phase 4: Progress persistence (localStorage) ================= */
       // Single-device only: progress + history live in this browser's
@@ -4628,6 +4784,7 @@
           var list = document.getElementById('p4HistoryList');
           if (!list) return;
           var h = load('history', []);
+          renderStreak(h);
           if (!h.length) { list.innerHTML = '<p class="exam-meta">No submitted results yet.</p>'; return; }
           list.innerHTML = h.map(function (e) {
             var d = new Date(e.at);
@@ -5040,7 +5197,7 @@
           var url = TTS_ENDPOINT + '?text=' + encodeURIComponent(line.t) +
             '&voice_gender=' + gender + '&access_key=' + encodeURIComponent(accessKey) + '&device_id=' + encodeURIComponent(deviceId) + '&_=' + Date.now() + i;
           listeningAudio = new Audio();
-          listeningAudio.playbackRate = 1.0;
+          listeningAudio.playbackRate = listeningSpeed;
           listeningAudio.playsInline = true; // Mobile fix 2026-10-17: inline playback on iOS Safari.
           listeningAudio.src = url;
           listeningAudio.onplaying = function () { started = true; armStall(); if (onState) onState('playing'); };
@@ -5067,7 +5224,9 @@
         var playBtn = document.getElementById('listeningPlayBtn');
         playBtn.disabled = false;
         playBtn.textContent = '▶ Play audio';
-        document.getElementById('listeningPlayNote').textContent = listeningPlayed[listeningPartIndex] ? 'Played — answer from memory, like the real test.' : 'Audio plays once per part.';
+        document.getElementById('listeningPlayNote').textContent = (isPracticeMode() && !listeningFullMock)
+          ? (listeningPlayed[listeningPartIndex] ? 'Practice mode — replay as many times as you like.' : 'Practice mode — audio can be replayed.')
+          : (listeningPlayed[listeningPartIndex] ? 'Played — answer from memory, like the real test.' : 'Audio plays once per part.');
         var box = document.getElementById('listeningQuestions');
         box.innerHTML = '';
         var partQuestions = activeListeningTest.questions.filter(function (q) { return q.section === listeningPartIndex; });
@@ -5218,8 +5377,17 @@
         playListeningScript(activeListeningParts[partIndex].script, function (success) {
           if (success) {
             listeningPlayed[partIndex] = true;
-            btn.textContent = '▶ Played';
-            noteEl.textContent = 'Played — answer from memory, like the real test.';
+            // Practice mode (short 12Q only): replay allowed — re-enable
+            // the button instead of locking it. Exam mode + Full Mock
+            // keep the one-play rule.
+            if (isPracticeMode() && !listeningFullMock) {
+              btn.disabled = false;
+              btn.textContent = '↻ Replay audio';
+              noteEl.textContent = 'Practice mode — replay as many times as you like.';
+            } else {
+              btn.textContent = '▶ Played';
+              noteEl.textContent = 'Played — answer from memory, like the real test.';
+            }
             p4SaveListening();
           } else {
             btn.disabled = false;
@@ -5325,7 +5493,8 @@
             }
             box.appendChild(qDiv);
           });
-          examCountdown(document.getElementById('readingTimer'), Math.max(0, Math.floor((readingEndsAt - Date.now()) / 1000)));
+          if (isPracticeMode()) document.getElementById('readingTimer').textContent = '📖 Practice — no time limit';
+          else examCountdown(document.getElementById('readingTimer'), Math.max(0, Math.floor((readingEndsAt - Date.now()) / 1000)));
           p4ShowAttempt('examReading', (resumed ? 'Resumed attempt ' : 'Attempt ') + readingAttemptId + ' · ' + examModeLabel() + ' · Set ' + (readingSetIndex[examMode] + 1));
           p4SaveReading();
           P4.refreshNotes();
@@ -6074,8 +6243,17 @@
         refillWritingTask2();
         // Phase 6E: countdown to the persisted deadlines — a refresh
         // resumes the remaining time instead of restarting the timers.
-        examCountdownUntil(document.getElementById(writingMode === 'general' ? 'writingTask1GTTimer' : 'writingTask1Timer'), writingTask1EndsAt);
-        examCountdownUntil(document.getElementById('writingTask2Timer'), writingTask2EndsAt);
+        if (isPracticeMode()) {
+          // Practice mode: no countdowns — show the relaxed state on
+          // BOTH Task 1 timer elements (Academic + GT) and Task 2.
+          ['writingTask1Timer', 'writingTask1GTTimer', 'writingTask2Timer'].forEach(function (id) {
+            var tEl = document.getElementById(id);
+            if (tEl) tEl.textContent = '📖 Practice — no time limit';
+          });
+        } else {
+          examCountdownUntil(document.getElementById(writingMode === 'general' ? 'writingTask1GTTimer' : 'writingTask1Timer'), writingTask1EndsAt);
+          examCountdownUntil(document.getElementById('writingTask2Timer'), writingTask2EndsAt);
+        }
         p4ShowAttempt('examWriting', (resumed ? 'Resumed attempt ' : 'Attempt ') + writingAttemptId + ' · ' + examModeLabel());
         p4SaveWriting();
         P4.refreshNotes();
