@@ -4,7 +4,8 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="color-scheme" content="light dark" />
-  <link rel="icon" href="data:," />
+  <link rel="icon" type="image/png" href="logo.png" />
+  <link rel="apple-touch-icon" href="apple-touch-icon.png" />
   <title>IELTSgo</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
@@ -1409,6 +1410,7 @@
     .side { background: var(--surface-2); border: 1px solid var(--line); border-radius: 18px; padding: 20px 14px; display: flex; flex-direction: column; gap: 4px; position: sticky; top: 12px; }
     .brand { display: flex; align-items: center; gap: 10px; padding: 2px 8px 18px; }
     .brand-mark { width: 38px; height: 38px; border-radius: 11px; background: var(--accent); color: #fff; display: grid; place-items: center; font-family: "Newsreader", Georgia, serif; font-weight: 700; font-size: 19px; flex: none; }
+    .brand-mark-img { width: 38px; height: 38px; border-radius: 11px; flex: none; object-fit: cover; }
     .brand-name { font-weight: 800; font-size: 17px; letter-spacing: -.01em; line-height: 1; }
     .brand-name span { color: var(--accent); }
     .brand-sub { font-size: 11px; color: var(--muted); margin-top: 3px; }
@@ -1575,7 +1577,7 @@
     <div class="app-shell">
       <aside class="side" aria-label="Main navigation">
         <div class="brand">
-          <div class="brand-mark">G</div>
+          <img class="brand-mark-img" src="logo.png" alt="IELTSGo logo" />
           <div>
             <div class="brand-name">IELTS<span>Go</span></div>
             <div class="brand-sub bn">প্রতিদিন ১০ মিনিটই যথেষ্ট</div>
