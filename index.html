@@ -648,6 +648,12 @@
       line-height: 1.5;
       font-style: italic;
     }
+    .coach-history-reply {
+      margin: 0 0 6px;
+      font-size: .8rem;
+      line-height: 1.55;
+      color: var(--ink-2);
+    }
     .coach-history-correction {
       margin: 6px 0 0;
       font-size: .78rem;
@@ -3469,12 +3475,18 @@
         }
       }
 
-      function recordCoachHistory(userText, result) {
+      // kind: which practice produced this entry ('Practice Chat',
+      // 'Speaking Mock', 'Writing', 'Full Mock · Writing'...). result
+      // may also carry band (1-9) for band-scored evaluations; the
+      // card then shows "Band X" instead of "Score Y".
+      function recordCoachHistory(userText, result, kind) {
         if (!result) return;
         var list = loadCoachHistory();
         var entry = {
           id: Date.now() + '-' + Math.floor(Math.random() * 100000),
           at: new Date().toISOString(),
+          kind: coachHistoryClip(kind || 'Practice Chat', 40),
+          band: (result.band != null && !isNaN(Number(result.band))) ? Number(result.band) : null,
           answer: coachHistoryClip(userText, 300),
           reply: coachHistoryClip(result.reply, 300),
           score: Number(result.score) || 0,
@@ -3488,9 +3500,9 @@
           })
         };
         // De-dup guard: one submit = one entry. Skip if the newest entry
-        // is the same answer + reply within 10 seconds (double-render).
+        // is the same kind + answer + reply within 10 seconds (double-render).
         var last = list[list.length - 1];
-        if (last && last.answer === entry.answer && last.reply === entry.reply) {
+        if (last && last.kind === entry.kind && last.answer === entry.answer && last.reply === entry.reply) {
           var lastAt = Date.parse(last.at || '');
           if (lastAt && Date.now() - lastAt < 10000) return;
         }
@@ -3515,7 +3527,7 @@
         if (!list.length) {
           var empty = document.createElement('p');
           empty.className = 'coach-history-empty bn';
-          empty.textContent = 'এখনো কোনো history নেই। উত্তর দিলে প্রতিটি turn-এর coach note এখানে জমা হবে।';
+          empty.textContent = 'এখনো কোনো history নেই। প্র্যাকটিস করলে (Speaking, Writing, Full Mock) প্রতিটি ফিডব্যাক এখানে জমা হবে।';
           coachHistoryEl.appendChild(empty);
           return;
         }
@@ -3534,7 +3546,7 @@
           var meta = document.createElement('div');
           meta.className = 'coach-history-meta';
           var turnLabel = document.createElement('strong');
-          turnLabel.textContent = 'Score ' + (entry.score || '—');
+          turnLabel.textContent = (entry.band != null ? 'Band ' + entry.band : 'Score ' + (entry.score || '—')) + (entry.kind ? ' · ' + entry.kind : '');
           var timeLabel = document.createElement('span');
           var d = new Date(entry.at);
           timeLabel.textContent = isNaN(d.getTime()) ? '' : d.toLocaleString();
@@ -3546,6 +3558,14 @@
             answer.className = 'coach-history-answer';
             answer.textContent = '“' + entry.answer + '”';
             card.appendChild(answer);
+          }
+          // The coach's reply was stored but never shown — show it so
+          // each note is actually useful for review.
+          if (entry.reply) {
+            var reply = document.createElement('p');
+            reply.className = 'coach-history-reply';
+            reply.textContent = entry.reply;
+            card.appendChild(reply);
           }
           if (entry.corrections && entry.corrections.length) {
             entry.corrections.forEach(function (c, i) {
@@ -3735,6 +3755,20 @@
           // re-entry can render it without re-evaluating.
           P4.recordSubmission(speakingAttemptId, { type: 'speaking', band: result.overall_band, result: result }, { attemptId: speakingAttemptId, test: 'Speaking', mode: '—', set: 'Set ' + (mockSetIndex + 1), score: 'Band ' + (result.overall_band != null ? result.overall_band : '—'), pct: null, band: result.overall_band != null ? Number(result.overall_band) : null, at: Date.now() });
           P4.remove('progress_speaking');
+          // Coach Notes (2026-11-12): every Speaking Mock result saves
+          // on the phone. Only the fresh-success branch records — the
+          // already-recorded re-entry above never re-records.
+          (function recordSpeakingMockNote() {
+            var bandNum = function (v) { return (v != null && !isNaN(Number(v))) ? Number(v).toFixed(1) : '—'; };
+            var mockAnswers = transcript.filter(function (item) { return item.role === 'user'; }).map(function (item) { return item.text; }).join(' ');
+            recordCoachHistory(mockAnswers, {
+              reply: 'Band ' + bandNum(result.overall_band) + ' (est.) — Fluency ' + bandNum(result.fluency) + ' · Lexical ' + bandNum(result.lexical) + ' · Grammar ' + bandNum(result.grammar),
+              score: result.overall_band != null ? Math.round(Number(result.overall_band) / 9 * 100) : 0,
+              encouragement_bn: result.next_steps_bn || result.strengths_bn || '',
+              corrections: [],
+              band: result.overall_band
+            }, 'Speaking Mock');
+          })();
           scoreLabel.textContent = 'Estimated overall band';
           setStatus('Mock test complete', false);
           newSessionBtn.textContent = 'Try another test';
@@ -3807,7 +3841,7 @@
           }
           transcript.push({ role: 'assistant', text: result.reply });
           renderFeedback(result);
-          recordCoachHistory(text, result);
+          recordCoachHistory(text, result, 'Practice Chat');
           if (!streamState.spokenAny) speak(result.reply);
           setStatus('AI coach · ready', false);
         } catch (error) {
@@ -6168,6 +6202,15 @@
             showToast('Already submitted — showing your saved result.');
           } else {
             showExamResult(writingResult.title, writingResult.headline, writingResult.sub, writingResult.detail, writingResult.label);
+            // Coach Notes (2026-11-12): every Writing evaluation saves
+            // on the phone. The 'already' branch above never re-records.
+            recordCoachHistory(t2, {
+              reply: 'Task 1: ' + (t1Data.feedback || '') + ' Task 2: ' + (t2Data.feedback || ''),
+              score: Math.round(bandNum / 9 * 100),
+              encouragement_bn: 'Band ' + bandNum + ' (est.) — Task 1: ' + t1Count + ' words · Task 2: ' + t2Count + ' words',
+              corrections: data.corrections || [],
+              band: bandNum
+            }, 'Writing');
           }
         } catch (error) {
           console.error('Writing evaluation failed:', error);
@@ -6743,6 +6786,15 @@
             // Phase 6E: record the result locally (history + duplicate
             // protection) and clear the resume pointer.
             P4.recordSubmission(fullMock.attemptId, { title: 'Full Mock Result', headline: '—', sub: 'All 4 skills · No overall band (see sections)', detail: detail, label: 'Overall band' }, { attemptId: fullMock.attemptId, test: 'Full Mock', mode: examModeLabel(), set: null, score: 'Listening ' + listenScore + '/3 · Reading ' + readScore + '/10', pct: null, band: null, at: Date.now() });
+            // Coach Notes (2026-11-12): Full Mock AI feedback saves on
+            // the phone — one note per AI-evaluated skill (Writing and
+            // Speaking when evaluated). Listening/Reading raw scores
+            // already live in Progress history.
+            (function recordFullMockNotes() {
+              var fmContext = 'Listening ' + listenScore + '/3 · Reading ' + readScore + '/10';
+              if (wBand != null) recordCoachHistory('Full Mock — Writing', { reply: wFeedback || '', score: Math.round(Number(wBand) / 9 * 100), encouragement_bn: fmContext, corrections: [], band: wBand }, 'Full Mock · Writing');
+              if (spBand != null) recordCoachHistory('Full Mock — Speaking', { reply: spFeedback || '', score: Math.round(Number(spBand) / 9 * 100), encouragement_bn: fmContext, corrections: [], band: spBand }, 'Full Mock · Speaking');
+            })();
             fmCacheClear();
           } catch (error) {
             console.error('Full Mock result failed:', error);
