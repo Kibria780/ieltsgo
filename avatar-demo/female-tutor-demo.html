@@ -1,0 +1,727 @@
+<!doctype html>
+<!--
+  IELTSGo AI Tutor — Female Avatar Demo (web-native, no Adobe files)
+  ------------------------------------------------------------------
+  An ORIGINAL SVG character inspired by the supplied female tutor
+  reference (professional, friendly, navy suit, brown ponytail).
+  Drawn from scratch in this file — not traced from the reference.
+
+  The avatar is a real-time puppet: a JS engine drives lip-sync
+  (speechSynthesis + WebAudio amplitude), blinking, breathing,
+  head sway, and 9 facial expressions.
+
+  Fully self-contained: no external images, fonts, or scripts.
+  System fonts only. SVG fills use presentation attributes (not CSS
+  classes) so the "Download PNG" export keeps all colours.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>IELTSGo AI Tutor — Female Avatar Demo</title>
+<style>
+  :root {
+    --ink: #1a2332; --muted: #667085; --line: #e4e7ec;
+    --navy: #1f3a5f; --red: #d92d20; --surface: #ffffff; --bg: #f6f7f9;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--ink);
+    font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial,
+      "Noto Sans Bengali", "Hind Siliguri", sans-serif;
+  }
+  header {
+    background: var(--surface); border-bottom: 1px solid var(--line);
+    padding: 16px 20px; text-align: center;
+  }
+  header h1 { margin: 0; font-size: 1.35rem; letter-spacing: -0.01em; }
+  header h1 span { color: var(--red); }
+  header p { margin: 6px 0 0; color: var(--muted); font-size: 0.92rem; }
+  main { max-width: 860px; margin: 0 auto; padding: 18px 16px 40px; }
+  .stage-card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 16px; padding: 12px 12px 4px; text-align: center;
+  }
+  .stage {
+    /* Soft backdrop behind the avatar (CSS only — the SVG itself stays
+       transparent so the PNG export has no background). */
+    background: radial-gradient(circle at 50% 38%, #eef3fa 0%, #e3ebf5 42%, #f7f9fc 72%);
+    border-radius: 12px; padding: 8px 0 0;
+  }
+  .stage svg { width: min(400px, 88vw); height: auto; display: block; margin: 0 auto; }
+  .status-row {
+    display: flex; gap: 10px; align-items: center; justify-content: center;
+    flex-wrap: wrap; padding: 10px 0 12px; font-size: 0.92rem;
+  }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: #98a2b3; flex: none; }
+  .dot.speaking { background: #16a34a; }
+  .dot.listening { background: #2563eb; }
+  .viseme-tag {
+    background: #eef2f7; border: 1px solid var(--line); border-radius: 999px;
+    padding: 2px 10px; font-size: 0.82rem; color: var(--muted);
+  }
+  .viseme-tag b { color: var(--ink); }
+  section.card {
+    background: var(--surface); border: 1px solid var(--line);
+    border-radius: 16px; padding: 16px; margin-top: 14px;
+  }
+  section.card h2 { margin: 0 0 4px; font-size: 1.02rem; }
+  section.card p.hint { margin: 0 0 12px; color: var(--muted); font-size: 0.86rem; }
+  .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+  button, select, input[type="text"] {
+    font-family: inherit; font-size: 0.92rem;
+  }
+  button {
+    border: 1px solid var(--line); background: #fff; color: var(--ink);
+    border-radius: 10px; padding: 9px 13px; cursor: pointer; min-height: 40px;
+  }
+  button:hover { border-color: #c6cdd6; background: #f8fafc; }
+  button.primary { background: var(--red); border-color: var(--red); color: #fff; font-weight: 600; }
+  button.primary:hover { background: #b42318; }
+  button.active { background: var(--navy); border-color: var(--navy); color: #fff; }
+  .sample-btn { text-align: left; }
+  input[type="text"] {
+    flex: 1; min-width: 220px; border: 1px solid var(--line);
+    border-radius: 10px; padding: 9px 12px; min-height: 40px;
+  }
+  select {
+    border: 1px solid var(--line); border-radius: 10px;
+    padding: 8px 10px; min-height: 40px; max-width: 100%;
+  }
+  .row { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; }
+  .row + .row { margin-top: 10px; }
+  audio { width: 100%; margin-top: 10px; }
+  footer { text-align: center; color: var(--muted); font-size: 0.85rem; padding: 18px 12px 8px; line-height: 1.6; }
+  footer b { color: var(--ink); }
+</style>
+</head>
+<body>
+<header>
+  <h1>IELTS<span>Go</span> AI Tutor — Female Avatar Demo</h1>
+  <p>মহিলা AI টিউটর — কথা বললে ঠোঁঁট নড়বে, চোখ পলক ফেলবে, মুখের ভাব বদলাবে।</p>
+</header>
+
+<main>
+  <div class="stage-card">
+    <div class="stage">
+      <!-- ===================== AVATAR SVG ===================== -->
+      <!-- Original character, drawn from scratch for this demo.
+           Upper body, viewBox 400x520. Groups have stable ids so the
+           JS engine can animate them. No background rect: the SVG is
+           transparent, which is what makes the PNG export transparent. -->
+      <svg id="avatarSvg" viewBox="0 0 400 520" width="400" height="520"
+           role="img" aria-label="IELTSGo female AI tutor avatar">
+        <g id="avatarRoot">
+          <!-- Back hair: cap behind the head + ponytail over her shoulder -->
+          <g id="hairBack">
+            <path d="M200,30 C142,30 108,78 108,140 C108,192 116,234 130,264 L270,264 C284,234 292,192 292,140 C292,78 258,30 200,30 Z" fill="#6B4423"/>
+            <path d="M140,92 C116,128 106,180 110,242 C113,292 122,342 112,384 C108,402 100,416 90,426 C102,434 124,430 136,412 C148,392 152,352 148,300 C145,250 142,198 152,158 C156,136 152,110 140,92 Z" fill="#6B4423"/>
+            <path d="M132,150 C124,200 124,280 130,350" stroke="#54331A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+            <ellipse cx="139" cy="116" rx="9" ry="6" fill="#2B2B2B" transform="rotate(-20 139 116)"/>
+          </g>
+
+          <!-- Torso: navy double-breasted blazer, white shirt -->
+          <g id="torso">
+            <path d="M178,288 C140,292 100,308 76,338 C60,360 52,392 52,430 L52,520 L348,520 L348,430 C348,392 340,360 324,338 C300,308 260,292 222,288 C212,300 188,300 178,288 Z" fill="#1F3A5F"/>
+            <path d="M180,290 L200,362 L220,290 L210,286 L200,298 L190,286 Z" fill="#F4F6F8"/>
+            <path d="M180,290 L198,318 L186,326 L176,296 Z" fill="#FFFFFF"/>
+            <path d="M220,290 L202,318 L214,326 L224,296 Z" fill="#FFFFFF"/>
+            <path d="M180,290 L200,362 L190,376 L166,320 Z" fill="#16294A"/>
+            <path d="M220,290 L200,362 L210,376 L234,320 Z" fill="#16294A"/>
+            <path d="M180,290 L200,362" stroke="#0F1F38" stroke-width="2" fill="none"/>
+            <path d="M220,290 L200,362" stroke="#0F1F38" stroke-width="2" fill="none"/>
+            <circle cx="184" cy="404" r="5" fill="#0E1C30"/>
+            <circle cx="216" cy="404" r="5" fill="#0E1C30"/>
+            <circle cx="184" cy="434" r="5" fill="#0E1C30"/>
+            <circle cx="216" cy="434" r="5" fill="#0E1C30"/>
+            <path d="M324,338 C340,360 348,392 348,430 L348,520 L310,520 C318,460 318,400 306,352 C300,330 292,312 282,300 C298,310 312,322 324,338 Z" fill="#182C49" opacity="0.55"/>
+          </g>
+
+          <!-- Neck -->
+          <g id="neck">
+            <path d="M182,244 L218,244 L222,298 Q200,308 178,298 Z" fill="#F7D4B7"/>
+            <ellipse cx="200" cy="254" rx="19" ry="6" fill="#E8B48F" opacity="0.55"/>
+          </g>
+
+          <!-- Head: face, ears, eyes, lids, brows, mouth, front hair -->
+          <g id="headGroup">
+            <g id="head">
+              <g id="earL">
+                <ellipse cx="124" cy="182" rx="10" ry="16" fill="#F7D4B7"/>
+                <path d="M124,174 Q129,182 124,190" stroke="#D9A982" stroke-width="2" fill="none"/>
+              </g>
+              <g id="earR">
+                <ellipse cx="276" cy="182" rx="10" ry="16" fill="#F7D4B7"/>
+                <path d="M276,174 Q271,182 276,190" stroke="#D9A982" stroke-width="2" fill="none"/>
+              </g>
+              <!-- Soft oval face, slightly tapered chin -->
+              <path d="M200,72 C246,72 278,112 278,162 C278,205 252,252 226,258 C214,261 186,261 174,258 C148,252 122,205 122,162 C122,112 154,72 200,72 Z" fill="#F7D4B7"/>
+              <ellipse id="blushL" cx="141" cy="206" rx="14" ry="8" fill="#F2A08E" opacity="0.35"/>
+              <ellipse id="blushR" cx="259" cy="206" rx="14" ry="8" fill="#F2A08E" opacity="0.35"/>
+              <path id="nose" d="M198,192 Q203,204 197,208 Q200,211 206,208" stroke="#D9A982" stroke-width="2" fill="none" stroke-linecap="round"/>
+              <!-- Eyes: white, brown iris, pupil, highlight, lash line -->
+              <g id="eyeL">
+                <path d="M145,168 Q164,154 183,168 Q164,181 145,168 Z" fill="#FFFFFF"/>
+                <circle cx="164" cy="168" r="8" fill="#5A3A1E"/>
+                <circle cx="164" cy="168" r="4" fill="#1A1A1A"/>
+                <circle cx="167" cy="165" r="2.5" fill="#FFFFFF"/>
+                <path d="M145,168 Q164,154 183,168" stroke="#3A2A1A" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              </g>
+              <g id="eyeR">
+                <path d="M217,168 Q236,154 255,168 Q236,181 217,168 Z" fill="#FFFFFF"/>
+                <circle cx="236" cy="168" r="8" fill="#5A3A1E"/>
+                <circle cx="236" cy="168" r="4" fill="#1A1A1A"/>
+                <circle cx="239" cy="165" r="2.5" fill="#FFFFFF"/>
+                <path d="M217,168 Q236,154 255,168" stroke="#3A2A1A" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              </g>
+              <!-- Eyelids: skin-coloured covers. scaleY 0 = open (collapsed
+                   to a line at the top of the eye), 1 = fully closed.
+                   JS animates the transform for blinking. -->
+              <g id="lidL" transform="translate(164 154) scale(1 0) translate(-164 -154)">
+                <path d="M145,168 Q164,154 183,168 Q164,181 145,168 Z" fill="#F7D4B7"/>
+                <path d="M145,168 Q164,181 183,168" stroke="#3A2A1A" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              </g>
+              <g id="lidR" transform="translate(236 154) scale(1 0) translate(-236 -154)">
+                <path d="M217,168 Q236,154 255,168 Q236,181 217,168 Z" fill="#F7D4B7"/>
+                <path d="M217,168 Q236,181 255,168" stroke="#3A2A1A" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+              </g>
+              <!-- Eyebrows (JS moves/rotates these per expression) -->
+              <path id="browL" d="M146,142 Q163,132 181,141" stroke="#4A2F18" stroke-width="5" fill="none" stroke-linecap="round"/>
+              <path id="browR" d="M219,141 Q237,132 254,142" stroke="#4A2F18" stroke-width="5" fill="none" stroke-linecap="round"/>
+
+              <!-- ============ MOUTH / VISEME SHAPES ============ -->
+              <!-- One shape visible at a time; JS toggles display.
+                   All centred on x=200, mouth line y≈230. -->
+              <g id="mouthGroup">
+                <g id="mouth-neutral">
+                  <path d="M176,229 C186,234 214,234 224,229 C218,240 210,244 200,244 C190,244 182,240 176,229 Z" fill="#C2273A"/>
+                  <path d="M177,230 Q200,238 223,230" stroke="#8E1B28" stroke-width="1.5" fill="none"/>
+                </g>
+                <g id="mouth-ah" style="display:none">
+                  <path d="M172,226 C184,220 216,220 228,226 C230,244 216,254 200,254 C184,254 170,244 172,226 Z" fill="#C2273A"/>
+                  <path d="M179,230 C189,226 211,226 221,230 C221,243 211,249 200,249 C189,249 179,243 179,230 Z" fill="#6E1420"/>
+                  <path d="M189,247 Q200,239 211,247 Q200,251 189,247 Z" fill="#E0787A"/>
+                </g>
+                <g id="mouth-ee" style="display:none">
+                  <path d="M170,228 C184,222 216,222 230,228 C228,242 214,248 200,248 C186,248 172,242 170,228 Z" fill="#C2273A"/>
+                  <path d="M175,230 C187,226 213,226 225,230 C224,238 213,242 200,242 C187,242 176,238 175,230 Z" fill="#FFFFFF"/>
+                  <path d="M200,228 L200,242" stroke="#E3E3E3" stroke-width="1"/>
+                </g>
+                <g id="mouth-oh" style="display:none">
+                  <ellipse cx="200" cy="236" rx="16" ry="15" fill="#C2273A"/>
+                  <ellipse cx="200" cy="237" rx="10" ry="10" fill="#6E1420"/>
+                </g>
+                <g id="mouth-oo" style="display:none">
+                  <ellipse cx="200" cy="234" rx="11" ry="10" fill="#C2273A"/>
+                  <ellipse cx="200" cy="235" rx="6" ry="6" fill="#6E1420"/>
+                </g>
+                <g id="mouth-f" style="display:none">
+                  <path d="M180,224 L220,224 L218,234 Q200,238 182,234 Z" fill="#FFFFFF" stroke="#E3E3E3" stroke-width="1"/>
+                  <path d="M180,234 Q200,247 220,234 Q200,239 180,234 Z" fill="#C2273A"/>
+                </g>
+                <g id="mouth-m" style="display:none">
+                  <path d="M178,231 Q200,237 222,231 Q200,233 178,231 Z" fill="#B01E30"/>
+                </g>
+                <g id="mouth-uh" style="display:none">
+                  <path d="M182,228 C190,224 210,224 218,228 C218,240 210,246 200,246 C190,246 182,240 182,228 Z" fill="#C2273A"/>
+                  <path d="M188,230 C194,228 206,228 212,230 C212,238 206,242 200,242 C194,242 188,238 188,230 Z" fill="#6E1420"/>
+                </g>
+              </g>
+
+              <!-- Front hair: side-swept fringe + temple strands + shine -->
+              <path d="M200,52 C150,52 122,96 121,150 C121,166 123,178 126,186 C132,150 146,124 168,112 C180,106 194,108 200,118 C210,106 232,100 248,108 C262,116 272,138 275,168 C278,150 278,120 270,96 C256,66 232,52 200,52 Z" fill="#6B4423"/>
+              <path d="M126,150 C120,190 124,220 132,244 C136,224 136,190 134,160 Z" fill="#6B4423"/>
+              <path d="M274,150 C280,190 276,220 268,244 C264,224 264,190 266,160 Z" fill="#6B4423"/>
+              <path d="M150,84 C170,66 196,60 214,64" stroke="#7D5230" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.8"/>
+            </g>
+          </g>
+        </g>
+      </svg>
+      <!-- =================== /AVATAR SVG =================== -->
+    </div>
+    <div class="status-row">
+      <span class="dot" id="stateDot"></span>
+      <span>অবস্থা / Status: <b id="stateText">Idle</b></span>
+      <span class="viseme-tag">Mouth: <b id="visemeReadout">neutral</b></span>
+      <span class="viseme-tag">Expression: <b id="exprReadout">Neutral</b></span>
+    </div>
+  </div>
+
+  <section class="card">
+    <h2>🗣️ কথা বলাও / Make her speak</h2>
+    <p class="hint">Browser-এর speech voice দিয়ে কথা বলবে, আর ঠোঁট সেই অনুযায়ী নড়বে।</p>
+    <div class="btn-row">
+      <button type="button" class="sample-btn" data-speak="Hello! Let's practise speaking English together.">▶ “Hello! Let's practise speaking English together.”</button>
+      <button type="button" class="sample-btn" data-speak="Great job! Your pronunciation is improving.">▶ “Great job! Your pronunciation is improving.”</button>
+      <button type="button" class="sample-btn" data-speak="Now, tell me about your hometown.">▶ “Now, tell me about your hometown.”</button>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <input type="text" id="customText" placeholder="নিজের লাইন লিখুন… / Type your own line…" value="Well done! Let's try that sentence once more, a little slower." />
+      <button type="button" class="primary" id="speakCustomBtn">Speak / বলো</button>
+      <button type="button" id="stopBtn">⏹ Stop</button>
+    </div>
+    <div class="row">
+      <label for="voiceSelect">Voice:</label>
+      <select id="voiceSelect"></select>
+    </div>
+    <div class="row">
+      <button type="button" id="timelineBtn">▶ Sample viseme timeline (exact sync demo)</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>😊 মুখের ভাব / Expressions</h2>
+    <p class="hint">ভ্রু, চোখ, মুখ আর মাথার ভঙ্গি বদলে প্রতিটি ভাব ফুটে ওঠে।</p>
+    <div class="btn-row" id="exprRow">
+      <button type="button" data-expr="Neutral" class="active">Neutral</button>
+      <button type="button" data-expr="Happy">Happy</button>
+      <button type="button" data-expr="Encouraging">Encouraging</button>
+      <button type="button" data-expr="Thinking">Thinking</button>
+      <button type="button" data-expr="Listening">Listening</button>
+      <button type="button" data-expr="Surprised">Surprised</button>
+      <button type="button" data-expr="Explaining">Explaining</button>
+      <button type="button" data-expr="Concerned">Concerned</button>
+      <button type="button" data-expr="Celebrating">Celebrating 🎉</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>🎵 অডিও ফাইল দিয়ে lip-sync / Audio-file lip-sync</h2>
+    <p class="hint">এটাই IELTSGo-র আসল পথ: AI-এর TTS অডিও ফাইল দিলে তার আওয়াজের জোর (amplitude) মেপে মুখ খুলবে-বন্ধ হবে। একটি MP3/WAV ফাইল বেছে নিন।</p>
+    <div class="row">
+      <input type="file" id="audioFile" accept="audio/*" />
+    </div>
+    <audio id="audioEl" controls></audio>
+  </section>
+
+  <section class="card">
+    <h2>⚙️ আরও / More</h2>
+    <div class="btn-row">
+      <button type="button" id="pauseIdleBtn">⏸ Pause idle animation (blink / breathing / sway)</button>
+      <button type="button" id="downloadPngBtn">⬇ Download PNG (transparent, current pose)</button>
+    </div>
+  </section>
+
+  <footer>
+    <b>Web-native demo:</b> original SVG character + JavaScript lip-sync engine.
+    No Adobe Illustrator / Character Animator / After Effects files exist — this machine has no Adobe tools,
+    so the avatar was built to run directly in a browser instead.
+    See <b>INTEGRATION.md</b> for how it connects to IELTSGo.
+  </footer>
+</main>
+
+<script>
+/* ================================================================
+   IELTSGo Female Tutor — animation engine
+   ----------------------------------------------------------------
+   Three lip-sync paths:
+   1. speak(text) — browser speechSynthesis + timed viseme cycling
+      (~8 changes/sec, pulsed on word boundaries).
+   2. speakWithTimeline(text, [{t, viseme}]) — EXACT sync hook: play
+      precise visemes at given millisecond offsets. This is the hook
+      for IELTSGo's real TTS when word/phoneme timings are available.
+   3. Audio-file mode — an <audio> element + WebAudio AnalyserNode:
+      mouth opening follows the real amplitude of the audio. This is
+      the path IELTSGo will use with its server TTS audio.
+   Idle life (blinking, breathing, head sway) runs on
+   requestAnimationFrame and can be paused.
+   ================================================================ */
+(function () {
+  'use strict';
+  var $ = function (id) { return document.getElementById(id); };
+
+  /* ---------------- visemes ---------------- */
+  // 8 drawn mouth shapes. The 12 standard viseme labels map onto them.
+  var MOUTHS = {
+    neutral: 'mouth-neutral', ah: 'mouth-ah', ee: 'mouth-ee', oh: 'mouth-oh',
+    oo: 'mouth-oo', f: 'mouth-f', m: 'mouth-m', uh: 'mouth-uh'
+  };
+  var VISEME_MAP = {
+    Neutral: 'neutral', Ah: 'ah', D: 'ah', Ee: 'ee', F: 'f', L: 'ah',
+    M: 'm', Oh: 'oh', R: 'oh', S: 'ee', Uh: 'uh', 'W-Oo': 'oo'
+  };
+  var currentViseme = 'neutral';
+
+  function setViseme(name) {
+    var shape = VISEME_MAP[name] || name;
+    if (!MOUTHS[shape]) shape = 'neutral';
+    for (var k in MOUTHS) $(MOUTHS[k]).style.display = (k === shape) ? '' : 'none';
+    currentViseme = shape;
+    $('visemeReadout').textContent = shape;
+  }
+  // Vertical mouth openness, 1 = drawn size. Scaled around (200, 236).
+  function setMouthOpen(s) {
+    $('mouthGroup').setAttribute('transform',
+      'translate(200 236) scale(1 ' + s.toFixed(2) + ') translate(-200 -236)');
+  }
+
+  /* ---------------- expressions ---------------- */
+  // brow: {dy, rot} — rot pivots on the brow's inner end.
+  // eye: vertical openness scale. mouth: resting viseme.
+  var EXPRESSIONS = {
+    Neutral:     { browL: { dy: 0,  rot: 0 },  browR: { dy: 0,  rot: 0 },  eye: 1.00, mouth: 'neutral', blush: 0.35, tilt: 0 },
+    Happy:       { browL: { dy: -3, rot: 0 },  browR: { dy: -3, rot: 0 },  eye: 0.85, mouth: 'ee',      blush: 0.55, tilt: 0 },
+    Encouraging: { browL: { dy: -2, rot: 0 },  browR: { dy: -2, rot: 0 },  eye: 1.00, mouth: 'neutral', blush: 0.50, tilt: 2 },
+    Thinking:    { browL: { dy: -4, rot: 0 },  browR: { dy: 2,  rot: 0 },  eye: 0.90, mouth: 'uh',      blush: 0.25, tilt: -4 },
+    Listening:   { browL: { dy: 0,  rot: 0 },  browR: { dy: 0,  rot: 0 },  eye: 1.00, mouth: 'm',       blush: 0.35, tilt: 3 },
+    Surprised:   { browL: { dy: -7, rot: 0 },  browR: { dy: -7, rot: 0 },  eye: 1.15, mouth: 'oh',      blush: 0.30, tilt: 0 },
+    Explaining:  { browL: { dy: -3, rot: 0 },  browR: { dy: -3, rot: 0 },  eye: 1.00, mouth: 'neutral', blush: 0.40, tilt: 1 },
+    Concerned:   { browL: { dy: 1,  rot: -8 }, browR: { dy: 1,  rot: 8 },  eye: 0.90, mouth: 'm',       blush: 0.20, tilt: 0 },
+    Celebrating: { browL: { dy: -6, rot: 0 },  browR: { dy: -6, rot: 0 },  eye: 0.90, mouth: 'ee',      blush: 0.60, tilt: 0 }
+  };
+  var currentExpression = 'Neutral';
+  var exprMouth = 'neutral';
+  var exprTilt = 0;
+
+  function applyBrow(id, cfg, cx, cy) {
+    $(id).setAttribute('transform',
+      'translate(0 ' + cfg.dy + ') rotate(' + cfg.rot + ' ' + cx + ' ' + cy + ')');
+  }
+  function setEyeOpen(s) {
+    $('eyeL').setAttribute('transform', 'translate(164 168) scale(1 ' + s + ') translate(-164 -168)');
+    $('eyeR').setAttribute('transform', 'translate(236 168) scale(1 ' + s + ') translate(-236 -168)');
+  }
+  function setExpression(name) {
+    var e = EXPRESSIONS[name] || EXPRESSIONS.Neutral;
+    currentExpression = name;
+    applyBrow('browL', e.browL, 181, 141);
+    applyBrow('browR', e.browR, 219, 141);
+    setEyeOpen(e.eye);
+    $('blushL').setAttribute('opacity', e.blush);
+    $('blushR').setAttribute('opacity', e.blush);
+    exprTilt = e.tilt;
+    exprMouth = e.mouth;
+    if (!speaking) { setViseme(e.mouth); setMouthOpen(1); }
+    $('exprReadout').textContent = name;
+    var btns = document.querySelectorAll('#exprRow button');
+    for (var i = 0; i < btns.length; i++) {
+      btns[i].classList.toggle('active', btns[i].getAttribute('data-expr') === name);
+    }
+    refreshState();
+  }
+
+  /* ---------------- state indicator ---------------- */
+  var speaking = false;
+  function refreshState() {
+    var s = speaking ? 'Speaking' : (currentExpression === 'Listening' ? 'Listening' : 'Idle');
+    $('stateText').textContent = s;
+    $('stateDot').className = 'dot' + (s === 'Speaking' ? ' speaking' : s === 'Listening' ? ' listening' : '');
+  }
+
+  /* ---------------- idle life (rAF) ---------------- */
+  var idlePaused = false;
+  var nextBlinkAt = performance.now() + 2500, blinkStart = 0, blinking = false;
+  var nextNodAt = 0, nodStart = 0, nodding = false;
+
+  function setLids(s) {
+    $('lidL').setAttribute('transform', 'translate(164 154) scale(1 ' + s.toFixed(2) + ') translate(-164 -154)');
+    $('lidR').setAttribute('transform', 'translate(236 154) scale(1 ' + s.toFixed(2) + ') translate(-236 -154)');
+  }
+  function tick(now) {
+    if (!idlePaused) {
+      // Breathing: torso scale 1 <-> 1.015, 4 s cycle, pivoting at the bottom.
+      var br = 1.0075 + 0.0075 * Math.sin(now / 1000 * Math.PI * 2 / 4);
+      $('torso').setAttribute('transform',
+        'translate(200 520) scale(1 ' + br.toFixed(4) + ') translate(-200 -520)');
+      // Head sway (+/-0.8 deg, 6 s sine) + expression tilt + listening nod.
+      var ang = 0.8 * Math.sin(now / 1000 * Math.PI * 2 / 6) + exprTilt;
+      if (currentExpression === 'Listening') {
+        if (!nodding && now >= nextNodAt) { nodding = true; nodStart = now; }
+        if (nodding) {
+          var p = (now - nodStart) / 700;
+          if (p >= 1) { nodding = false; nextNodAt = now + 2400 + Math.random() * 1600; }
+          else ang += 2.2 * Math.sin(Math.PI * p);
+        }
+      }
+      $('headGroup').setAttribute('transform', 'rotate(' + ang.toFixed(2) + ' 200 260)');
+      // Celebrating: gentle bounce of the whole avatar.
+      if (currentExpression === 'Celebrating') {
+        var b = -5 * Math.abs(Math.sin(now / 1000 * Math.PI * 2 / 1.1));
+        $('avatarRoot').setAttribute('transform', 'translate(0 ' + b.toFixed(1) + ')');
+      } else {
+        $('avatarRoot').removeAttribute('transform');
+      }
+      // Blinking: random every 2.5-5 s, lids close+open over ~150 ms.
+      if (!blinking && now >= nextBlinkAt) { blinking = true; blinkStart = now; }
+      if (blinking) {
+        var bp = (now - blinkStart) / 150;
+        if (bp >= 1) { blinking = false; setLids(0); nextBlinkAt = now + 2500 + Math.random() * 2500; }
+        else setLids(bp < 0.5 ? bp * 2 : (1 - bp) * 2);
+      }
+    }
+    requestAnimationFrame(tick);
+  }
+
+  /* ---------------- speech (speechSynthesis path) ---------------- */
+  var speechToken = 0; // guards against stale onend/onerror after cancel
+  var lipTimer = null, pulseUntil = 0, lastVisemes = [];
+
+  function pickLipViseme() {
+    var pool = ['ah', 'ah', 'ee', 'oh', 'uh', 'oo', 'ah', 'ee', 'uh', 'm', 'f', 'oh', 'ah', 'ee'];
+    var v;
+    do { v = pool[Math.floor(Math.random() * pool.length)]; }
+    while (lastVisemes.length >= 2 && lastVisemes[0] === v && lastVisemes[1] === v);
+    lastVisemes.push(v);
+    if (lastVisemes.length > 2) lastVisemes.shift();
+    return v;
+  }
+  function startLipCycle() {
+    stopLipCycle();
+    lipTimer = setInterval(function () {
+      setViseme(pickLipViseme());
+      var boost = performance.now() < pulseUntil ? 0.25 : 0;
+      setMouthOpen(0.9 + Math.random() * 0.25 + boost);
+    }, 120); // ~8 mouth changes/sec
+  }
+  function stopLipCycle() { if (lipTimer) { clearInterval(lipTimer); lipTimer = null; } }
+  function finishSpeaking() {
+    speaking = false;
+    stopLipCycle();
+    setViseme(exprMouth);
+    setMouthOpen(1);
+    refreshState();
+  }
+  function currentVoice() {
+    var uri = $('voiceSelect').value;
+    var vs = window.speechSynthesis ? speechSynthesis.getVoices() : [];
+    for (var i = 0; i < vs.length; i++) if (vs[i].voiceURI === uri) return vs[i];
+    return null;
+  }
+  function makeUtterance(text) {
+    var u = new SpeechSynthesisUtterance(text);
+    var v = currentVoice();
+    if (v) u.voice = v;
+    u.rate = 1;
+    u.pitch = 1.05;
+    return u;
+  }
+  function speak(text) {
+    if (!('speechSynthesis' in window)) { alert('This browser has no speech synthesis.'); return; }
+    stopAll();
+    var myToken = ++speechToken;
+    var u = makeUtterance(text);
+    u.onstart = function () {
+      if (myToken !== speechToken) return;
+      speaking = true; refreshState(); startLipCycle();
+    };
+    // Pulse the mouth open a little on every word boundary.
+    u.onboundary = function () { pulseUntil = performance.now() + 260; };
+    u.onend = function () { if (myToken === speechToken) finishSpeaking(); };
+    u.onerror = function () { if (myToken === speechToken) finishSpeaking(); };
+    speechSynthesis.speak(u);
+  }
+  // Exact-sync hook: play precise visemes at given ms offsets while the
+  // utterance speaks. Use this when TTS word/phoneme timings are known.
+  // timeline: [{t: 0, viseme: 'oh', open: 1.1}, ...] — t in ms from speech start.
+  function speakWithTimeline(text, timeline) {
+    if (!('speechSynthesis' in window)) { alert('This browser has no speech synthesis.'); return; }
+    stopAll();
+    var myToken = ++speechToken;
+    var timers = [];
+    var u = makeUtterance(text);
+    u.onstart = function () {
+      if (myToken !== speechToken) return;
+      speaking = true; refreshState();
+      timeline.forEach(function (step) {
+        timers.push(setTimeout(function () {
+          if (myToken !== speechToken) return;
+          setViseme(step.viseme);
+          setMouthOpen(step.open || 1);
+        }, step.t));
+      });
+    };
+    var done = function () {
+      timers.forEach(clearTimeout);
+      if (myToken === speechToken) finishSpeaking();
+    };
+    u.onend = done;
+    u.onerror = done;
+    speechSynthesis.speak(u);
+  }
+  function stopAll() {
+    speechToken++; // invalidate any pending utterance/timeline callbacks
+    if ('speechSynthesis' in window) speechSynthesis.cancel();
+    var a = $('audioEl');
+    if (a && !a.paused) a.pause();
+    finishSpeaking();
+  }
+
+  /* ---------------- audio-file path (WebAudio amplitude) ---------------- */
+  var audioCtx = null, analyser = null, audioSource = null, audioRaf = null;
+  var lastAudioVisemeAt = 0;
+  function ensureAudioGraph() {
+    if (!audioCtx) {
+      var AC = window.AudioContext || window.webkitAudioContext;
+      if (!AC) { alert('WebAudio is not supported in this browser.'); return false; }
+      audioCtx = new AC();
+      analyser = audioCtx.createAnalyser();
+      analyser.fftSize = 2048;
+    }
+    if (!audioSource) {
+      // One MediaElementSource per element — create once and reuse.
+      audioSource = audioCtx.createMediaElementSource($('audioEl'));
+      audioSource.connect(analyser);
+      analyser.connect(audioCtx.destination);
+    }
+    return true;
+  }
+  function driveMouthFromAmplitude(rms, now) {
+    var amp = Math.min(1, rms * 6); // speech RMS is roughly 0.02-0.15
+    if (amp < 0.08) { setViseme('m'); setMouthOpen(0.8); return; }
+    if (now - lastAudioVisemeAt > 110) {
+      lastAudioVisemeAt = now;
+      var band = amp < 0.35 ? ['uh', 'oo', 'm'] : amp < 0.7 ? ['ah', 'oh', 'ee', 'uh'] : ['ah', 'ee', 'oh'];
+      setViseme(band[Math.floor(Math.random() * band.length)]);
+    }
+    setMouthOpen(0.7 + amp * 0.6);
+  }
+  function audioLoop() {
+    var a = $('audioEl');
+    if (a.paused || a.ended) { finishSpeaking(); return; }
+    var data = new Uint8Array(analyser.fftSize);
+    analyser.getByteTimeDomainData(data);
+    var sum = 0;
+    for (var i = 0; i < data.length; i++) { var v = (data[i] - 128) / 128; sum += v * v; }
+    driveMouthFromAmplitude(Math.sqrt(sum / data.length), performance.now());
+    audioRaf = requestAnimationFrame(audioLoop);
+  }
+
+  /* ---------------- voice picker ---------------- */
+  function loadVoices() {
+    if (!('speechSynthesis' in window)) return;
+    var voices = speechSynthesis.getVoices();
+    if (!voices.length) return;
+    var en = voices.filter(function (v) { return /^en[-_]/i.test(v.lang); });
+    var rest = voices.filter(function (v) { return !/^en[-_]/i.test(v.lang); });
+    var sorted = en.concat(rest);
+    var sel = $('voiceSelect');
+    sel.innerHTML = '';
+    sorted.forEach(function (v) {
+      var o = document.createElement('option');
+      o.value = v.voiceURI;
+      o.textContent = v.name + ' (' + v.lang + ')' + (v.default ? ' — default' : '');
+      sel.appendChild(o);
+    });
+    // Prefer an English female voice when one is identifiable.
+    var pref = -1;
+    for (var i = 0; i < sorted.length; i++) {
+      if (/female|samantha|zira|aria|jenny|google us english/i.test(sorted[i].name)) { pref = i; break; }
+    }
+    sel.selectedIndex = pref >= 0 ? pref : 0;
+  }
+
+  /* ---------------- PNG export (current pose, transparent) ---------------- */
+  function downloadPng() {
+    var svg = $('avatarSvg');
+    var clone = svg.cloneNode(true);
+    clone.setAttribute('width', '800');
+    clone.setAttribute('height', '1040');
+    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
+    var xml = new XMLSerializer().serializeToString(clone);
+    var url = URL.createObjectURL(new Blob([xml], { type: 'image/svg+xml;charset=utf-8' }));
+    var img = new Image();
+    img.onload = function () {
+      var c = document.createElement('canvas');
+      c.width = 800; c.height = 1040;
+      c.getContext('2d').drawImage(img, 0, 0, 800, 1040);
+      URL.revokeObjectURL(url);
+      var a = document.createElement('a');
+      a.download = 'ieltsgo-female-tutor.png';
+      a.href = c.toDataURL('image/png');
+      a.click();
+    };
+    img.onerror = function () { URL.revokeObjectURL(url); alert('PNG export failed in this browser.'); };
+    img.src = url;
+  }
+
+  /* ---------------- UI wiring ---------------- */
+  var sampleBtns = document.querySelectorAll('[data-speak]');
+  for (var i = 0; i < sampleBtns.length; i++) {
+    sampleBtns[i].addEventListener('click', function () {
+      speak(this.getAttribute('data-speak'));
+    });
+  }
+  $('speakCustomBtn').addEventListener('click', function () {
+    var t = $('customText').value.trim();
+    if (t) speak(t);
+  });
+  $('customText').addEventListener('keydown', function (e) {
+    if (e.key === 'Enter') { var t = this.value.trim(); if (t) speak(t); }
+  });
+  $('stopBtn').addEventListener('click', stopAll);
+  $('timelineBtn').addEventListener('click', function () {
+    // Hand-made viseme timeline for "Hello, how are you today?"
+    // (times in ms from speech start — a stand-in for real TTS timings).
+    speakWithTimeline('Hello, how are you today?', [
+      { t: 0, viseme: 'oh', open: 1.1 }, { t: 130, viseme: 'ee' },
+      { t: 260, viseme: 'oo' }, { t: 400, viseme: 'm', open: 0.8 },
+      { t: 520, viseme: 'oh', open: 1.15 }, { t: 650, viseme: 'oo' },
+      { t: 780, viseme: 'ah' }, { t: 900, viseme: 'ah', open: 1.1 },
+      { t: 1050, viseme: 'ee' }, { t: 1180, viseme: 'oo' },
+      { t: 1350, viseme: 'oo' }, { t: 1500, viseme: 'uh' },
+      { t: 1650, viseme: 'ah' }, { t: 1800, viseme: 'ee' },
+      { t: 1950, viseme: 'ee' }, { t: 2100, viseme: 'neutral', open: 1 }
+    ]);
+  });
+  var exprBtns = document.querySelectorAll('#exprRow button');
+  for (var j = 0; j < exprBtns.length; j++) {
+    exprBtns[j].addEventListener('click', function () {
+      setExpression(this.getAttribute('data-expr'));
+    });
+  }
+  $('audioFile').addEventListener('change', function () {
+    var f = this.files && this.files[0];
+    if (!f) return;
+    stopAll();
+    var a = $('audioEl');
+    a.src = URL.createObjectURL(f);
+    a.play().catch(function () { /* user pressed play on the control instead */ });
+  });
+  $('audioEl').addEventListener('play', function () {
+    if (!ensureAudioGraph()) return;
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    speaking = true; refreshState();
+    cancelAnimationFrame(audioRaf);
+    audioRaf = requestAnimationFrame(audioLoop);
+  });
+  $('audioEl').addEventListener('pause', function () { if (speaking) finishSpeaking(); });
+  $('audioEl').addEventListener('ended', function () { if (speaking) finishSpeaking(); });
+  $('pauseIdleBtn').addEventListener('click', function () {
+    idlePaused = !idlePaused;
+    this.textContent = idlePaused
+      ? '▶ Resume idle animation (blink / breathing / sway)'
+      : '⏸ Pause idle animation (blink / breathing / sway)';
+    if (idlePaused) {
+      $('torso').removeAttribute('transform');
+      $('headGroup').setAttribute('transform', 'rotate(' + exprTilt + ' 200 260)');
+      $('avatarRoot').removeAttribute('transform');
+      setLids(0);
+    }
+  });
+  $('downloadPngBtn').addEventListener('click', downloadPng);
+
+  /* ---------------- init ---------------- */
+  if ('speechSynthesis' in window) {
+    speechSynthesis.onvoiceschanged = loadVoices;
+    loadVoices();
+    setTimeout(loadVoices, 500); // some browsers populate voices late
+  } else {
+    $('voiceSelect').innerHTML = '<option>Speech synthesis not supported</option>';
+  }
+  setExpression('Neutral');
+  setViseme('neutral');
+  requestAnimationFrame(tick);
+
+  // Expose the engine for the page console / future IELTSGo integration.
+  window.IELTSGoTutor = {
+    speak: speak,
+    speakWithTimeline: speakWithTimeline,
+    setExpression: setExpression,
+    setViseme: setViseme,
+    stop: stopAll,
+    VISEME_MAP: VISEME_MAP
+  };
+})();
+</script>
+</body>
+</html>
