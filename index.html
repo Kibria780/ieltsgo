@@ -1665,7 +1665,7 @@
                 </button>
                 <button class="plan-item" type="button" data-plan="speaking">
                   <span class="plan-ico" style="background:var(--accent-soft);color:var(--accent)">🎤</span>
-                  <span><span class="t">Speaking practice — কথা বলুন</span><span class="d" style="display:block">Mic-এ বলুন, ৩ সেকেন্ড চুপ থাকলেই Send হবে</span></span>
+                  <span><span class="t">Speaking practice — কথা বলুন</span><span class="d" style="display:block">Mic-এ বলুন, ২ সেকেন্ড চুপ থাকলেই Send হবে</span></span>
                   <span class="go">→</span>
                 </button>
                 <button class="plan-item" type="button" data-plan="listening" id="planListening">
@@ -1696,7 +1696,7 @@
           <div class="screen-head">
             <div>
               <h2>Speaking practice</h2>
-              <div class="sub bn">মাইকে চাপ দিন, ইংরেজিতে বলুন — ৩ সেকেন্ড চুপ থাকলেই উত্তর চলে যাবে।</div>
+              <div class="sub bn">মাইকে চাপ দিন, ইংরেজিতে বলুন — ২ সেকেন্ড চুপ থাকলেই উত্তর চলে যাবে।</div>
             </div>
             <span class="pill red">Live practice</span>
           </div>
@@ -3844,17 +3844,17 @@
       // records with LIVE "Recording… MM:SS" + level bars -> tap mic again
       // to stop -> blob POSTs to /api/transcribe (own proxy, Groq
       // whisper-large-v3) -> text fills the input -> user taps Send.
-      // LIVE auto-send 2026-10-18: while recording, an AnalyserNode
-      // measures the mic level. Once real speech has been heard, 3s of
-      // continuous silence auto-stops the recording; a non-empty
-      // transcript then AUTO-SENDS (same submit path as Send). Empty
-      // transcripts never auto-send. If the user taps into / edits the
+      // LIVE auto-send 2026-10-18 (2s since 2026-11-12): while recording,
+      // an AnalyserNode measures the mic level. Once real speech has been
+      // heard, 2s of continuous silence auto-stops the recording; a
+      // non-empty transcript then AUTO-SENDS (same submit path as Send).
+      // Empty transcripts never auto-send. If the user taps into / edits the
       // input during transcription, auto-send is cancelled and the text
       // stays for manual Send. Audio blobs go only to the user's own
       // proxy, never stored.
       var TRANSCRIBE_ENDPOINT = 'https://ieltsgo-proxy.vercel.app/api/transcribe';
       var MAX_REC_MS = 180000; // 3 min cap bounds upload size (~1 MB Opus)
-      var SILENCE_MS = 3000; // 3s of silence after speech -> auto-stop
+      var SILENCE_MS = 2000; // 2s of silence after speech -> auto-stop (was 3s; Hasan asked for 2s 2026-11-12)
       // Silence threshold on the scaled RMS level (0..1) the level bars
       // show. Normal speech is well above it; a quiet room is below.
       // If the room is too noisy the silence trigger simply never fires
@@ -3919,6 +3919,23 @@
         if (session && session.timerId) { clearInterval(session.timerId); session.timerId = null; }
         if (session && session.audioCtx) { try { session.audioCtx.close(); } catch (e) {} session.audioCtx = null; }
       }
+      // BUGFIX 2026-11-12: on real Android phones the AudioContext starts
+      // SUSPENDED — it is created after the getUserMedia await, so outside
+      // the mic-tap gesture. A suspended context feeds the AnalyserNode
+      // flat silence (all 128s), so heardSpeech never became true and the
+      // silence auto-stop could NEVER fire: the user always had to tap
+      // mic + Send manually. resume() right after creation (still inside
+      // the tap's ~5s transient-activation window) and retry on every
+      // tick until it runs. Safe no-op when already running.
+      function resumeAudioCtx(session) {
+        if (!session || !session.audioCtx) return;
+        try {
+          if (session.audioCtx.state === 'suspended') {
+            var pr = session.audioCtx.resume();
+            if (pr && pr.catch) pr.catch(function () {});
+          }
+        } catch (e) {}
+      }
       // Start recording. callbacks: onTick(elapsedMs, levelBars) while
       // recording; onDone(blob) when stopped; onError(kind) where kind is
       // 'permission' | 'unsupported' | 'start'. Returns Promise<boolean>.
@@ -3952,6 +3969,7 @@
             session.analyser = session.audioCtx.createAnalyser();
             session.analyser.fftSize = 512;
             srcNode.connect(session.analyser);
+            resumeAudioCtx(session);
           }
         } catch (e) { /* ignore */ }
         var recorder;
@@ -3987,6 +4005,8 @@
         session.timerId = setInterval(function () {
           var elapsed = Date.now() - session.startedAt;
           var level = 0;
+          // Retry resume until the context runs (see resumeAudioCtx).
+          resumeAudioCtx(session);
           if (session.analyser) {
             try {
               var data = new Uint8Array(session.analyser.fftSize);
@@ -4074,11 +4094,11 @@
         armVoiceAutoSend();
         micBtn.classList.add('listening');
         micBtn.setAttribute('aria-label', 'Stop recording');
-        micHint.textContent = '🔴 Recording… 00:00 — ৩ সেকেন্ড চুপ থাকলে নিজে থেকেই পাঠানো হবে';
+        micHint.textContent = '🔴 Recording… 00:00 — ২ সেকেন্ড চুপ থাকলে নিজে থেকেই পাঠানো হবে';
         setStatus('Recording…', true);
         await startAudioRecording({
           onTick: function (elapsed, bars) {
-            micHint.textContent = '🔴 Recording… ' + formatRecTime(elapsed) + ' ' + bars + ' — ৩ সেকেন্ড চুপ থাকলে auto-send';
+            micHint.textContent = '🔴 Recording… ' + formatRecTime(elapsed) + ' ' + bars + ' — ২ সেকেন্ড চুপ থাকলে auto-send';
           },
           onDone: function (blob, autoStopped) {
             isListening = false;
@@ -4146,7 +4166,7 @@
       micBtn.addEventListener('click', function () {
         if (isBusy || isTranscribing) return;
         // Tap to start recording, tap again to stop + transcribe.
-        // LIVE auto-send: 3s of silence after speech auto-stops the
+        // LIVE auto-send: 2s of silence after speech auto-stops the
         // recording and auto-sends a non-empty transcript. Manual stop
         // still just fills the input for the user to Send.
         if (isListening) {
@@ -6545,7 +6565,7 @@
           // Toggle: tap to record, tap again to stop + transcribe.
           // Same MediaRecorder path as Practice Chat — SpeechRecognition
           // is dead on this device (aborts ~1s after start).
-          // 3s of silence after speech auto-stops here too (shared
+          // 2s of silence after speech auto-stops here too (shared
           // silence detection in startAudioRecording); the transcript
           // is then saved to this part, as before.
           if (isListening) {
@@ -6571,7 +6591,7 @@
           var started = await startAudioRecording({
             onTick: function (elapsed, bars) {
               var note = document.getElementById('fmSpeakNote');
-              if (note) note.textContent = '🔴 Recording… ' + formatRecTime(elapsed) + ' ' + bars + ' — ৩ সেকেন্ড চুপ থাকলে নিজে থেকেই থামবে।';
+              if (note) note.textContent = '🔴 Recording… ' + formatRecTime(elapsed) + ' ' + bars + ' — ২ সেকেন্ড চুপ থাকলে নিজে থেকেই থামবে।';
               btn.disabled = false; btn.textContent = '⏹ Stop recording';
             },
             onDone: function (blob, autoStopped) {
