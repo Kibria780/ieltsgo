@@ -117,12 +117,6 @@
             <path d="M200,30 C142,30 108,78 108,140 C108,192 116,234 130,264 L270,264 C284,234 292,192 292,140 C292,78 258,30 200,30 Z" fill="#6B4423"/>
             <path d="M140,92 C116,128 106,180 110,242 C113,292 122,342 112,384 C108,402 100,416 90,426 C102,434 124,430 136,412 C148,392 152,352 148,300 C145,250 142,198 152,158 C156,136 152,110 140,92 Z" fill="#6B4423" stroke="#54331A" stroke-width="2" stroke-linejoin="round" opacity="1"/>
             <path d="M132,150 C124,200 124,280 130,350" stroke="#54331A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
-            <!-- Gathering strands: crown hair pulled into the ponytail tie -->
-            <path d="M198,54 C175,72 156,96 144,120" stroke="#54331A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8"/>
-            <path d="M152,58 C146,84 142,104 141,120" stroke="#54331A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8"/>
-            <!-- Ponytail tie: wide navy band, clearly visible against the hair -->
-            <rect x="122" y="114" width="36" height="14" rx="7" fill="#1F3A5F" transform="rotate(-28 140 121)"/>
-            <rect x="122" y="114" width="36" height="5" rx="2.5" fill="#2E5A8C" transform="rotate(-28 140 121)"/>
           </g>
 
           <!-- Torso: navy double-breasted blazer, white shirt -->
@@ -239,6 +233,16 @@
               <path d="M274,150 C280,190 276,220 268,244 C264,224 264,190 266,160 Z" fill="#6B4423"/>
               <path d="M150,84 C170,66 196,60 214,64" stroke="#7D5230" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.8"/>
             </g>
+          </g>
+          <!-- Ponytail tie: drawn AFTER the head so it stays visible.
+               It sits on the fully visible tail (y≈260, clear of the
+               face and above the shoulder), with strands converging
+               into it so the tail reads as gathered, not loose. -->
+          <g id="ponyTie">
+            <path d="M114,206 C120,226 124,242 128,254" stroke="#54331A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8"/>
+            <path d="M142,208 C138,228 134,244 131,254" stroke="#54331A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8"/>
+            <rect x="107" y="253" width="44" height="15" rx="7" fill="#1F3A5F" transform="rotate(-10 129 260)"/>
+            <rect x="107" y="253" width="44" height="5" rx="2.5" fill="#2E5A8C" transform="rotate(-10 129 260)"/>
           </g>
         </g>
       </svg>
@@ -460,6 +464,7 @@
 
   /* ---------------- speech (speechSynthesis path) ---------------- */
   var speechToken = 0; // guards against stale onend/onerror after cancel
+  var voicesKnown = false; // true once getVoices() has returned voices
   var lipTimer = null, pulseUntil = 0, lastVisemes = [];
 
   function pickLipViseme() {
@@ -513,8 +518,12 @@
     };
     // Pulse the mouth open a little on every word boundary.
     u.onboundary = function () { pulseUntil = performance.now() + 260; };
-    u.onend = done;
-    u.onerror = done;
+    // Preview mode (no voices known): onend/onerror fire almost
+    // immediately and would kill the animation — ignore them and let
+    // the duration estimate stop it instead.
+    var preview = !voicesKnown;
+    u.onend = function () { if (!preview) done(); };
+    u.onerror = function () { if (!preview) done(); };
     // Animate IMMEDIATELY: onstart may never fire where no TTS voice
     // exists (e.g. headless browsers), and the mouth must still move.
     // Fallback stop: if onend/onerror never fire, stop after an
@@ -539,8 +548,10 @@
       if (fallback) { clearTimeout(fallback); fallback = null; }
       if (myToken === speechToken) finishSpeaking();
     };
-    u.onend = done;
-    u.onerror = done;
+    // Preview mode (no voices known): ignore onend/onerror, same as speak().
+    var preview = !voicesKnown;
+    u.onend = function () { if (!preview) done(); };
+    u.onerror = function () { if (!preview) done(); };
     // Start the timeline immediately (same no-voice reason as speak()).
     speaking = true; refreshState();
     timeline.forEach(function (step) {
@@ -606,6 +617,7 @@
   function loadVoices() {
     if (!('speechSynthesis' in window)) return;
     var voices = speechSynthesis.getVoices();
+    voicesKnown = voices.length > 0;
     var note = $('voiceNote');
     if (!voices.length) {
       if (note) note.textContent = 'No TTS voices in this browser — Speak runs in silent preview mode (mouth still moves).';
