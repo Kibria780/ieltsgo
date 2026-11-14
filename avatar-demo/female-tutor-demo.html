@@ -111,126 +111,295 @@
            transparent, which is what makes the PNG export transparent. -->
       <svg id="avatarSvg" viewBox="0 0 400 520" width="400" height="520"
            role="img" aria-label="IELTSGo female AI tutor avatar">
+        <!-- Polished render (v2): soft gradient shading, detailed eyes
+             and hair, natural skin tones — same layout, same element
+             ids, same JS pivots as v1. All gradients live in <defs>
+             inside this SVG so the PNG export keeps them. -->
+        <defs>
+          <!-- Skin: light centre, warmer edges (user space, shared by face/ears/neck/lids) -->
+          <radialGradient id="skinGrad" gradientUnits="userSpaceOnUse" cx="200" cy="165" r="135">
+            <stop offset="0%" stop-color="#FCE3CC"/>
+            <stop offset="50%" stop-color="#F8D5B8"/>
+            <stop offset="80%" stop-color="#F3CBA6"/>
+            <stop offset="100%" stop-color="#EAB892"/>
+          </radialGradient>
+          <!-- Hair: lighter crown, darker ends -->
+          <linearGradient id="hairGrad" gradientUnits="userSpaceOnUse" x1="200" y1="30" x2="200" y2="440">
+            <stop offset="0%" stop-color="#7E5229"/>
+            <stop offset="35%" stop-color="#6B4423"/>
+            <stop offset="70%" stop-color="#5A3719"/>
+            <stop offset="100%" stop-color="#472A12"/>
+          </linearGradient>
+          <!-- Blazer: subtle light falloff left to right -->
+          <linearGradient id="blazerGrad" gradientUnits="userSpaceOnUse" x1="46" y1="0" x2="354" y2="0">
+            <stop offset="0%" stop-color="#23456F"/>
+            <stop offset="25%" stop-color="#1F3A5F"/>
+            <stop offset="60%" stop-color="#1C3557"/>
+            <stop offset="100%" stop-color="#13253D"/>
+          </linearGradient>
+          <linearGradient id="lapelGrad" gradientUnits="userSpaceOnUse" x1="166" y1="290" x2="234" y2="376">
+            <stop offset="0%" stop-color="#1B3355"/>
+            <stop offset="100%" stop-color="#0E1D33"/>
+          </linearGradient>
+          <linearGradient id="shirtGrad" gradientUnits="userSpaceOnUse" x1="0" y1="286" x2="0" y2="362">
+            <stop offset="0%" stop-color="#FFFFFF"/>
+            <stop offset="100%" stop-color="#E4E9EF"/>
+          </linearGradient>
+          <radialGradient id="irisGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#A9743C"/>
+            <stop offset="55%" stop-color="#6E4420"/>
+            <stop offset="85%" stop-color="#4A2C10"/>
+            <stop offset="100%" stop-color="#2E1A08"/>
+          </radialGradient>
+          <linearGradient id="eyeWhiteGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#FFFFFF"/>
+            <stop offset="100%" stop-color="#E9EBEE"/>
+          </linearGradient>
+          <linearGradient id="lipGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#DA3A4B"/>
+            <stop offset="45%" stop-color="#C2273A"/>
+            <stop offset="100%" stop-color="#8E1B28"/>
+          </linearGradient>
+          <radialGradient id="mouthInnerGrad" cx="50%" cy="40%" r="65%">
+            <stop offset="0%" stop-color="#8A1A26"/>
+            <stop offset="100%" stop-color="#450C14"/>
+          </radialGradient>
+          <linearGradient id="teethGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#FFFFFF"/>
+            <stop offset="100%" stop-color="#E9E2D3"/>
+          </linearGradient>
+          <linearGradient id="tongueGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stop-color="#EA8B84"/>
+            <stop offset="100%" stop-color="#C65E62"/>
+          </linearGradient>
+          <radialGradient id="blushGrad" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#F2A08E" stop-opacity="0.65"/>
+            <stop offset="60%" stop-color="#F2A08E" stop-opacity="0.3"/>
+            <stop offset="100%" stop-color="#F2A08E" stop-opacity="0"/>
+          </radialGradient>
+          <!-- Soft overlays: warm shade + cool light, fading to transparent -->
+          <radialGradient id="shadeWarm" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#D89A6C" stop-opacity="0.55"/>
+            <stop offset="100%" stop-color="#D89A6C" stop-opacity="0"/>
+          </radialGradient>
+          <radialGradient id="glowLight" cx="50%" cy="50%" r="50%">
+            <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.55"/>
+            <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
         <g id="avatarRoot">
           <!-- Back hair: cap behind the head + ponytail over her shoulder -->
           <g id="hairBack">
-            <path d="M200,30 C142,30 108,78 108,140 C108,192 116,234 130,264 L270,264 C284,234 292,192 292,140 C292,78 258,30 200,30 Z" fill="#6B4423"/>
-            <path d="M140,92 C116,128 106,180 110,242 C113,292 122,342 112,384 C108,402 100,416 90,426 C102,434 124,430 136,412 C148,392 152,352 148,300 C145,250 142,198 152,158 C156,136 152,110 140,92 Z" fill="#6B4423" stroke="#54331A" stroke-width="2" stroke-linejoin="round" opacity="1"/>
-            <path d="M132,150 C124,200 124,280 130,350" stroke="#54331A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.7"/>
+            <path d="M200,30 C142,30 108,78 108,140 C108,192 116,234 130,264 L270,264 C284,234 292,192 292,140 C292,78 258,30 200,30 Z" fill="url(#hairGrad)"/>
+            <path d="M200,42 C152,42 122,82 122,138 C122,180 128,220 138,250 L262,250 C272,220 278,180 278,138 C278,82 248,42 200,42 Z" fill="#7A4E28" opacity="0.5"/>
+            <!-- Crown shine -->
+            <path d="M140,96 C160,66 190,54 216,56" stroke="#B0824A" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.45"/>
+            <path d="M224,58 C244,64 260,80 268,100" stroke="#B0824A" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.35"/>
+            <!-- Cap strands following the flow -->
+            <path d="M200,42 C170,62 150,102 146,152" stroke="#54331A" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+            <path d="M200,42 C230,62 250,102 254,152" stroke="#54331A" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+            <path d="M160,50 C140,90 132,140 134,190" stroke="#3E2410" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.45"/>
+            <path d="M240,50 C260,90 268,140 266,190" stroke="#3E2410" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.45"/>
+            <path d="M180,44 C168,74 160,116 160,160" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.55"/>
+            <path d="M220,44 C232,74 240,116 240,160" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.55"/>
+            <!-- Ponytail: wider, layered, tapered tip -->
+            <path d="M142,90 C114,126 100,180 104,244 C107,292 116,344 106,386 C102,404 94,420 84,430 C88,438 96,442 106,438 C120,430 132,410 140,384 C150,352 154,300 150,250 C146,198 154,158 158,134 C158,112 152,98 142,90 Z" fill="url(#hairGrad)" stroke="#3E2410" stroke-width="1.5" stroke-linejoin="round"/>
+            <path d="M128,160 C118,220 118,300 124,380" stroke="#3E2410" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.5"/>
+            <path d="M138,170 C132,230 134,310 138,390" stroke="#8A5A30" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.6"/>
+            <path d="M118,150 C108,210 108,290 112,360" stroke="#B0824A" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+            <path d="M146,180 C144,250 146,320 142,380" stroke="#3E2410" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.4"/>
+            <path d="M112,200 C106,260 108,330 112,380" stroke="#C89A5E" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.35"/>
           </g>
 
           <!-- Torso: navy double-breasted blazer, white shirt -->
           <g id="torso">
-            <path d="M178,288 C140,292 100,308 76,338 C60,360 52,392 52,430 L52,520 L348,520 L348,430 C348,392 340,360 324,338 C300,308 260,292 222,288 C212,300 188,300 178,288 Z" fill="#1F3A5F"/>
-            <path d="M180,290 L200,362 L220,290 L210,286 L200,298 L190,286 Z" fill="#F4F6F8"/>
+            <path d="M178,288 C138,292 96,308 70,340 C54,362 46,394 46,432 L46,520 L354,520 L354,432 C354,394 346,362 330,340 C304,308 262,292 222,288 C212,300 188,300 178,288 Z" fill="url(#blazerGrad)"/>
+            <!-- Shoulder light (left) + shade (right) -->
+            <ellipse cx="108" cy="340" rx="46" ry="26" fill="url(#glowLight)" opacity="0.35"/>
+            <ellipse cx="302" cy="346" rx="52" ry="30" fill="#0F1F38" opacity="0.22"/>
+            <path d="M180,290 L200,362 L220,290 L210,286 L200,298 L190,286 Z" fill="url(#shirtGrad)"/>
+            <!-- Collar shadow on the shirt -->
+            <path d="M182,292 L196,326 L186,322 Z" fill="#B9C4D2" opacity="0.45"/>
+            <path d="M218,292 L204,326 L214,322 Z" fill="#B9C4D2" opacity="0.45"/>
             <path d="M180,290 L198,318 L186,326 L176,296 Z" fill="#FFFFFF"/>
             <path d="M220,290 L202,318 L214,326 L224,296 Z" fill="#FFFFFF"/>
-            <path d="M180,290 L200,362 L190,376 L166,320 Z" fill="#16294A"/>
-            <path d="M220,290 L200,362 L210,376 L234,320 Z" fill="#16294A"/>
+            <path d="M180,290 L200,362 L190,376 L166,320 Z" fill="url(#lapelGrad)"/>
+            <path d="M220,290 L200,362 L210,376 L234,320 Z" fill="url(#lapelGrad)"/>
+            <!-- Lapel edge light + fabric folds -->
+            <path d="M182,296 L198,356" stroke="#2E5A8C" stroke-width="1.5" fill="none" opacity="0.5"/>
+            <path d="M218,296 L202,356" stroke="#2E5A8C" stroke-width="1.5" fill="none" opacity="0.5"/>
+            <path d="M186,332 C180,362 176,402 178,442" stroke="#0F1F38" stroke-width="2" fill="none" opacity="0.45"/>
+            <path d="M214,332 C220,362 224,402 222,442" stroke="#0F1F38" stroke-width="2" fill="none" opacity="0.45"/>
             <path d="M180,290 L200,362" stroke="#0F1F38" stroke-width="2" fill="none"/>
             <path d="M220,290 L200,362" stroke="#0F1F38" stroke-width="2" fill="none"/>
             <circle cx="184" cy="404" r="5" fill="#0E1C30"/>
             <circle cx="216" cy="404" r="5" fill="#0E1C30"/>
             <circle cx="184" cy="434" r="5" fill="#0E1C30"/>
             <circle cx="216" cy="434" r="5" fill="#0E1C30"/>
-            <path d="M324,338 C340,360 348,392 348,430 L348,520 L310,520 C318,460 318,400 306,352 C300,330 292,312 282,300 C298,310 312,322 324,338 Z" fill="#182C49" opacity="0.55"/>
+            <circle cx="182" cy="402" r="1.3" fill="#FFFFFF" opacity="0.55"/>
+            <circle cx="214" cy="402" r="1.3" fill="#FFFFFF" opacity="0.55"/>
+            <circle cx="182" cy="432" r="1.3" fill="#FFFFFF" opacity="0.55"/>
+            <circle cx="214" cy="432" r="1.3" fill="#FFFFFF" opacity="0.55"/>
+            <path d="M330,340 C346,362 354,394 354,432 L354,520 L314,520 C322,460 322,400 310,352 C304,330 296,312 286,300 C302,310 316,324 330,340 Z" fill="#182C49" opacity="0.5"/>
           </g>
 
           <!-- Neck -->
           <g id="neck">
-            <path d="M182,244 L218,244 L222,298 Q200,308 178,298 Z" fill="#F7D4B7"/>
-            <ellipse cx="200" cy="254" rx="19" ry="6" fill="#E8B48F" opacity="0.55"/>
+            <path d="M182,244 L218,244 L222,298 Q200,308 178,298 Z" fill="url(#skinGrad)"/>
+            <ellipse cx="200" cy="252" rx="20" ry="7" fill="#DCA87F" opacity="0.55"/>
+            <ellipse cx="200" cy="248" rx="13" ry="4" fill="#D29A72" opacity="0.5"/>
+            <path d="M184,250 C183,268 184,284 186,296" stroke="#DCA87F" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.4"/>
+            <path d="M216,250 C217,268 216,284 214,296" stroke="#DCA87F" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.4"/>
           </g>
 
           <!-- Head: face, ears, eyes, lids, brows, mouth, front hair -->
           <g id="headGroup">
             <g id="head">
               <g id="earL">
-                <ellipse cx="124" cy="182" rx="10" ry="16" fill="#F7D4B7"/>
+                <ellipse cx="124" cy="182" rx="10" ry="16" fill="url(#skinGrad)"/>
+                <path d="M124,172 C130,176 130,188 124,192 C121,188 121,176 124,172 Z" fill="#E8B48F" opacity="0.7"/>
                 <path d="M124,174 Q129,182 124,190" stroke="#D9A982" stroke-width="2" fill="none"/>
               </g>
               <g id="earR">
-                <ellipse cx="276" cy="182" rx="10" ry="16" fill="#F7D4B7"/>
+                <ellipse cx="276" cy="182" rx="10" ry="16" fill="url(#skinGrad)"/>
+                <path d="M276,172 C270,176 270,188 276,192 C279,188 279,176 276,172 Z" fill="#E8B48F" opacity="0.7"/>
                 <path d="M276,174 Q271,182 276,190" stroke="#D9A982" stroke-width="2" fill="none"/>
               </g>
-              <!-- Soft oval face, slightly tapered chin -->
-              <path d="M200,72 C246,72 278,112 278,162 C278,205 252,252 226,258 C214,261 186,261 174,258 C148,252 122,205 122,162 C122,112 154,72 200,72 Z" fill="#F7D4B7"/>
-              <ellipse id="blushL" cx="141" cy="206" rx="14" ry="8" fill="#F2A08E" opacity="0.35"/>
-              <ellipse id="blushR" cx="259" cy="206" rx="14" ry="8" fill="#F2A08E" opacity="0.35"/>
-              <path id="nose" d="M198,192 Q203,204 197,208 Q200,211 206,208" stroke="#D9A982" stroke-width="2" fill="none" stroke-linecap="round"/>
-              <!-- Eyes: white, brown iris, pupil, highlight, lash line -->
+              <!-- Soft oval face, slightly tapered chin (jaw/cheeks slimmed ~2px vs v1) -->
+              <path d="M200,72 C244,72 276,112 276,162 C276,204 250,250 225,258 C213,261 187,261 175,258 C150,250 124,204 124,162 C124,112 156,72 200,72 Z" fill="url(#skinGrad)"/>
+              <!-- Face shading: forehead light, cheek + jaw shade, chin shade -->
+              <ellipse cx="200" cy="124" rx="38" ry="9" fill="url(#glowLight)" opacity="0.45"/>
+              <ellipse cx="150" cy="196" rx="20" ry="10" fill="url(#shadeWarm)" opacity="0.35"/>
+              <ellipse cx="250" cy="196" rx="20" ry="10" fill="url(#shadeWarm)" opacity="0.35"/>
+              <ellipse cx="162" cy="232" rx="22" ry="13" fill="url(#shadeWarm)" opacity="0.5"/>
+              <ellipse cx="238" cy="232" rx="22" ry="13" fill="url(#shadeWarm)" opacity="0.5"/>
+              <ellipse cx="200" cy="256" rx="18" ry="6" fill="url(#shadeWarm)" opacity="0.6"/>
+              <!-- Nose shading: soft side shadow + bridge highlight -->
+              <ellipse cx="192" cy="202" rx="5" ry="9" fill="url(#shadeWarm)" opacity="0.5"/>
+              <ellipse cx="203" cy="190" rx="3.5" ry="10" fill="#FFFFFF" opacity="0.28"/>
+              <!-- Shadow under the lower lip -->
+              <ellipse cx="200" cy="252" rx="12" ry="4" fill="#D9A982" opacity="0.45"/>
+              <ellipse id="blushL" cx="141" cy="206" rx="14" ry="8" fill="url(#blushGrad)" opacity="0.35"/>
+              <ellipse id="blushR" cx="259" cy="206" rx="14" ry="8" fill="url(#blushGrad)" opacity="0.35"/>
+              <path id="nose" d="M198,192 Q203,204 197,208 Q200,211 206,208" stroke="#D9A982" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <!-- Eyes: shaded white, detailed iris, lashes -->
               <g id="eyeL">
-                <path d="M145,168 Q164,154 183,168 Q164,181 145,168 Z" fill="#FFFFFF"/>
-                <circle cx="164" cy="168" r="8" fill="#5A3A1E"/>
-                <circle cx="164" cy="168" r="4" fill="#1A1A1A"/>
-                <circle cx="167" cy="165" r="2.5" fill="#FFFFFF"/>
-                <path d="M145,168 Q164,154 183,168" stroke="#3A2A1A" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                <path d="M145,166 Q164,150 183,166 Q164,158 145,166 Z" fill="#D9B8A6" opacity="0.35"/>
+                <path d="M145,168 Q164,154 183,168 Q164,181 145,168 Z" fill="url(#eyeWhiteGrad)"/>
+                <circle cx="164" cy="168" r="8" fill="url(#irisGrad)"/>
+                <circle cx="164" cy="168" r="8" fill="none" stroke="#2A1808" stroke-width="1.2"/>
+                <circle cx="164" cy="168" r="5.5" fill="none" stroke="#C89A5E" stroke-width="1" opacity="0.5"/>
+                <circle cx="164" cy="168" r="4" fill="#14100C"/>
+                <circle cx="161" cy="164" r="2.6" fill="#FFFFFF" opacity="0.95"/>
+                <circle cx="167" cy="171" r="1.3" fill="#FFFFFF" opacity="0.7"/>
+                <path d="M148,158 Q164,148 180,158" stroke="#D9A982" stroke-width="1.5" fill="none" opacity="0.5"/>
+                <path d="M145,168 Q164,154 183,168" stroke="#2A1A10" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+                <path d="M145,167 Q140,163 138,158" stroke="#2A1A10" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                <path d="M150,175 Q164,182 178,175" stroke="#8A6A4A" stroke-width="1.2" fill="none" opacity="0.5"/>
               </g>
               <g id="eyeR">
-                <path d="M217,168 Q236,154 255,168 Q236,181 217,168 Z" fill="#FFFFFF"/>
-                <circle cx="236" cy="168" r="8" fill="#5A3A1E"/>
-                <circle cx="236" cy="168" r="4" fill="#1A1A1A"/>
-                <circle cx="239" cy="165" r="2.5" fill="#FFFFFF"/>
-                <path d="M217,168 Q236,154 255,168" stroke="#3A2A1A" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                <path d="M217,166 Q236,150 255,166 Q236,158 217,166 Z" fill="#D9B8A6" opacity="0.35"/>
+                <path d="M217,168 Q236,154 255,168 Q236,181 217,168 Z" fill="url(#eyeWhiteGrad)"/>
+                <circle cx="236" cy="168" r="8" fill="url(#irisGrad)"/>
+                <circle cx="236" cy="168" r="8" fill="none" stroke="#2A1808" stroke-width="1.2"/>
+                <circle cx="236" cy="168" r="5.5" fill="none" stroke="#C89A5E" stroke-width="1" opacity="0.5"/>
+                <circle cx="236" cy="168" r="4" fill="#14100C"/>
+                <circle cx="233" cy="164" r="2.6" fill="#FFFFFF" opacity="0.95"/>
+                <circle cx="239" cy="171" r="1.3" fill="#FFFFFF" opacity="0.7"/>
+                <path d="M220,158 Q236,148 252,158" stroke="#D9A982" stroke-width="1.5" fill="none" opacity="0.5"/>
+                <path d="M217,168 Q236,154 255,168" stroke="#2A1A10" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+                <path d="M255,167 Q260,163 262,158" stroke="#2A1A10" stroke-width="2.5" fill="none" stroke-linecap="round"/>
+                <path d="M222,175 Q236,182 250,175" stroke="#8A6A4A" stroke-width="1.2" fill="none" opacity="0.5"/>
               </g>
               <!-- Eyelids: skin-coloured covers. scaleY 0 = open (collapsed
                    to a line at the top of the eye), 1 = fully closed.
                    JS animates the transform for blinking. -->
               <g id="lidL" transform="translate(164 154) scale(1 0) translate(-164 -154)">
-                <path d="M145,168 Q164,154 183,168 Q164,181 145,168 Z" fill="#F7D4B7"/>
+                <path d="M145,168 Q164,154 183,168 Q164,181 145,168 Z" fill="url(#skinGrad)"/>
+                <path d="M148,162 Q164,154 180,162" stroke="#D9A982" stroke-width="1.5" fill="none" opacity="0.6"/>
                 <path d="M145,168 Q164,181 183,168" stroke="#3A2A1A" stroke-width="2.5" fill="none" stroke-linecap="round"/>
               </g>
               <g id="lidR" transform="translate(236 154) scale(1 0) translate(-236 -154)">
-                <path d="M217,168 Q236,154 255,168 Q236,181 217,168 Z" fill="#F7D4B7"/>
+                <path d="M217,168 Q236,154 255,168 Q236,181 217,168 Z" fill="url(#skinGrad)"/>
+                <path d="M220,162 Q236,154 252,162" stroke="#D9A982" stroke-width="1.5" fill="none" opacity="0.6"/>
                 <path d="M217,168 Q236,181 255,168" stroke="#3A2A1A" stroke-width="2.5" fill="none" stroke-linecap="round"/>
               </g>
-              <!-- Eyebrows (JS moves/rotates these per expression) -->
-              <path id="browL" d="M146,142 Q163,132 181,141" stroke="#4A2F18" stroke-width="5" fill="none" stroke-linecap="round"/>
-              <path id="browR" d="M219,141 Q237,132 254,142" stroke="#4A2F18" stroke-width="5" fill="none" stroke-linecap="round"/>
+              <!-- Eyebrows: tapered strand strokes (JS moves/rotates these per expression) -->
+              <g id="browL">
+                <path d="M146,141 Q162,130 182,140 Q164,136 146,141 Z" fill="#4A2F18" opacity="0.9"/>
+                <path d="M150,140 Q163,133 178,139" stroke="#5A3A1E" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.9"/>
+                <path d="M152,136 Q164,130 176,136" stroke="#3A2410" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="0.8"/>
+                <path d="M148,143 Q162,137 180,142" stroke="#6B4423" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.7"/>
+                <path d="M148,138 L147,143 M152,136 L151,141 M156,134 L155,139" stroke="#3A2410" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+              </g>
+              <g id="browR">
+                <path d="M254,141 Q238,130 218,140 Q236,136 254,141 Z" fill="#4A2F18" opacity="0.9"/>
+                <path d="M250,140 Q237,133 222,139" stroke="#5A3A1E" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.9"/>
+                <path d="M248,136 Q236,130 224,136" stroke="#3A2410" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="0.8"/>
+                <path d="M252,143 Q238,137 220,142" stroke="#6B4423" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.7"/>
+                <path d="M252,138 L253,143 M248,136 L249,141 M244,134 L245,139" stroke="#3A2410" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+              </g>
 
               <!-- ============ MOUTH / VISEME SHAPES ============ -->
               <!-- One shape visible at a time; JS toggles display.
                    All centred on x=200, mouth line y≈230. -->
               <g id="mouthGroup">
                 <g id="mouth-neutral">
-                  <path d="M176,229 C186,234 214,234 224,229 C218,240 210,244 200,244 C190,244 182,240 176,229 Z" fill="#C2273A"/>
+                  <path d="M176,229 C186,234 214,234 224,229 C218,240 210,244 200,244 C190,244 182,240 176,229 Z" fill="url(#lipGrad)"/>
                   <path d="M177,230 Q200,238 223,230" stroke="#8E1B28" stroke-width="1.5" fill="none"/>
+                  <path d="M186,238 Q200,243 214,238" stroke="#F0808A" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
                 </g>
                 <g id="mouth-ah" style="display:none">
-                  <path d="M172,226 C184,220 216,220 228,226 C230,244 216,254 200,254 C184,254 170,244 172,226 Z" fill="#C2273A"/>
-                  <path d="M179,230 C189,226 211,226 221,230 C221,243 211,249 200,249 C189,249 179,243 179,230 Z" fill="#6E1420"/>
-                  <path d="M189,247 Q200,239 211,247 Q200,251 189,247 Z" fill="#E0787A"/>
+                  <path d="M172,226 C184,220 216,220 228,226 C230,244 216,254 200,254 C184,254 170,244 172,226 Z" fill="url(#lipGrad)"/>
+                  <path d="M179,230 C189,226 211,226 221,230 C221,243 211,249 200,249 C189,249 179,243 179,230 Z" fill="url(#mouthInnerGrad)"/>
+                  <path d="M189,247 Q200,239 211,247 Q200,251 189,247 Z" fill="url(#tongueGrad)"/>
+                  <ellipse cx="200" cy="244" rx="6" ry="2" fill="#F0A0A0" opacity="0.6"/>
                 </g>
                 <g id="mouth-ee" style="display:none">
-                  <path d="M170,228 C184,222 216,222 230,228 C228,242 214,248 200,248 C186,248 172,242 170,228 Z" fill="#C2273A"/>
-                  <path d="M175,230 C187,226 213,226 225,230 C224,238 213,242 200,242 C187,242 176,238 175,230 Z" fill="#FFFFFF"/>
-                  <path d="M200,228 L200,242" stroke="#E3E3E3" stroke-width="1"/>
+                  <path d="M170,228 C184,222 216,222 230,228 C228,242 214,248 200,248 C186,248 172,242 170,228 Z" fill="url(#lipGrad)"/>
+                  <path d="M175,230 C187,226 213,226 225,230 C224,238 213,242 200,242 C187,242 176,238 175,230 Z" fill="url(#teethGrad)"/>
+                  <path d="M188,229 L188,241 M200,228 L200,242 M212,229 L212,241" stroke="#D8D2C4" stroke-width="1" opacity="0.8"/>
+                  <path d="M178,240 Q200,244 222,240" stroke="#D8D2C4" stroke-width="1.5" fill="none" opacity="0.5"/>
                 </g>
                 <g id="mouth-oh" style="display:none">
-                  <ellipse cx="200" cy="236" rx="16" ry="15" fill="#C2273A"/>
-                  <ellipse cx="200" cy="237" rx="10" ry="10" fill="#6E1420"/>
+                  <ellipse cx="200" cy="236" rx="16" ry="15" fill="url(#lipGrad)"/>
+                  <ellipse cx="200" cy="237" rx="10" ry="10" fill="url(#mouthInnerGrad)"/>
+                  <ellipse cx="194" cy="230" rx="4" ry="2.5" fill="#F0808A" opacity="0.5" transform="rotate(-20 194 230)"/>
                 </g>
                 <g id="mouth-oo" style="display:none">
-                  <ellipse cx="200" cy="234" rx="11" ry="10" fill="#C2273A"/>
-                  <ellipse cx="200" cy="235" rx="6" ry="6" fill="#6E1420"/>
+                  <ellipse cx="200" cy="234" rx="11" ry="10" fill="url(#lipGrad)"/>
+                  <ellipse cx="200" cy="235" rx="6" ry="6" fill="url(#mouthInnerGrad)"/>
+                  <ellipse cx="196" cy="229" rx="3" ry="2" fill="#F0808A" opacity="0.5" transform="rotate(-20 196 229)"/>
                 </g>
                 <g id="mouth-f" style="display:none">
-                  <path d="M180,224 L220,224 L218,234 Q200,238 182,234 Z" fill="#FFFFFF" stroke="#E3E3E3" stroke-width="1"/>
-                  <path d="M180,234 Q200,247 220,234 Q200,239 180,234 Z" fill="#C2273A"/>
+                  <path d="M180,224 L220,224 L218,234 Q200,238 182,234 Z" fill="url(#teethGrad)" stroke="#E3E3E3" stroke-width="1"/>
+                  <path d="M200,224 L200,236" stroke="#D8D2C4" stroke-width="1" opacity="0.8"/>
+                  <path d="M180,234 Q200,247 220,234 Q200,239 180,234 Z" fill="url(#lipGrad)"/>
+                  <path d="M190,240 Q200,244 210,240" stroke="#F0808A" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.5"/>
                 </g>
                 <g id="mouth-m" style="display:none">
-                  <path d="M178,231 Q200,237 222,231 Q200,233 178,231 Z" fill="#B01E30"/>
+                  <path d="M178,231 Q200,237 222,231 Q200,233 178,231 Z" fill="url(#lipGrad)"/>
+                  <path d="M190,232 Q200,235 210,232" stroke="#F0808A" stroke-width="1" fill="none" stroke-linecap="round" opacity="0.4"/>
                 </g>
                 <g id="mouth-uh" style="display:none">
-                  <path d="M182,228 C190,224 210,224 218,228 C218,240 210,246 200,246 C190,246 182,240 182,228 Z" fill="#C2273A"/>
-                  <path d="M188,230 C194,228 206,228 212,230 C212,238 206,242 200,242 C194,242 188,238 188,230 Z" fill="#6E1420"/>
+                  <path d="M182,228 C190,224 210,224 218,228 C218,240 210,246 200,246 C190,246 182,240 182,228 Z" fill="url(#lipGrad)"/>
+                  <path d="M188,230 C194,228 206,228 212,230 C212,238 206,242 200,242 C194,242 188,238 188,230 Z" fill="url(#mouthInnerGrad)"/>
                 </g>
               </g>
 
               <!-- Front hair: side-swept fringe + temple strands + shine -->
-              <path d="M200,52 C150,52 122,96 121,150 C121,166 123,178 126,186 C132,150 146,124 168,112 C180,106 194,108 200,118 C210,106 232,100 248,108 C262,116 272,138 275,168 C278,150 278,120 270,96 C256,66 232,52 200,52 Z" fill="#6B4423"/>
-              <path d="M126,150 C120,190 124,220 132,244 C136,224 136,190 134,160 Z" fill="#6B4423"/>
-              <path d="M274,150 C280,190 276,220 268,244 C264,224 264,190 266,160 Z" fill="#6B4423"/>
+              <path d="M200,52 C150,52 122,96 121,150 C121,166 123,178 126,186 C132,150 146,124 168,112 C180,106 194,108 200,118 C210,106 232,100 248,108 C262,116 272,138 275,168 C278,150 278,120 270,96 C256,66 232,52 200,52 Z" fill="url(#hairGrad)"/>
+              <path d="M200,58 C158,58 132,96 131,142 C131,152 132,162 134,168 C140,140 152,120 172,110 C182,105 194,107 200,116 C210,106 230,102 244,110 C258,118 266,138 269,162 C272,148 270,120 262,98 C250,72 228,58 200,58 Z" fill="#7A4E28" opacity="0.6"/>
+              <path d="M150,110 C160,84 180,68 204,64" stroke="#3E2410" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+              <path d="M168,116 C178,90 198,74 222,72" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+              <path d="M140,140 C144,112 158,88 178,74" stroke="#3E2410" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.4"/>
+              <path d="M252,112 C246,88 230,72 210,66" stroke="#54331A" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+              <path d="M266,140 C266,114 254,92 236,78" stroke="#3E2410" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.4"/>
+              <path d="M126,150 C120,190 124,220 132,244 C136,224 136,190 134,160 Z" fill="url(#hairGrad)"/>
+              <path d="M274,150 C280,190 276,220 268,244 C264,224 264,190 266,160 Z" fill="url(#hairGrad)"/>
+              <path d="M128,160 C124,190 126,220 131,240" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+              <path d="M272,160 C276,190 274,220 269,240" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+              <path d="M148,88 C168,68 196,60 216,66" stroke="#B0824A" stroke-width="8" fill="none" stroke-linecap="round" opacity="0.3"/>
               <path d="M150,84 C170,66 196,60 214,64" stroke="#7D5230" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.8"/>
             </g>
           </g>
@@ -241,6 +410,7 @@
           <g id="ponyTie">
             <path d="M114,206 C120,226 124,242 128,254" stroke="#54331A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8"/>
             <path d="M142,208 C138,228 134,244 131,254" stroke="#54331A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8"/>
+            <path d="M108,214 C112,232 118,248 124,256" stroke="#54331A" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.7"/>
             <rect x="107" y="253" width="44" height="15" rx="7" fill="#1F3A5F" transform="rotate(-10 129 260)"/>
             <rect x="107" y="253" width="44" height="5" rx="2.5" fill="#2E5A8C" transform="rotate(-10 129 260)"/>
           </g>
