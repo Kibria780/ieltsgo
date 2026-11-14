@@ -116,12 +116,13 @@
              ids, same JS pivots as v1. All gradients live in <defs>
              inside this SVG so the PNG export keeps them. -->
         <defs>
-          <!-- Skin: light centre, warmer edges (user space, shared by face/ears/neck/lids) -->
-          <radialGradient id="skinGrad" gradientUnits="userSpaceOnUse" cx="200" cy="165" r="135">
-            <stop offset="0%" stop-color="#FCE3CC"/>
-            <stop offset="50%" stop-color="#F8D5B8"/>
-            <stop offset="80%" stop-color="#F3CBA6"/>
-            <stop offset="100%" stop-color="#EAB892"/>
+          <!-- Skin: light centre, clearly warmer/darker edges (v3: much
+               stronger contrast than v2, so the falloff reads at a glance) -->
+          <radialGradient id="skinGrad" gradientUnits="userSpaceOnUse" cx="200" cy="155" r="115">
+            <stop offset="0%" stop-color="#FDE9D3"/>
+            <stop offset="40%" stop-color="#F8D2AA"/>
+            <stop offset="70%" stop-color="#EFB083"/>
+            <stop offset="100%" stop-color="#DD9A6B"/>
           </radialGradient>
           <!-- Hair: lighter crown, darker ends -->
           <linearGradient id="hairGrad" gradientUnits="userSpaceOnUse" x1="200" y1="30" x2="200" y2="440">
@@ -186,38 +187,74 @@
             <stop offset="0%" stop-color="#FFFFFF" stop-opacity="0.55"/>
             <stop offset="100%" stop-color="#FFFFFF" stop-opacity="0"/>
           </radialGradient>
+          <!-- v3: clip paths keep ALL shading inside the silhouette —
+               no shade can ever spill outside (v2 artifacts). -->
+          <clipPath id="faceClip">
+            <path d="M200,72 C244,72 276,112 276,162 C276,204 250,250 225,258 C213,261 187,261 175,258 C150,250 124,204 124,162 C124,112 156,72 200,72 Z"/>
+          </clipPath>
+          <clipPath id="torsoClip">
+            <path d="M178,288 L128,296 C100,306 76,326 62,354 C52,376 46,402 46,432 L46,520 L354,520 L354,432 C354,402 348,376 338,354 C324,326 300,306 272,296 L222,288 C212,300 188,300 178,288 Z"/>
+          </clipPath>
+          <!-- Soft blur filters for 3D modeling (cairosvg + browsers support feGaussianBlur) -->
+          <filter id="softBlur3" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="3"/>
+          </filter>
+          <filter id="softBlur6" x="-40%" y="-40%" width="180%" height="180%">
+            <feGaussianBlur stdDeviation="6"/>
+          </filter>
+          <filter id="softBlur10" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="10"/>
+          </filter>
         </defs>
         <g id="avatarRoot">
           <!-- Back hair: cap behind the head + ponytail over her shoulder -->
           <g id="hairBack">
-            <path d="M200,30 C142,30 108,78 108,140 C108,192 116,234 130,264 L270,264 C284,234 292,192 292,140 C292,78 258,30 200,30 Z" fill="url(#hairGrad)"/>
-            <path d="M200,42 C152,42 122,82 122,138 C122,180 128,220 138,250 L262,250 C272,220 278,180 278,138 C278,82 248,42 200,42 Z" fill="#7A4E28" opacity="0.5"/>
+            <path d="M200,30 C142,30 108,78 108,140 C108,192 114,232 128,258 C142,268 168,272 200,272 C232,272 258,268 272,258 C286,232 292,192 292,140 C292,78 258,30 200,30 Z" fill="url(#hairGrad)"/>
+            <path d="M200,42 C152,42 122,82 122,138 C122,180 128,218 138,246 C152,254 172,258 200,258 C228,258 248,254 262,246 C272,218 278,180 278,138 C278,82 248,42 200,42 Z" fill="#7A4E28" opacity="0.5"/>
             <!-- Crown shine -->
             <path d="M140,96 C160,66 190,54 216,56" stroke="#B0824A" stroke-width="6" fill="none" stroke-linecap="round" opacity="0.45"/>
             <path d="M224,58 C244,64 260,80 268,100" stroke="#B0824A" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.35"/>
-            <!-- Cap strands following the flow -->
-            <path d="M200,42 C170,62 150,102 146,152" stroke="#54331A" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.5"/>
-            <path d="M200,42 C230,62 250,102 254,152" stroke="#54331A" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.5"/>
-            <path d="M160,50 C140,90 132,140 134,190" stroke="#3E2410" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.45"/>
-            <path d="M240,50 C260,90 268,140 266,190" stroke="#3E2410" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.45"/>
-            <path d="M180,44 C168,74 160,116 160,160" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.55"/>
-            <path d="M220,44 C232,74 240,116 240,160" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.55"/>
-            <!-- Ponytail: wider, layered, tapered tip -->
-            <path d="M142,90 C114,126 100,180 104,244 C107,292 116,344 106,386 C102,404 94,420 84,430 C88,438 96,442 106,438 C120,430 132,410 140,384 C150,352 154,300 150,250 C146,198 154,158 158,134 C158,112 152,98 142,90 Z" fill="url(#hairGrad)" stroke="#3E2410" stroke-width="1.5" stroke-linejoin="round"/>
-            <path d="M128,160 C118,220 118,300 124,380" stroke="#3E2410" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.5"/>
-            <path d="M138,170 C132,230 134,310 138,390" stroke="#8A5A30" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.6"/>
-            <path d="M118,150 C108,210 108,290 112,360" stroke="#B0824A" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
-            <path d="M146,180 C144,250 146,320 142,380" stroke="#3E2410" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.4"/>
-            <path d="M112,200 C106,260 108,330 112,380" stroke="#C89A5E" stroke-width="4" fill="none" stroke-linecap="round" opacity="0.35"/>
+            <!-- Crown strands: radiating from a side part — strands start
+                 ON the part line and flow away, never crossing it (no
+                 chevron/X apex as in v2) -->
+            <path d="M210,36 C216,44 222,52 228,60" stroke="#C89A5E" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.55"/>
+            <path d="M208,44 C188,54 168,80 154,114" stroke="#B0824A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.45"/>
+            <path d="M206,50 C186,64 166,100 154,144" stroke="#8A5A30" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+            <path d="M204,54 C196,78 190,110 188,146" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+            <path d="M218,44 C236,56 254,82 266,114" stroke="#54331A" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.45"/>
+            <path d="M220,50 C240,66 256,100 264,142" stroke="#3E2410" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.4"/>
+            <path d="M222,54 C230,78 236,110 238,146" stroke="#54331A" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.45"/>
+            <path d="M150,134 C142,174 140,212 144,246" stroke="#3E2410" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.45"/>
+            <path d="M250,134 C258,174 260,212 256,246" stroke="#3E2410" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.45"/>
           </g>
 
-          <!-- Torso: navy double-breasted blazer, white shirt -->
+          <!-- Torso: tailored navy double-breasted blazer, white shirt -->
           <g id="torso">
-            <path d="M178,288 C138,292 96,308 70,340 C54,362 46,394 46,432 L46,520 L354,520 L354,432 C354,394 346,362 330,340 C304,308 262,292 222,288 C212,300 188,300 178,288 Z" fill="url(#blazerGrad)"/>
-            <!-- Shoulder light (left) + shade (right) -->
-            <ellipse cx="108" cy="340" rx="46" ry="26" fill="url(#glowLight)" opacity="0.35"/>
-            <ellipse cx="302" cy="346" rx="52" ry="30" fill="#0F1F38" opacity="0.22"/>
+            <path d="M178,288 L128,296 C100,306 76,326 62,354 C52,376 46,402 46,432 L46,520 L354,520 L354,432 C354,402 348,376 338,354 C324,326 300,306 272,296 L222,288 C212,300 188,300 178,288 Z" fill="url(#blazerGrad)"/>
+            <!-- Shoulder light (left) + shade (right), clipped to the
+                 torso silhouette so nothing can spill outside (v2 bug) -->
+            <g clip-path="url(#torsoClip)">
+              <ellipse cx="108" cy="340" rx="46" ry="26" fill="url(#glowLight)" opacity="0.35"/>
+              <ellipse cx="300" cy="350" rx="55" ry="34" fill="#0F1F38" opacity="0.18" filter="url(#softBlur6)"/>
+              <ellipse cx="200" cy="475" rx="120" ry="60" fill="#0F1F38" opacity="0.12" filter="url(#softBlur10)"/>
+              <!-- Shoulder seams: define the shoulder/sleeve boundary -->
+              <path d="M176,294 C140,300 104,318 78,342" stroke="#0F1F38" stroke-width="1.5" fill="none" opacity="0.35"/>
+              <path d="M224,294 C260,300 296,318 322,342" stroke="#0F1F38" stroke-width="1.5" fill="none" opacity="0.35"/>
+              <!-- Side folds break up the flat navy -->
+              <path d="M120,360 C116,400 116,450 120,490" stroke="#0F1F38" stroke-width="2" fill="none" opacity="0.3"/>
+              <path d="M124,360 C120,400 120,450 124,490" stroke="#3A6EA8" stroke-width="1.5" fill="none" opacity="0.3"/>
+              <path d="M280,360 C284,400 284,450 280,490" stroke="#0F1F38" stroke-width="2" fill="none" opacity="0.3"/>
+              <path d="M276,360 C280,400 280,450 276,490" stroke="#3A6EA8" stroke-width="1.5" fill="none" opacity="0.3"/>
+              <!-- Soft shadow under each lapel fold -->
+              <path d="M168,318 C176,340 184,360 190,376 L196,376 C188,356 180,336 174,318 Z" fill="#0F1F38" opacity="0.25" filter="url(#softBlur3)"/>
+              <path d="M232,318 C224,340 216,360 210,376 L204,376 C212,356 220,336 226,318 Z" fill="#0F1F38" opacity="0.25" filter="url(#softBlur3)"/>
+            </g>
+            <!-- Collar band around the neck base -->
+            <path d="M168,292 C178,304 222,304 232,292 L226,284 C216,294 184,294 174,284 Z" fill="#16294A"/>
+            <path d="M172,290 C182,299 218,299 228,290" stroke="#2E5A8C" stroke-width="1.5" fill="none" opacity="0.6"/>
             <path d="M180,290 L200,362 L220,290 L210,286 L200,298 L190,286 Z" fill="url(#shirtGrad)"/>
+            <!-- Shirt placket line -->
+            <path d="M200,302 L200,358" stroke="#D5DCE4" stroke-width="1.5" opacity="0.6"/>
             <!-- Collar shadow on the shirt -->
             <path d="M182,292 L196,326 L186,322 Z" fill="#B9C4D2" opacity="0.45"/>
             <path d="M218,292 L204,326 L214,322 Z" fill="#B9C4D2" opacity="0.45"/>
@@ -225,13 +262,19 @@
             <path d="M220,290 L202,318 L214,326 L224,296 Z" fill="#FFFFFF"/>
             <path d="M180,290 L200,362 L190,376 L166,320 Z" fill="url(#lapelGrad)"/>
             <path d="M220,290 L200,362 L210,376 L234,320 Z" fill="url(#lapelGrad)"/>
-            <!-- Lapel edge light + fabric folds -->
-            <path d="M182,296 L198,356" stroke="#2E5A8C" stroke-width="1.5" fill="none" opacity="0.5"/>
-            <path d="M218,296 L202,356" stroke="#2E5A8C" stroke-width="1.5" fill="none" opacity="0.5"/>
-            <path d="M186,332 C180,362 176,402 178,442" stroke="#0F1F38" stroke-width="2" fill="none" opacity="0.45"/>
-            <path d="M214,332 C220,362 224,402 222,442" stroke="#0F1F38" stroke-width="2" fill="none" opacity="0.45"/>
+            <!-- Lapel edge light + fabric folds (visible, not faint) -->
+            <path d="M182,296 L198,356" stroke="#3A6EA8" stroke-width="2" fill="none" opacity="0.75"/>
+            <path d="M218,296 L202,356" stroke="#3A6EA8" stroke-width="2" fill="none" opacity="0.75"/>
+            <path d="M186,332 C180,362 176,402 178,442" stroke="#0F1F38" stroke-width="2.5" fill="none" opacity="0.6"/>
+            <path d="M214,332 C220,362 224,402 222,442" stroke="#0F1F38" stroke-width="2.5" fill="none" opacity="0.6"/>
+            <path d="M190,332 C184,362 180,402 182,442" stroke="#3A6EA8" stroke-width="1.5" fill="none" opacity="0.4"/>
+            <path d="M210,332 C216,362 220,402 218,442" stroke="#3A6EA8" stroke-width="1.5" fill="none" opacity="0.4"/>
             <path d="M180,290 L200,362" stroke="#0F1F38" stroke-width="2" fill="none"/>
             <path d="M220,290 L200,362" stroke="#0F1F38" stroke-width="2" fill="none"/>
+            <circle cx="184" cy="404" r="6.5" fill="none" stroke="#0A1526" stroke-width="1" opacity="0.4"/>
+            <circle cx="216" cy="404" r="6.5" fill="none" stroke="#0A1526" stroke-width="1" opacity="0.4"/>
+            <circle cx="184" cy="434" r="6.5" fill="none" stroke="#0A1526" stroke-width="1" opacity="0.4"/>
+            <circle cx="216" cy="434" r="6.5" fill="none" stroke="#0A1526" stroke-width="1" opacity="0.4"/>
             <circle cx="184" cy="404" r="5" fill="#0E1C30"/>
             <circle cx="216" cy="404" r="5" fill="#0E1C30"/>
             <circle cx="184" cy="434" r="5" fill="#0E1C30"/>
@@ -240,12 +283,27 @@
             <circle cx="214" cy="402" r="1.3" fill="#FFFFFF" opacity="0.55"/>
             <circle cx="182" cy="432" r="1.3" fill="#FFFFFF" opacity="0.55"/>
             <circle cx="214" cy="432" r="1.3" fill="#FFFFFF" opacity="0.55"/>
-            <path d="M330,340 C346,362 354,394 354,432 L354,520 L314,520 C322,460 322,400 310,352 C304,330 296,312 286,300 C302,310 316,324 330,340 Z" fill="#182C49" opacity="0.5"/>
           </g>
 
-          <!-- Neck -->
+          <!-- Ponytail: drawn AFTER the torso so the tail hangs OVER the
+               shoulder onto the chest (like the reference portrait), but
+               BEFORE the head so the head covers the tail's top. Pinches
+               at the tie (y≈260), flares below it, tapered tip. -->
+          <g id="ponyTail">
+            <path d="M142,90 C116,128 104,178 108,228 C110,246 114,254 120,260 C112,280 106,318 105,356 C104,388 100,410 96,424 C98,432 106,437 114,433 C126,424 134,398 139,366 C144,332 145,296 138,260 C142,248 146,224 148,196 C150,168 154,150 158,134 C158,112 152,98 142,90 Z" fill="url(#hairGrad)" stroke="#3E2410" stroke-width="1.5" stroke-linejoin="round"/>
+            <!-- Tail strands: converge INTO the tie from above, fan below it -->
+            <path d="M130,150 C122,190 122,228 126,254" stroke="#3E2410" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.5"/>
+            <path d="M142,160 C138,196 136,228 132,254" stroke="#8A5A30" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.6"/>
+            <path d="M118,160 C112,198 114,230 122,254" stroke="#B0824A" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+            <path d="M124,268 C118,310 116,360 118,400" stroke="#3E2410" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+            <path d="M134,268 C136,310 136,360 132,405" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.55"/>
+            <path d="M116,270 C112,315 112,365 114,405" stroke="#C89A5E" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.4"/>
+          </g>
+
+          <!-- Neck: mid skin tone (the radial skinGrad would clamp to
+               its darkest stop here and turn the neck orange) -->
           <g id="neck">
-            <path d="M182,244 L218,244 L222,298 Q200,308 178,298 Z" fill="url(#skinGrad)"/>
+            <path d="M182,244 L218,244 L222,298 Q200,308 178,298 Z" fill="#F2C096"/>
             <ellipse cx="200" cy="252" rx="20" ry="7" fill="#DCA87F" opacity="0.55"/>
             <ellipse cx="200" cy="248" rx="13" ry="4" fill="#D29A72" opacity="0.5"/>
             <path d="M184,250 C183,268 184,284 186,296" stroke="#DCA87F" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.4"/>
@@ -267,21 +325,30 @@
               </g>
               <!-- Soft oval face, slightly tapered chin (jaw/cheeks slimmed ~2px vs v1) -->
               <path d="M200,72 C244,72 276,112 276,162 C276,204 250,250 225,258 C213,261 187,261 175,258 C150,250 124,204 124,162 C124,112 156,72 200,72 Z" fill="url(#skinGrad)"/>
-              <!-- Face shading: forehead light, cheek + jaw shade, chin shade -->
-              <ellipse cx="200" cy="124" rx="38" ry="9" fill="url(#glowLight)" opacity="0.45"/>
-              <ellipse cx="150" cy="196" rx="20" ry="10" fill="url(#shadeWarm)" opacity="0.35"/>
-              <ellipse cx="250" cy="196" rx="20" ry="10" fill="url(#shadeWarm)" opacity="0.35"/>
-              <ellipse cx="162" cy="232" rx="22" ry="13" fill="url(#shadeWarm)" opacity="0.5"/>
-              <ellipse cx="238" cy="232" rx="22" ry="13" fill="url(#shadeWarm)" opacity="0.5"/>
-              <ellipse cx="200" cy="256" rx="18" ry="6" fill="url(#shadeWarm)" opacity="0.6"/>
-              <!-- Nose shading: soft side shadow + bridge highlight -->
-              <ellipse cx="192" cy="202" rx="5" ry="9" fill="url(#shadeWarm)" opacity="0.5"/>
-              <ellipse cx="203" cy="190" rx="3.5" ry="10" fill="#FFFFFF" opacity="0.28"/>
-              <!-- Shadow under the lower lip -->
-              <ellipse cx="200" cy="252" rx="12" ry="4" fill="#D9A982" opacity="0.45"/>
+              <!-- Face modeling (v3): bold soft shadows + highlights,
+                   all clipped to the face outline. Light from upper-left. -->
+              <g clip-path="url(#faceClip)">
+                <ellipse cx="200" cy="118" rx="42" ry="14" fill="url(#glowLight)" opacity="0.5"/>
+                <ellipse cx="138" cy="118" rx="16" ry="26" fill="#D89A6C" opacity="0.35" filter="url(#softBlur6)"/>
+                <ellipse cx="262" cy="118" rx="16" ry="26" fill="#D89A6C" opacity="0.35" filter="url(#softBlur6)"/>
+                <ellipse cx="155" cy="188" rx="14" ry="7" fill="#FFFFFF" opacity="0.18" filter="url(#softBlur6)"/>
+                <ellipse cx="245" cy="188" rx="14" ry="7" fill="#FFFFFF" opacity="0.18" filter="url(#softBlur6)"/>
+                <ellipse cx="152" cy="204" rx="20" ry="9" fill="#D89A6C" opacity="0.45" filter="url(#softBlur6)"/>
+                <ellipse cx="248" cy="204" rx="20" ry="9" fill="#D89A6C" opacity="0.45" filter="url(#softBlur6)"/>
+                <path d="M140,218 C150,240 168,252 190,256 C168,252 150,238 142,216 Z" fill="#D89A6C" opacity="0.4" filter="url(#softBlur6)"/>
+                <path d="M260,218 C250,240 232,252 210,256 C232,252 250,238 258,216 Z" fill="#D89A6C" opacity="0.4" filter="url(#softBlur6)"/>
+                <ellipse cx="200" cy="254" rx="12" ry="5" fill="#FFFFFF" opacity="0.2" filter="url(#softBlur3)"/>
+                <ellipse cx="200" cy="250" rx="13" ry="4" fill="#C98A5E" opacity="0.55" filter="url(#softBlur3)"/>
+                <!-- Nose as a shaded form: bridge highlight, side shadow,
+                     shadow under the tip, tip highlight -->
+                <path d="M196,166 C198,180 198,194 197,204 C200,194 200,178 198,166 Z" fill="#FFFFFF" opacity="0.45" filter="url(#softBlur3)"/>
+                <path d="M204,178 C207,190 207,198 205,207 C208,198 208,188 206,178 Z" fill="#D89A6C" opacity="0.6" filter="url(#softBlur3)"/>
+                <ellipse cx="200" cy="211" rx="7" ry="2.5" fill="#C98A5E" opacity="0.5" filter="url(#softBlur3)"/>
+                <ellipse cx="199" cy="205" rx="4" ry="2.5" fill="#FFFFFF" opacity="0.3" filter="url(#softBlur3)"/>
+              </g>
               <ellipse id="blushL" cx="141" cy="206" rx="14" ry="8" fill="url(#blushGrad)" opacity="0.35"/>
               <ellipse id="blushR" cx="259" cy="206" rx="14" ry="8" fill="url(#blushGrad)" opacity="0.35"/>
-              <path id="nose" d="M198,192 Q203,204 197,208 Q200,211 206,208" stroke="#D9A982" stroke-width="1.8" fill="none" stroke-linecap="round"/>
+              <path id="nose" d="M198,192 Q203,204 197,208 Q200,211 206,208" stroke="#D9A982" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="0.75"/>
               <!-- Eyes: shaded white, detailed iris, lashes -->
               <g id="eyeL">
                 <path d="M145,166 Q164,150 183,166 Q164,158 145,166 Z" fill="#D9B8A6" opacity="0.35"/>
@@ -326,18 +393,18 @@
               </g>
               <!-- Eyebrows: tapered strand strokes (JS moves/rotates these per expression) -->
               <g id="browL">
-                <path d="M146,141 Q162,130 182,140 Q164,136 146,141 Z" fill="#4A2F18" opacity="0.9"/>
-                <path d="M150,140 Q163,133 178,139" stroke="#5A3A1E" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.9"/>
-                <path d="M152,136 Q164,130 176,136" stroke="#3A2410" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="0.8"/>
-                <path d="M148,143 Q162,137 180,142" stroke="#6B4423" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.7"/>
-                <path d="M148,138 L147,143 M152,136 L151,141 M156,134 L155,139" stroke="#3A2410" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+                <path d="M146,141 Q162,130 182,140 Q164,136 146,141 Z" fill="#4A2F18" opacity="0.75"/>
+                <path d="M150,140 Q163,133 178,139" stroke="#5A3A1E" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.8"/>
+                <path d="M152,136 Q164,130 176,136" stroke="#3A2410" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="0.7"/>
+                <path d="M148,143 Q162,137 180,142" stroke="#6B4423" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.6"/>
+                <path d="M148,138 L147,143 M152,136 L151,141 M156,134 L155,139" stroke="#3A2410" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
               </g>
               <g id="browR">
-                <path d="M254,141 Q238,130 218,140 Q236,136 254,141 Z" fill="#4A2F18" opacity="0.9"/>
-                <path d="M250,140 Q237,133 222,139" stroke="#5A3A1E" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.9"/>
-                <path d="M248,136 Q236,130 224,136" stroke="#3A2410" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="0.8"/>
-                <path d="M252,143 Q238,137 220,142" stroke="#6B4423" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.7"/>
-                <path d="M252,138 L253,143 M248,136 L249,141 M244,134 L245,139" stroke="#3A2410" stroke-width="1.2" stroke-linecap="round" opacity="0.6"/>
+                <path d="M254,141 Q238,130 218,140 Q236,136 254,141 Z" fill="#4A2F18" opacity="0.75"/>
+                <path d="M250,140 Q237,133 222,139" stroke="#5A3A1E" stroke-width="2.2" fill="none" stroke-linecap="round" opacity="0.8"/>
+                <path d="M248,136 Q236,130 224,136" stroke="#3A2410" stroke-width="1.8" fill="none" stroke-linecap="round" opacity="0.7"/>
+                <path d="M252,143 Q238,137 220,142" stroke="#6B4423" stroke-width="1.6" fill="none" stroke-linecap="round" opacity="0.6"/>
+                <path d="M252,138 L253,143 M248,136 L249,141 M244,134 L245,139" stroke="#3A2410" stroke-width="1.2" stroke-linecap="round" opacity="0.5"/>
               </g>
 
               <!-- ============ MOUTH / VISEME SHAPES ============ -->
@@ -345,9 +412,12 @@
                    All centred on x=200, mouth line y≈230. -->
               <g id="mouthGroup">
                 <g id="mouth-neutral">
-                  <path d="M176,229 C186,234 214,234 224,229 C218,240 210,244 200,244 C190,244 182,240 176,229 Z" fill="url(#lipGrad)"/>
+                  <!-- Upper lip: darker, with a defined Cupid's bow -->
+                  <path d="M176,229 C182,222 192,221 200,226 C208,221 218,222 224,229 C214,233 186,233 176,229 Z" fill="#A81E2E"/>
+                  <!-- Lower lip: fuller, with a strong highlight -->
+                  <path d="M176,229 C186,233 214,233 224,229 C220,241 210,246 200,246 C190,246 180,241 176,229 Z" fill="url(#lipGrad)"/>
                   <path d="M177,230 Q200,238 223,230" stroke="#8E1B28" stroke-width="1.5" fill="none"/>
-                  <path d="M186,238 Q200,243 214,238" stroke="#F0808A" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+                  <ellipse cx="200" cy="239" rx="9" ry="2.5" fill="#F0808A" opacity="0.7"/>
                 </g>
                 <g id="mouth-ah" style="display:none">
                   <path d="M172,226 C184,220 216,220 228,226 C230,244 216,254 200,254 C184,254 170,244 172,226 Z" fill="url(#lipGrad)"/>
@@ -384,35 +454,43 @@
                 <g id="mouth-uh" style="display:none">
                   <path d="M182,228 C190,224 210,224 218,228 C218,240 210,246 200,246 C190,246 182,240 182,228 Z" fill="url(#lipGrad)"/>
                   <path d="M188,230 C194,228 206,228 212,230 C212,238 206,242 200,242 C194,242 188,238 188,230 Z" fill="url(#mouthInnerGrad)"/>
+                  <ellipse cx="200" cy="242" rx="7" ry="2" fill="#F0808A" opacity="0.5"/>
                 </g>
               </g>
 
-              <!-- Front hair: side-swept fringe + temple strands + shine -->
-              <path d="M200,52 C150,52 122,96 121,150 C121,166 123,178 126,186 C132,150 146,124 168,112 C180,106 194,108 200,118 C210,106 232,100 248,108 C262,116 272,138 275,168 C278,150 278,120 270,96 C256,66 232,52 200,52 Z" fill="url(#hairGrad)"/>
-              <path d="M200,58 C158,58 132,96 131,142 C131,152 132,162 134,168 C140,140 152,120 172,110 C182,105 194,107 200,116 C210,106 230,102 244,110 C258,118 266,138 269,162 C272,148 270,120 262,98 C250,72 228,58 200,58 Z" fill="#7A4E28" opacity="0.6"/>
-              <path d="M150,110 C160,84 180,68 204,64" stroke="#3E2410" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.5"/>
-              <path d="M168,116 C178,90 198,74 222,72" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
-              <path d="M140,140 C144,112 158,88 178,74" stroke="#3E2410" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.4"/>
-              <path d="M252,112 C246,88 230,72 210,66" stroke="#54331A" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
-              <path d="M266,140 C266,114 254,92 236,78" stroke="#3E2410" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.4"/>
+              <!-- Front hair: smooth side-swept fringe (v3: no M-dip),
+                   layered strands, visible side part flow -->
+              <path d="M200,52 C150,52 122,96 121,150 C121,166 123,178 126,186 C128,160 134,138 146,124 C160,110 180,102 205,100 C228,98 248,102 262,114 C270,122 274,142 275,168 C278,150 278,120 270,96 C256,66 232,52 200,52 Z" fill="url(#hairGrad)"/>
+              <path d="M200,58 C156,58 132,94 131,140 C131,152 133,162 136,170 C138,150 144,132 156,120 C170,108 188,101 208,100 C228,99 246,103 258,114 C266,122 270,140 271,162 C273,146 271,118 263,96 C251,70 229,58 200,58 Z" fill="#7A4E28" opacity="0.6"/>
+              <path d="M150,118 C164,96 188,82 214,78" stroke="#3E2410" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.5"/>
+              <path d="M168,112 C182,92 204,80 228,78" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+              <path d="M140,140 C150,114 168,92 192,80" stroke="#3E2410" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.4"/>
+              <path d="M250,108 C242,88 226,74 206,70" stroke="#54331A" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+              <path d="M264,136 C262,112 248,92 230,80" stroke="#3E2410" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.4"/>
+              <path d="M186,106 C200,88 220,78 240,78" stroke="#B0824A" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+              <!-- Side curtains: layered, not flat panels -->
               <path d="M126,150 C120,190 124,220 132,244 C136,224 136,190 134,160 Z" fill="url(#hairGrad)"/>
+              <path d="M128,152 C124,186 126,214 131,238 C133,214 133,182 132,158 Z" fill="#54331A" opacity="0.55"/>
+              <path d="M124,158 C120,190 122,218 128,240" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+              <path d="M132,162 C130,192 130,218 132,238" stroke="#B0824A" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.5"/>
               <path d="M274,150 C280,190 276,220 268,244 C264,224 264,190 266,160 Z" fill="url(#hairGrad)"/>
-              <path d="M128,160 C124,190 126,220 131,240" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
-              <path d="M272,160 C276,190 274,220 269,240" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.5"/>
+              <path d="M272,152 C276,186 274,214 269,238 C267,214 267,182 268,158 Z" fill="#54331A" opacity="0.55"/>
+              <path d="M276,158 C280,190 278,218 272,240" stroke="#8A5A30" stroke-width="2" fill="none" stroke-linecap="round" opacity="0.6"/>
+              <path d="M268,162 C270,192 270,218 268,238" stroke="#B0824A" stroke-width="1.5" fill="none" stroke-linecap="round" opacity="0.5"/>
               <path d="M148,88 C168,68 196,60 216,66" stroke="#B0824A" stroke-width="8" fill="none" stroke-linecap="round" opacity="0.3"/>
               <path d="M150,84 C170,66 196,60 214,64" stroke="#7D5230" stroke-width="5" fill="none" stroke-linecap="round" opacity="0.8"/>
             </g>
           </g>
           <!-- Ponytail tie: drawn AFTER the head so it stays visible.
-               It sits on the fully visible tail (y≈260, clear of the
-               face and above the shoulder), with strands converging
-               into it so the tail reads as gathered, not loose. -->
+               Narrow band wrapped around the pinched tail (y≈260),
+               with wrap lines and strands converging into it. -->
           <g id="ponyTie">
-            <path d="M114,206 C120,226 124,242 128,254" stroke="#54331A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8"/>
-            <path d="M142,208 C138,228 134,244 131,254" stroke="#54331A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8"/>
-            <path d="M108,214 C112,232 118,248 124,256" stroke="#54331A" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.7"/>
-            <rect x="107" y="253" width="44" height="15" rx="7" fill="#1F3A5F" transform="rotate(-10 129 260)"/>
-            <rect x="107" y="253" width="44" height="5" rx="2.5" fill="#2E5A8C" transform="rotate(-10 129 260)"/>
+            <path d="M108,206 C112,224 118,242 124,253" stroke="#54331A" stroke-width="3" fill="none" stroke-linecap="round" opacity="0.8"/>
+            <path d="M120,204 C122,222 125,240 128,253" stroke="#3E2410" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+            <path d="M138,232 C137,240 134,248 132,253" stroke="#54331A" stroke-width="2.5" fill="none" stroke-linecap="round" opacity="0.7"/>
+            <rect x="114" y="252" width="30" height="16" rx="7" fill="#1F3A5F" transform="rotate(-8 129 260)"/>
+            <rect x="114" y="252" width="30" height="5" rx="2.5" fill="#2E5A8C" transform="rotate(-8 129 260)"/>
+            <path d="M122,253 L122,267 M136,253 L136,267" stroke="#0F1F38" stroke-width="1.5" opacity="0.6" transform="rotate(-8 129 260)"/>
           </g>
         </g>
       </svg>
